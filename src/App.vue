@@ -6,8 +6,6 @@
         <div class="split" ref="splitRef"><span>I</span><span>R</span><span>I</span><span>S</span>&nbsp;Starter</div>
       </div>
       <div class="menu">
-  <button class="btn" @click="toggleWire">{{ wireframe ? 'Solid' : 'Wireframe' }}</button>
-  <button class="btn" @click="toggleSkeleton">{{ showSkeleton ? 'Hide' : 'Show' }} Skeleton</button>
         <div class="dropdown" :class="{ open: openMenu }">
           <button class="btn" @click="toggleMenu">Camera Selection</button>
           <div class="dropdown-menu">
@@ -44,8 +42,7 @@ const sceneRef = ref<HTMLElement | null>(null);
 const splitRef = ref<HTMLElement | null>(null);
 const openMenu = ref(false);
 const devices = ref<MediaDeviceInfo[]>([]);
-const wireframe = ref(true);
-const showSkeleton = ref(true);
+// Skeleton always visible by default
 
 let renderer: THREE.WebGLRenderer | null = null;
 let scene: THREE.Scene;
@@ -95,23 +92,7 @@ function selectDevice(d: MediaDeviceInfo){
   startMockPose();
 }
 
-function toggleWire(){
-  wireframe.value = !wireframe.value;
-  if (!scene) return;
-  scene.traverse((child: any) => {
-    if (child.isMesh && child.material) {
-      const mtl = child.material as THREE.Material | THREE.Material[];
-      const update = (mat: any) => { if (mat && 'wireframe' in mat) mat.wireframe = wireframe.value; };
-      Array.isArray(mtl) ? mtl.forEach(update) : update(mtl);
-    }
-  });
-}
-
-function toggleSkeleton(){
-  showSkeleton.value = !showSkeleton.value;
-  if (boneLines) boneLines.visible = showSkeleton.value;
-  jointSpheres.forEach(j => j.visible = showSkeleton.value);
-}
+// Removed wireframe toggle to keep UI unchanged; skeleton remains visible
 
 async function loadSMPLX(scene: THREE.Scene){
   const loader = new OBJLoader();
@@ -246,7 +227,7 @@ function initSkeleton(scene: THREE.Scene){
   const jointGeo = new THREE.SphereGeometry(0.02, 16, 16);
   const jointMat = new THREE.MeshBasicMaterial({ color: 0xff5533 });
   jointSpheres = COCO_KEYPOINTS.map(() => new THREE.Mesh(jointGeo, jointMat.clone()));
-  jointSpheres.forEach(m => { m.visible = showSkeleton.value; scene.add(m); });
+  jointSpheres.forEach(m => { m.visible = true; scene.add(m); });
 
   // Bones
   const positions = new Float32Array(COCO_EDGES.length * 2 * 3);
@@ -254,7 +235,7 @@ function initSkeleton(scene: THREE.Scene){
   geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
   const mat = new THREE.LineBasicMaterial({ color: 0xffffff });
   boneLines = new THREE.LineSegments(geom, mat);
-  boneLines.visible = showSkeleton.value;
+  boneLines.visible = true;
   scene.add(boneLines);
 }
 
