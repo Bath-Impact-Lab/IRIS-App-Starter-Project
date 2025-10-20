@@ -3,6 +3,7 @@ import vue from '@vitejs/plugin-vue';
 import path from 'node:path';
 
 export default defineConfig({
+  base: './', // use relative paths so file:// loads assets correctly
   plugins: [vue()],
   root: '.',
   build: {
