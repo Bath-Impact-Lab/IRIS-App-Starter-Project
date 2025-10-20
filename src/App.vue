@@ -27,12 +27,18 @@
       </div>
     </nav>
     <section class="scene" ref="sceneRef"></section>
+    <div class="hud">
+      <label class="hud-item">
+        <input type="checkbox" v-model="showModel" />
+        <span>Show model</span>
+      </label>
+    </div>
   </div>
   
 </template>
 
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref } from 'vue';
+import { onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import * as THREE from 'three';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -53,6 +59,9 @@ let controls: OrbitControls | null = null;
 let jointSpheres: THREE.Mesh[] = [];
 let boneLines: THREE.LineSegments | null = null;
 let poseStream: MockPoseStream | null = null;
+let modelRoot: THREE.Object3D | null = null;
+
+const showModel = ref(false); // off by default
 
 function toggleMenu() { openMenu.value = !openMenu.value; }
 function closeMenu() { openMenu.value = false; }
@@ -117,19 +126,23 @@ async function loadSMPLX(scene: THREE.Scene){
     if (!obj) throw new Error('OBJ load failed');
     obj.traverse((child: any) => {
       if (child.isMesh) {
-        child.material = new THREE.MeshStandardMaterial({ color: 0x8fb3ff, metalness: 0.15, roughness: 0.6 });
+        child.material = new THREE.MeshStandardMaterial({ color: 0x6b83c6, metalness: 0.1, roughness: 0.8, transparent: true, opacity: 0.85 });
         child.castShadow = true; child.receiveShadow = true;
       }
     });
     obj.position.set(0, 0, 0);
-    scene.add(obj);
+    modelRoot = obj;
+    modelRoot.visible = showModel.value;
+    scene.add(modelRoot);
     fitToObject(obj);
   } catch (e) {
     console.warn('Failed to load SMPLX OBJ, using fallback', e);
     const geo = new THREE.TorusKnotGeometry(0.6, 0.2, 200, 32);
     const mat = new THREE.MeshStandardMaterial({ color: 0x6be675, metalness: 0.4, roughness: 0.3 });
     const mesh = new THREE.Mesh(geo, mat);
-    scene.add(mesh);
+    modelRoot = mesh;
+    modelRoot.visible = showModel.value;
+    scene.add(modelRoot);
     fitToObject(mesh);
   }
 }
@@ -212,6 +225,8 @@ onMounted(() => {
   if (sceneRef.value) initThree(sceneRef.value);
   enumerateCameras();
   startMockPose();
+  // React to showModel toggle
+  watch(showModel, (v) => { if (modelRoot) modelRoot.visible = v; });
 });
 
 onBeforeUnmount(() => {
@@ -225,17 +240,19 @@ onBeforeUnmount(() => {
 function initSkeleton(scene: THREE.Scene){
   // Joints
   const jointGeo = new THREE.SphereGeometry(0.02, 16, 16);
-  const jointMat = new THREE.MeshBasicMaterial({ color: 0xff5533 });
+  const jointMat = new THREE.MeshBasicMaterial({ color: 0xff5533, depthTest: false, depthWrite: false });
   jointSpheres = COCO_KEYPOINTS.map(() => new THREE.Mesh(jointGeo, jointMat.clone()));
   jointSpheres.forEach(m => { m.visible = true; scene.add(m); });
+  jointSpheres.forEach(m => m.renderOrder = 999);
 
   // Bones
   const positions = new Float32Array(COCO_EDGES.length * 2 * 3);
   const geom = new THREE.BufferGeometry();
   geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  const mat = new THREE.LineBasicMaterial({ color: 0xffffff });
+  const mat = new THREE.LineBasicMaterial({ color: 0xffffff, depthTest: false });
   boneLines = new THREE.LineSegments(geom, mat);
   boneLines.visible = true;
+  boneLines.renderOrder = 998;
   scene.add(boneLines);
 }
 
@@ -264,3 +281,9 @@ function startMockPose(){
   poseStream.start();
 }
 </script>
+
+<style scoped>
+.hud{ position: fixed; left: 16px; bottom: 16px; display:flex; gap:8px; padding:8px 10px; background: rgba(12,18,25,.6); border:1px solid rgba(255,255,255,.08); border-radius: 12px; backdrop-filter: blur(10px); }
+.hud-item{ display:flex; align-items:center; gap:8px; color:#e6edf3; font-weight:600; }
+.hud-item input{ accent-color:#6be675; width:16px; height:16px; }
+</style>
