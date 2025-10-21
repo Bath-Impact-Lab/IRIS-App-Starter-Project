@@ -32,6 +32,7 @@ build/
 *.dll
 *.so
 *.obj
+!public/assets/*.obj
 *.pyc
 __pycache__/
 *.egg-info/
