@@ -1,22 +1,21 @@
-# IRIS Electron Starter
+# IRIS Starter Application
 
-An Electron app that loads a Three.js scene with a SMPLX OBJ at startup and includes a world-class animated navbar with Camera Selection. Designed as a starter to ingest real-time pose streams from IRIS in the future.
+Simple example application that connects to the IRIS real-time pose stream and 
+connects your movements to various example avatars in a 3D visualiser.
 
 ## Features
 - Electron + Vite + Vue 3 renderer
-- Three.js OBJ loading (uses `public/assets/SMPLX_neutral.obj` placeholder)
-- Animated split-text title, glassy navbar, dark theme
-- Camera Selection that auto-detects cameras via `mediaDevices` (falls back to a mock if permission/device not available)
+- Three.js OBJ loading
+- Camera Selection that auto-detects cameras via `mediaDevices`
 
 ## Setup (Windows PowerShell)
 ```powershell
-# From the IRIS-Electron-Starter folder
 npm install
 
-# Development: runs Vite + Electron auto-reload
+# Development: runs with auto-reload
 npm run dev
 
-# Build Windows executable (nsis)
+# Build Windows executable ( run as administrator with developer mode enabled )
 npm run build
 ```
 
@@ -32,5 +31,6 @@ Drop your actual `SMPLX_neutral.obj` into `public/assets/` (same filename). Larg
 
 ## Next steps
 - Wire IRIS real-time pose stream (WebSocket/UDP/Shared memory) and animate skeleton
+- support changing of avatars
 - Add robust camera preview panel with selectable resolutions and frame rates
 - Crash reporting and auto-updates
