@@ -37,6 +37,24 @@
         <span :class="['dot', irisConnected ? 'ok' : 'warn']"></span>
         <span>{{ irisConnected ? 'IRIS connected' : 'IRIS offline' }}</span>
       </div>
+      <div class="hud-sep"></div>
+      <button class="btn btn-mini" @click="debugOpen = !debugOpen">{{ debugOpen ? 'Hide' : 'Show' }} debug</button>
+    </div>
+
+    <div class="debug" v-if="debugOpen">
+      <div class="debug-row">
+        <button class="btn btn-mini" @click="pingIris">Ping IRIS</button>
+      </div>
+      <div class="debug-row">
+        <div class="debug-col">
+          <div class="debug-title">Last sent</div>
+          <pre class="debug-pre">{{ lastSentMsg }}</pre>
+        </div>
+        <div class="debug-col">
+          <div class="debug-title">Last received</div>
+          <pre class="debug-pre">{{ lastRecvMsg }}</pre>
+        </div>
+      </div>
     </div>
   </div>
   
@@ -54,6 +72,9 @@ const splitRef = ref<HTMLElement | null>(null);
 const openMenu = ref(false);
 const devices = ref<MediaDeviceInfo[]>([]);
 const irisConnected = ref(false);
+const debugOpen = ref(false);
+const lastSentMsg = ref('');
+const lastRecvMsg = ref('');
 // Skeleton always visible by default
 
 let renderer: THREE.WebGLRenderer | null = null;
@@ -84,6 +105,12 @@ async function enumerateCameras() {
     await navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(s => s.getTracks().forEach(t => t.stop())).catch(() => {});
     const list = await navigator.mediaDevices.enumerateDevices();
     devices.value = list.filter(d => d.kind === 'videoinput');
+    // Send camera-list to IRIS once we have devices
+    const payload = devices.value.map(d => ({ deviceId: d.deviceId, label: d.label, kind: d.kind }));
+    const msg = { type: 'camera-list', payload, ts: Date.now() };
+    console.log('[IRIS send] camera-list', msg);
+    lastSentMsg.value = JSON.stringify(msg, null, 2);
+    (window as any).electronAPI?.irisSend?.(msg);
   } catch (err) {
     // Mock when not available (e.g., permissions denied)
     devices.value = [{
@@ -108,6 +135,8 @@ function selectDevice(d: MediaDeviceInfo){
   startMockPose();
   // Send camera info to IRIS mock bridge
   const info = { type: 'camera-info', payload: { deviceId: d.deviceId, label: d.label, kind: d.kind, ts: Date.now() } };
+  console.log('[IRIS send] camera-info', info);
+  lastSentMsg.value = JSON.stringify(info, null, 2);
   (window as any).electronAPI?.irisSend?.(info);
 }
 
@@ -254,11 +283,20 @@ function connectIris(){
     irisUnsub = (window as any).electronAPI?.irisSubscribe?.((msg:any) => {
       // Mark connected when any message arrives from IRIS bridge
       irisConnected.value = true;
+      console.log('[IRIS recv]', msg);
+      lastRecvMsg.value = JSON.stringify(msg, null, 2);
       if (msg?.type === 'pose-frame') {
         // Hook for future: apply msg.payload to updateSkeleton
       }
     }) ?? null;
   } catch { irisConnected.value = false; }
+}
+
+function pingIris(){
+  const msg = { type: 'ping', ts: Date.now() };
+  console.log('[IRIS send] ping', msg);
+  lastSentMsg.value = JSON.stringify(msg, null, 2);
+  (window as any).electronAPI?.irisSend?.(msg);
 }
 
 function initSkeleton(scene: THREE.Scene){
@@ -314,4 +352,10 @@ function startMockPose(){
 .dot{ width:8px; height:8px; border-radius:50%; display:inline-block; box-shadow:0 0 10px rgba(0,0,0,.5) }
 .dot.ok{ background:#6be675 }
 .dot.warn{ background:#ff9a5c }
+.btn.btn-mini{ padding:6px 10px; font-size:.8rem; border-radius:8px; border:1px solid rgba(255,255,255,.08); background:rgba(26,35,48,.8); color:#e6edf3; cursor:pointer }
+.debug{ position: fixed; left: 16px; bottom: 70px; width: 540px; max-width: calc(100vw - 32px); background: rgba(12,18,25,.85); border:1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 10px; backdrop-filter: blur(10px); box-shadow:0 10px 28px rgba(0,0,0,.35) }
+.debug-row{ display:flex; gap:10px; align-items:center; margin-bottom:8px }
+.debug-col{ flex:1; min-width:0 }
+.debug-title{ color:#9fb1c1; font-weight:700; font-size:.8rem; margin-bottom:4px }
+.debug-pre{ margin:0; max-height:140px; overflow:auto; background:#0e141b; padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,.06); color:#cfe2f3; font-size:.78rem }
 </style>
