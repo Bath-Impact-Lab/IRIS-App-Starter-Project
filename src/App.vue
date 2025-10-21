@@ -71,6 +71,7 @@ const sceneRef = ref<HTMLElement | null>(null);
 const splitRef = ref<HTMLElement | null>(null);
 const openMenu = ref(false);
 const devices = ref<MediaDeviceInfo[]>([]);
+const selectedDeviceId = ref<string | null>(null);
 const irisConnected = ref(false);
 const debugOpen = ref(false);
 const lastSentMsg = ref('');
@@ -91,7 +92,14 @@ let modelRoot: THREE.Object3D | null = null;
 const showModel = ref(false); // off by default
 let irisUnsub: null | (()=>void) = null;
 
-function toggleMenu() { openMenu.value = !openMenu.value; }
+function toggleMenu() {
+  const willOpen = !openMenu.value;
+  openMenu.value = willOpen;
+  if (willOpen) {
+    // Refresh device list on each open so hot-plug/unplug is reflected
+    enumerateCameras();
+  }
+}
 function closeMenu() { openMenu.value = false; }
 function onClickOutside(e: MouseEvent) {
   if (!openMenu.value) return;
@@ -127,6 +135,7 @@ function selectDevice(d: MediaDeviceInfo){
   closeMenu();
   // For now, just log and maybe change background color subtly to show selection
   console.log('Selected device', d);
+   selectedDeviceId.value = d.deviceId;
   if (renderer) {
     const col = new THREE.Color(0x0b0f14).offsetHSL(0.02, 0.05, 0.02);
     renderer.setClearColor(col, 1);
@@ -265,6 +274,20 @@ onMounted(() => {
   enumerateCameras();
   startMockPose();
   connectIris();
+  // React to device hot-plug events
+  if (navigator.mediaDevices && 'ondevicechange' in navigator.mediaDevices) {
+    navigator.mediaDevices.addEventListener('devicechange', async () => {
+      await enumerateCameras();
+      // If selected device was removed, clear selection and inform IRIS
+      if (selectedDeviceId.value && !devices.value.some(d => d.deviceId === selectedDeviceId.value)) {
+        console.log('[Camera] Selected device removed:', selectedDeviceId.value);
+        const msg = { type: 'camera-removed', payload: { deviceId: selectedDeviceId.value, ts: Date.now() } };
+        lastSentMsg.value = JSON.stringify(msg, null, 2);
+        (window as any).electronAPI?.irisSend?.(msg);
+        selectedDeviceId.value = null;
+      }
+    });
+  }
   // React to showModel toggle
   watch(showModel, (v) => { if (modelRoot) modelRoot.visible = v; });
 });
