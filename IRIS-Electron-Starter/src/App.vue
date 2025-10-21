@@ -27,23 +27,12 @@
       </div>
     </nav>
     <section class="scene" ref="sceneRef"></section>
-    <div class="hud">
-      <label class="hud-item">
-        <input type="checkbox" v-model="showModel" />
-        <span>Show model</span>
-      </label>
-      <div class="hud-sep"></div>
-      <div class="hud-item">
-        <span :class="['dot', irisConnected ? 'ok' : 'warn']"></span>
-        <span>{{ irisConnected ? 'IRIS connected' : 'IRIS offline' }}</span>
-      </div>
-    </div>
   </div>
   
 </template>
 
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, watch } from 'vue';
+import { onMounted, onBeforeUnmount, ref } from 'vue';
 import * as THREE from 'three';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -53,7 +42,6 @@ const sceneRef = ref<HTMLElement | null>(null);
 const splitRef = ref<HTMLElement | null>(null);
 const openMenu = ref(false);
 const devices = ref<MediaDeviceInfo[]>([]);
-const irisConnected = ref(false);
 // Skeleton always visible by default
 
 let renderer: THREE.WebGLRenderer | null = null;
@@ -65,10 +53,6 @@ let controls: OrbitControls | null = null;
 let jointSpheres: THREE.Mesh[] = [];
 let boneLines: THREE.LineSegments | null = null;
 let poseStream: MockPoseStream | null = null;
-let modelRoot: THREE.Object3D | null = null;
-
-const showModel = ref(false); // off by default
-let irisUnsub: null | (()=>void) = null;
 
 function toggleMenu() { openMenu.value = !openMenu.value; }
 function closeMenu() { openMenu.value = false; }
@@ -106,9 +90,6 @@ function selectDevice(d: MediaDeviceInfo){
   }
   // Start mock pose stream when a camera is chosen (until IRIS real stream is wired)
   startMockPose();
-  // Send camera info to IRIS mock bridge
-  const info = { type: 'camera-info', payload: { deviceId: d.deviceId, label: d.label, kind: d.kind, ts: Date.now() } };
-  (window as any).electronAPI?.irisSend?.(info);
 }
 
 // Removed wireframe toggle to keep UI unchanged; skeleton remains visible
@@ -136,23 +117,19 @@ async function loadSMPLX(scene: THREE.Scene){
     if (!obj) throw new Error('OBJ load failed');
     obj.traverse((child: any) => {
       if (child.isMesh) {
-        child.material = new THREE.MeshStandardMaterial({ color: 0x6b83c6, metalness: 0.1, roughness: 0.8, transparent: true, opacity: 0.85 });
+        child.material = new THREE.MeshStandardMaterial({ color: 0x8fb3ff, metalness: 0.15, roughness: 0.6 });
         child.castShadow = true; child.receiveShadow = true;
       }
     });
     obj.position.set(0, 0, 0);
-    modelRoot = obj;
-    modelRoot.visible = showModel.value;
-    scene.add(modelRoot);
+    scene.add(obj);
     fitToObject(obj);
   } catch (e) {
     console.warn('Failed to load SMPLX OBJ, using fallback', e);
     const geo = new THREE.TorusKnotGeometry(0.6, 0.2, 200, 32);
     const mat = new THREE.MeshStandardMaterial({ color: 0x6be675, metalness: 0.4, roughness: 0.3 });
     const mesh = new THREE.Mesh(geo, mat);
-    modelRoot = mesh;
-    modelRoot.visible = showModel.value;
-    scene.add(modelRoot);
+    scene.add(mesh);
     fitToObject(mesh);
   }
 }
@@ -235,9 +212,6 @@ onMounted(() => {
   if (sceneRef.value) initThree(sceneRef.value);
   enumerateCameras();
   startMockPose();
-  connectIris();
-  // React to showModel toggle
-  watch(showModel, (v) => { if (modelRoot) modelRoot.visible = v; });
 });
 
 onBeforeUnmount(() => {
@@ -246,37 +220,22 @@ onBeforeUnmount(() => {
   if (resizeObserver && sceneRef.value) resizeObserver.unobserve(sceneRef.value);
   if (renderer) { renderer.dispose(); renderer = null; }
   poseStream?.stop();
-  if (irisUnsub) { try { irisUnsub(); } catch {}; irisUnsub = null; }
 });
-
-function connectIris(){
-  try {
-    irisUnsub = (window as any).electronAPI?.irisSubscribe?.((msg:any) => {
-      // Mark connected when any message arrives from IRIS bridge
-      irisConnected.value = true;
-      if (msg?.type === 'pose-frame') {
-        // Hook for future: apply msg.payload to updateSkeleton
-      }
-    }) ?? null;
-  } catch { irisConnected.value = false; }
-}
 
 function initSkeleton(scene: THREE.Scene){
   // Joints
   const jointGeo = new THREE.SphereGeometry(0.02, 16, 16);
-  const jointMat = new THREE.MeshBasicMaterial({ color: 0xff5533, depthTest: false, depthWrite: false });
+  const jointMat = new THREE.MeshBasicMaterial({ color: 0xff5533 });
   jointSpheres = COCO_KEYPOINTS.map(() => new THREE.Mesh(jointGeo, jointMat.clone()));
   jointSpheres.forEach(m => { m.visible = true; scene.add(m); });
-  jointSpheres.forEach(m => m.renderOrder = 999);
 
   // Bones
   const positions = new Float32Array(COCO_EDGES.length * 2 * 3);
   const geom = new THREE.BufferGeometry();
   geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  const mat = new THREE.LineBasicMaterial({ color: 0xffffff, depthTest: false });
+  const mat = new THREE.LineBasicMaterial({ color: 0xffffff });
   boneLines = new THREE.LineSegments(geom, mat);
   boneLines.visible = true;
-  boneLines.renderOrder = 998;
   scene.add(boneLines);
 }
 
@@ -305,13 +264,3 @@ function startMockPose(){
   poseStream.start();
 }
 </script>
-
-<style scoped>
-.hud{ position: fixed; left: 16px; bottom: 16px; display:flex; gap:8px; padding:8px 10px; background: rgba(12,18,25,.6); border:1px solid rgba(255,255,255,.08); border-radius: 12px; backdrop-filter: blur(10px); }
-.hud-item{ display:flex; align-items:center; gap:8px; color:#e6edf3; font-weight:600; }
-.hud-item input{ accent-color:#6be675; width:16px; height:16px; }
-.hud-sep{ width:1px; background:rgba(255,255,255,.1); margin:0 6px; }
-.dot{ width:8px; height:8px; border-radius:50%; display:inline-block; box-shadow:0 0 10px rgba(0,0,0,.5) }
-.dot.ok{ background:#6be675 }
-.dot.warn{ background:#ff9a5c }
-</style>

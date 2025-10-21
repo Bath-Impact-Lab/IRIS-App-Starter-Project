@@ -14,8 +14,7 @@
   },
   "dependencies": {
     "three": "^0.169.0",
-    "vue": "^3.5.10",
-    "ws": "^8.18.0"
+    "vue": "^3.5.10"
   },
   "devDependencies": {
     "@electron/notarize": "^2.3.0",
