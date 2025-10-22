@@ -6,8 +6,11 @@
         <div class="split" ref="splitRef">{{ appTitle }}</div>
       </div>
       <div class="menu">
-        <div class="dropdown" :class="{ open: openMenu }">
-          <button class="btn" @click="toggleMenu">Camera Selection</button>
+        <!-- Camera selection dropdown -->
+        <div class="dropdown" :class="{ open: openCamera }">
+          <button class="btn" @click="toggleCamera">
+            {{ selectedDeviceLabel || 'Camera Selection' }}
+          </button>
           <div class="dropdown-menu">
             <h4>Detected cameras</h4>
             <div v-if="devices.length === 0" class="device">
@@ -23,6 +26,43 @@
               </div>
             </div>
           </div>
+        </div>
+
+        <!-- Tracking type dropdown -->
+        <div class="dropdown" :class="{ open: openTrack }" style="margin-left: 12px;">
+          <button class="btn" @click="toggleTrack">
+            {{ trackingType || 'Tracking Type' }}
+          </button>
+          <div class="dropdown-menu">
+            <h4>Tracking</h4>
+            <div class="device" v-for="t in trackingOptions" :key="t" @click="selectTracking(t)">
+              <div>
+                <div>{{ t }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Output option dropdown -->
+        <div class="dropdown" :class="{ open: openOutput }" style="margin-left: 12px;">
+          <button class="btn" @click="toggleOutput">
+            {{ outputOption || 'Output' }}
+          </button>
+          <div class="dropdown-menu">
+            <h4>Output</h4>
+            <div class="device" v-for="o in outputOptions" :key="o" @click="selectOutput(o)">
+              <div>
+                <div>{{ o }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right side: sign-in area -->
+      <div class="nav-right">
+        <div class="menu-right">
+          <button class="btn btn-signin" @click="toggleSignIn">{{ userSignedIn ? 'Signed in' : 'Sign in' }}</button>
         </div>
       </div>
     </nav>
@@ -67,14 +107,29 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { COCO_KEYPOINTS, COCO_EDGES, MockPoseStream, type PoseFrame } from './pose';
 
-
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 
 const sceneRef = ref<HTMLElement | null>(null);
 const splitRef = ref<HTMLElement | null>(null);
-const openMenu = ref(false);
+// Individual dropdown open flags
+const openCamera = ref(false);
+const openTrack = ref(false);
+const openOutput = ref(false);
+// Sign-in state
+const userSignedIn = ref(false);
+
 const devices = ref<MediaDeviceInfo[]>([]);
 const selectedDeviceId = ref<string | null>(null);
+const selectedDeviceLabel = ref<string | null>(null);
+
+// Tracking options
+const trackingOptions = ['Full body', 'Hand', 'Face'];
+const trackingType = ref<string | null>(null);
+
+// Output options
+const outputOptions = ['SteamVR', 'Unity', 'UnReal', 'Gadot'];
+const outputOption = ref<string | null>(null);
+
 const irisConnected = ref(false);
 const debugOpen = ref(false);
 const lastSentMsg = ref('');
@@ -96,18 +151,32 @@ const showModel = ref(false); // off by default
 let irisUnsub: null | (()=>void) = null;
 
 function toggleMenu() {
-  const willOpen = !openMenu.value;
-  openMenu.value = willOpen;
-  if (willOpen) {
-    // Refresh device list on each open so hot-plug/unplug is reflected
-    enumerateCameras();
-  }
+  // kept for backward compatibility but no-op now
+  // Toggle camera dropdown by default for original behavior
+  toggleCamera();
 }
-function closeMenu() { openMenu.value = false; }
-function onClickOutside(e: MouseEvent) {
-  if (!openMenu.value) return;
+function toggleCamera() {
+  const willOpen = !openCamera.value;
+  openCamera.value = willOpen;
+  // close others
+  if (willOpen) { openTrack.value = false; openOutput.value = false; enumerateCameras(); }
+}
+function toggleTrack() {
+  const willOpen = !openTrack.value;
+  openTrack.value = willOpen;
+  if (willOpen) { openCamera.value = false; openOutput.value = false; }
+}
+function toggleOutput() {
+  const willOpen = !openOutput.value;
+  openOutput.value = willOpen;
+  if (willOpen) { openCamera.value = false; openTrack.value = false; }
+}
+ function closeMenu() { openMenu.value = false; }
+ function onClickOutside(e: MouseEvent) {
+  // close any open dropdown if click outside
+  if (!openCamera.value && !openTrack.value && !openOutput.value) return;
   const dd = (e.target as HTMLElement)?.closest('.dropdown');
-  if (!dd) closeMenu();
+  if (!dd) { openCamera.value = false; openTrack.value = false; openOutput.value = false; }
 }
 
 async function enumerateCameras() {
@@ -135,10 +204,12 @@ async function enumerateCameras() {
 }
 
 function selectDevice(d: MediaDeviceInfo){
-  closeMenu();
+  // close just the camera dropdown
+  openCamera.value = false;
   // For now, just log and maybe change background color subtly to show selection
   console.log('Selected device', d);
    selectedDeviceId.value = d.deviceId;
+  selectedDeviceLabel.value = d.label || ('Camera ' + d.deviceId.substring(0,6));
   if (renderer) {
     const col = new THREE.Color(0x0b0f14).offsetHSL(0.02, 0.05, 0.02);
     renderer.setClearColor(col, 1);
@@ -368,6 +439,31 @@ function startMockPose(){
   poseStream.subscribe(updateSkeleton);
   poseStream.start();
 }
+
+function selectTracking(t: string) {
+  trackingType.value = t;
+  openTrack.value = false;
+  // notify backend/electron if desired
+  const msg = { type: 'tracking-select', payload: { tracking: t, ts: Date.now() } };
+  lastSentMsg.value = JSON.stringify(msg, null, 2);
+  (window as any).electronAPI?.irisSend?.(msg);
+}
+
+function selectOutput(o: string) {
+  outputOption.value = o;
+  openOutput.value = false;
+  const msg = { type: 'output-select', payload: { output: o, ts: Date.now() } };
+  lastSentMsg.value = JSON.stringify(msg, null, 2);
+  (window as any).electronAPI?.irisSend?.(msg);
+}
+
+function toggleSignIn() {
+  // Simple placeholder toggle. Replace with real auth flow later.
+  userSignedIn.value = !userSignedIn.value;
+  const msg = { type: 'auth', payload: { signedIn: userSignedIn.value, ts: Date.now() } };
+  lastSentMsg.value = JSON.stringify(msg, null, 2);
+  (window as any).electronAPI?.irisSend?.(msg);
+}
 </script>
 
 <style scoped>
@@ -384,4 +480,36 @@ function startMockPose(){
 .debug-col{ flex:1; min-width:0 }
 .debug-title{ color:#9fb1c1; font-weight:700; font-size:.8rem; margin-bottom:4px }
 .debug-pre{ margin:0; max-height:140px; overflow:auto; background:#0e141b; padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,.06); color:#cfe2f3; font-size:.78rem }
+
+/* Navbar layout: brand left, menu centered, right side for sign-in */
+.navbar{
+  position: relative; /* enable absolute-centering of the menu */
+  display:flex;
+  align-items:center;
+  justify-content: space-between; /* keep brand left and right area placed */
+  gap:12px;
+  padding:12px 18px;
+}
+.brand{ display:flex; align-items:center; gap:10px; color:#e6edf3; font-weight:700; z-index:2; }
+.menu{
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 50%;
+  transform-origin: center;
+  transform: translate(-50%, -50%); /* center vertically and horizontally inside navbar */
+  display:flex;
+  align-items:center;
+  gap:12px;
+  z-index:1;
+}
+.nav-right{ display:flex; align-items:center; gap:12px; z-index:2; }
+.btn-signin{
+  padding:8px 12px;
+  border-radius:9px;
+  border:1px solid rgba(255,255,255,0.08);
+  background: rgba(26,35,48,0.9);
+  color: #e6edf3;
+  cursor: pointer;
+}
 </style>
