@@ -17,6 +17,9 @@ npm run dev
 
 # Build Windows executable ( run as administrator with developer mode enabled )
 npm run build
+
+# Build static web bundle only
+npm run build:web
 ```
 
 If the camera list is empty, Windows may be denying camera access to desktop apps. Open Windows Settings > Privacy & Security > Camera and allow access. The app will still show a mock device when access is unavailable.
