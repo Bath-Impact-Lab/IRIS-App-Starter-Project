@@ -3,7 +3,7 @@
     <nav class="navbar">
       <div class="brand">
         <div class="dot"></div>
-        <div class="split" ref="splitRef"><span>I</span><span>R</span><span>I</span><span>S</span>&nbsp;Starter</div>
+        <div class="split" ref="splitRef">{{ appTitle }}</div>
       </div>
       <div class="menu">
         <div class="dropdown" :class="{ open: openMenu }">
@@ -66,6 +66,9 @@ import * as THREE from 'three';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { COCO_KEYPOINTS, COCO_EDGES, MockPoseStream, type PoseFrame } from './pose';
+
+
+const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 
 const sceneRef = ref<HTMLElement | null>(null);
 const splitRef = ref<HTMLElement | null>(null);
