@@ -32,8 +32,8 @@
     "wait-on": "^8.0.0"
   },
   "build": {
-    "appId": "com.bath-impact-lab.iris-starter",
-    "productName": "IRIS Starter",
+    "appId": "com.bath-impact-lab.iris-app",
+    "productName": "IRIS App",
     "files": [
       "dist/**",
       "electron/**"
