@@ -8,10 +8,26 @@
       <div class="menu">
         <!-- Camera selection dropdown -->
         <div class="dropdown" :class="{ open: openCamera }">
-          <button class="btn" @click="toggleCamera">
+          <button
+            class="btn"
+            ref="cameraButtonRef"
+            @click="toggleCamera"
+            @keydown="onCameraButtonKeydown"
+            aria-haspopup="listbox"
+            :aria-expanded="openCamera"
+            aria-controls="camera-listbox"
+          >
             {{ selectedDeviceLabel || 'Camera Selection' }}
           </button>
-          <div class="dropdown-menu">
+          <div
+            class="dropdown-menu"
+            id="camera-listbox"
+            ref="cameraListRef"
+            role="listbox"
+            tabindex="0"
+            :aria-activedescendant="activeCameraOptionId"
+            @keydown="onCameraListKeydown"
+          >
             <h4>Detected cameras</h4>
             <div v-if="devices.length === 0" class="device">
               <div>
@@ -19,7 +35,16 @@
                 <small>We use a safe mock for now.</small>
               </div>
             </div>
-            <div v-for="d in devices" :key="d.deviceId" class="device" @click="selectDevice(d)">
+            <div
+              v-for="(d, i) in devices"
+              :key="d.deviceId"
+              class="device"
+              role="option"
+              :id="'cam-opt-' + i"
+              :aria-selected="i === cameraActiveIndex"
+              :class="{ active: i === cameraActiveIndex }"
+              @click="selectDevice(d)"
+            >
               <div>
                 <div>{{ d.label || 'Camera ' + d.deviceId.substring(0,6) }}</div>
                 <small>{{ d.kind }}</small>
@@ -101,7 +126,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, watch } from 'vue';
+import { onMounted, onBeforeUnmount, ref, watch, nextTick, computed } from 'vue';
 import * as THREE from 'three';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -116,12 +141,17 @@ const splitRef = ref<HTMLElement | null>(null);
 const openCamera = ref(false);
 const openTrack = ref(false);
 const openOutput = ref(false);
+// Camera menu focus + ARIA state
+const cameraButtonRef = ref<HTMLButtonElement | null>(null);
+const cameraListRef = ref<HTMLElement | null>(null);
+const cameraActiveIndex = ref(0);
 // Sign-in state
 const userSignedIn = ref(false);
 
 const devices = ref<MediaDeviceInfo[]>([]);
 const selectedDeviceId = ref<string | null>(null);
 const selectedDeviceLabel = ref<string | null>(null);
+const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt-${cameraActiveIndex.value}` : undefined));
 
 // Tracking options
 const trackingOptions = ['Full body', 'Hand', 'Face'];
@@ -151,6 +181,55 @@ let modelRoot: THREE.Object3D | null = null;
 
 const showModel = ref(false); // off by default
 let irisUnsub: null | (()=>void) = null;
+
+function onCameraButtonKeydown(e: KeyboardEvent) {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    if (!openCamera.value) {
+      openCamera.value = true; openTrack.value = false; openOutput.value = false;
+      setInitialCameraActiveIndex(e.key === 'ArrowDown' ? 'first' : 'last');
+      e.preventDefault();
+      focusCameraListSoon();
+    }
+  } else if (e.key === 'Enter' || e.key === ' ') {
+    openCamera.value = !openCamera.value;
+    if (openCamera.value) { setInitialCameraActiveIndex('current-or-first'); focusCameraListSoon(); }
+    e.preventDefault();
+  } else if (e.key === 'Escape') {
+    openCamera.value = false; e.preventDefault();
+  }
+}
+
+function onCameraListKeydown(e: KeyboardEvent) {
+  if (devices.value.length === 0) {
+    if (e.key === 'Escape') { openCamera.value = false; cameraButtonRef.value?.focus(); e.preventDefault(); }
+    return;
+  }
+  const max = devices.value.length - 1;
+  if (e.key === 'ArrowDown') { cameraActiveIndex.value = Math.min(max, cameraActiveIndex.value + 1); e.preventDefault(); scrollActiveIntoView(); }
+  else if (e.key === 'ArrowUp') { cameraActiveIndex.value = Math.max(0, cameraActiveIndex.value - 1); e.preventDefault(); scrollActiveIntoView(); }
+  else if (e.key === 'Home') { cameraActiveIndex.value = 0; e.preventDefault(); scrollActiveIntoView(); }
+  else if (e.key === 'End') { cameraActiveIndex.value = max; e.preventDefault(); scrollActiveIntoView(); }
+  else if (e.key === 'Enter') { const d = devices.value[cameraActiveIndex.value]; if (d) selectDevice(d); e.preventDefault(); }
+  else if (e.key === 'Escape') { openCamera.value = false; cameraButtonRef.value?.focus(); e.preventDefault(); }
+}
+
+function setInitialCameraActiveIndex(mode: 'first' | 'last' | 'current-or-first'){
+  if (devices.value.length === 0) { cameraActiveIndex.value = 0; return; }
+  if (mode === 'last') cameraActiveIndex.value = devices.value.length - 1;
+  else if (mode === 'current-or-first') {
+    const idx = selectedDeviceId.value ? devices.value.findIndex(d => d.deviceId === selectedDeviceId.value) : -1;
+    cameraActiveIndex.value = idx >= 0 ? idx : 0;
+  } else cameraActiveIndex.value = 0;
+}
+
+function focusCameraListSoon(){ nextTick(() => cameraListRef.value?.focus()); }
+
+function scrollActiveIntoView(){
+  nextTick(() => {
+    const el = document.getElementById(`cam-opt-${cameraActiveIndex.value}`);
+    el?.scrollIntoView({ block: 'nearest' });
+  });
+}
 
 function toggleMenu() {
   // kept for backward compatibility but no-op now
@@ -369,6 +448,11 @@ onMounted(() => {
   }
   // React to showModel toggle
   watch(showModel, (v) => { if (modelRoot) modelRoot.visible = v; });
+  // Focus management for camera menu
+  watch(openCamera, (isOpen) => {
+    if (isOpen) { setInitialCameraActiveIndex('current-or-first'); focusCameraListSoon(); }
+    else if (document.activeElement === cameraListRef.value) { cameraButtonRef.value?.focus(); }
+  });
 });
 
 onBeforeUnmount(() => {
@@ -532,4 +616,12 @@ function toggleSignIn() {
   color: #e6edf3;
   cursor: pointer;
 }
+/* Accessibility focus styles */
+.btn:focus-visible, .btn.btn-mini:focus-visible {
+  outline: 2px solid #6be675;
+  outline-offset: 2px;
+}
+.dropdown-menu:focus { outline: none; }
+.device.active { background: rgba(107, 230, 117, 0.12); border-radius: 8px; }
+.device.active > div > div { color: #e6ffe9; }
 </style>
