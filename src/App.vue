@@ -134,6 +134,7 @@ const irisConnected = ref(false);
 const debugOpen = ref(false);
 const lastSentMsg = ref('');
 const lastRecvMsg = ref('');
+let poseLogCount = 0; // throttle console logs for pose-frame
 // Skeleton always visible by default
 
 let renderer: THREE.WebGLRenderer | null = null;
@@ -171,7 +172,6 @@ function toggleOutput() {
   openOutput.value = willOpen;
   if (willOpen) { openCamera.value = false; openTrack.value = false; }
 }
- function closeMenu() { openMenu.value = false; }
  function onClickOutside(e: MouseEvent) {
   // close any open dropdown if click outside
   if (!openCamera.value && !openTrack.value && !openOutput.value) return;
@@ -380,7 +380,12 @@ function connectIris(){
     irisUnsub = (window as any).electronAPI?.irisSubscribe?.((msg:any) => {
       // Mark connected when any message arrives from IRIS bridge
       irisConnected.value = true;
-      console.log('[IRIS recv]', msg);
+      if (msg?.type === 'pose-frame') {
+        poseLogCount++;
+        if (poseLogCount % 10 === 0) console.log('[IRIS recv]', msg);
+      } else {
+        console.log('[IRIS recv]', msg);
+      }
       lastRecvMsg.value = JSON.stringify(msg, null, 2);
       if (msg?.type === 'pose-frame') {
         // Hook for future: apply msg.payload to updateSkeleton

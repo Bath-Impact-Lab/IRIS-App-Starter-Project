@@ -7,6 +7,7 @@ const rl = readline.createInterface({ input: process.stdin, output: process.stdo
 
 let running = true;
 let poseTimer = null;
+const POSE_INTERVAL_MS = parseInt(process.env.IRIS_POSE_INTERVAL_MS || '1000', 10); // configurable, default 1s
 
 function send(obj){
   try { process.stdout.write(JSON.stringify(obj) + '\n'); } catch {}
@@ -16,7 +17,7 @@ function startPose(){
   if (poseTimer) return;
   poseTimer = setInterval(() => {
     send({ type: 'pose-frame', payload: { ts: Date.now(), note: 'mock-pose' } });
-  }, 200);
+  }, POSE_INTERVAL_MS);
 }
 
 function stopPose(){ if (poseTimer) { clearInterval(poseTimer); poseTimer = null; } }
