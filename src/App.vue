@@ -77,11 +77,11 @@
         <span :class="['dot', irisConnected ? 'ok' : 'warn']"></span>
         <span>{{ irisConnected ? 'IRIS connected' : 'IRIS offline' }}</span>
       </div>
-      <div class="hud-sep"></div>
-      <button class="btn btn-mini" @click="debugOpen = !debugOpen">{{ debugOpen ? 'Hide' : 'Show' }} debug</button>
+      <div class="hud-sep" v-if="isDev"></div>
+      <button class="btn btn-mini" v-if="isDev" @click="debugOpen = !debugOpen">{{ debugOpen ? 'Hide' : 'Show' }} debug</button>
     </div>
 
-    <div class="debug" v-if="debugOpen">
+    <div class="debug" v-if="isDev && debugOpen">
       <div class="debug-row">
         <button class="btn btn-mini" @click="pingIris">Ping IRIS</button>
       </div>
@@ -108,6 +108,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { COCO_KEYPOINTS, COCO_EDGES, MockPoseStream, type PoseFrame } from './pose';
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
+const isDev = import.meta.env.DEV;
 
 const sceneRef = ref<HTMLElement | null>(null);
 const splitRef = ref<HTMLElement | null>(null);
@@ -341,6 +342,10 @@ function initThree(container: HTMLElement){
 
 onMounted(() => {
   document.addEventListener('click', onClickOutside);
+  // Dev-only keyboard toggle for debug overlay
+  if (isDev) {
+    window.addEventListener('keydown', onKeyDown);
+  }
   // Trigger split animation
   requestAnimationFrame(() => { splitRef.value?.classList.add('ready'); });
 
@@ -368,12 +373,22 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onClickOutside);
+  if (isDev) {
+    window.removeEventListener('keydown', onKeyDown);
+  }
   if (frameId) cancelAnimationFrame(frameId);
   if (resizeObserver && sceneRef.value) resizeObserver.unobserve(sceneRef.value);
   if (renderer) { renderer.dispose(); renderer = null; }
   poseStream?.stop();
   if (irisUnsub) { try { irisUnsub(); } catch {}; irisUnsub = null; }
 });
+
+function onKeyDown(e: KeyboardEvent) {
+  if (!isDev) return;
+  if (e.key === 'F2') {
+    debugOpen.value = !debugOpen.value;
+  }
+}
 
 function connectIris(){
   try {
