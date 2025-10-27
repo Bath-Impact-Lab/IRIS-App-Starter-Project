@@ -22,6 +22,21 @@ npm run build
 npm run build:web
 ```
 
+### Dependency hygiene
+- Core build/runtime packages are pinned (vite, @vitejs/plugin-vue, electron, three, vue) to reduce surprises.
+- To see available updates:
+
+```powershell
+npm run check:deps
+```
+
+- To apply suggested updates (optional), run the command it prints with `-u` and then reinstall:
+
+```powershell
+npx npm-check-updates -u
+npm install
+```
+
 If the camera list is empty, Windows may be denying camera access to desktop apps. Open Windows Settings > Privacy & Security > Camera and allow access. The app will still show a mock device when access is unavailable.
 
 ## Replace the OBJ
