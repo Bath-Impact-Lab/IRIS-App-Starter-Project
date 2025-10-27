@@ -131,6 +131,7 @@ import * as THREE from 'three';
 import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { COCO_KEYPOINTS, COCO_EDGES, MockPoseStream, type PoseFrame } from './pose';
+import { useCameras } from './composables/useCameras';
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 const isDev = import.meta.env.DEV;
@@ -148,9 +149,18 @@ const cameraActiveIndex = ref(0);
 // Sign-in state
 const userSignedIn = ref(false);
 
-const devices = ref<MediaDeviceInfo[]>([]);
-const selectedDeviceId = ref<string | null>(null);
-const selectedDeviceLabel = ref<string | null>(null);
+const {
+  devices,
+  selectedDeviceId,
+  selectedDeviceLabel,
+  enumerateCameras,
+  selectDevice: selectCamera,
+  init: initCameras,
+  dispose: disposeCameras,
+} = useCameras({
+  autoReselect: true,
+  onSend: (msg) => { try { lastSentMsg.value = JSON.stringify(msg, null, 2); } catch {} },
+});
 const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt-${cameraActiveIndex.value}` : undefined));
 
 // Tracking options
@@ -259,37 +269,14 @@ function toggleOutput() {
   if (!dd) { openCamera.value = false; openTrack.value = false; openOutput.value = false; }
 }
 
-async function enumerateCameras() {
-  try {
-    // Trigger permission prompt to obtain labels
-    await navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(s => s.getTracks().forEach(t => t.stop())).catch(() => {});
-    const list = await navigator.mediaDevices.enumerateDevices();
-    devices.value = list.filter(d => d.kind === 'videoinput');
-    // Send camera-list to IRIS once we have devices
-    const payload = devices.value.map(d => ({ deviceId: d.deviceId, label: d.label, kind: d.kind }));
-    const msg = { type: 'camera-list', payload, ts: Date.now() };
-    console.log('[IRIS send] camera-list', msg);
-    lastSentMsg.value = JSON.stringify(msg, null, 2);
-    (window as any).electronAPI?.irisSend?.(msg);
-  } catch (err) {
-    // Mock when not available (e.g., permissions denied)
-    devices.value = [{
-      deviceId: 'mock-0',
-      groupId: 'mock',
-      kind: 'videoinput',
-      label: 'Mock IRIS Camera',
-      toJSON(){ return this as any }
-    } as any];
-  }
-}
+
 
 function selectDevice(d: MediaDeviceInfo){
   // close just the camera dropdown
   openCamera.value = false;
   // For now, just log and maybe change background color subtly to show selection
   console.log('Selected device', d);
-   selectedDeviceId.value = d.deviceId;
-  selectedDeviceLabel.value = d.label || ('Camera ' + d.deviceId.substring(0,6));
+  selectCamera(d);
   if (renderer) {
     const col = new THREE.Color(0x0b0f14).offsetHSL(0.02, 0.05, 0.02);
     renderer.setClearColor(col, 1);
@@ -429,23 +416,9 @@ onMounted(() => {
   requestAnimationFrame(() => { splitRef.value?.classList.add('ready'); });
 
   if (sceneRef.value) initThree(sceneRef.value);
-  enumerateCameras();
+  initCameras();
   startMockPose();
   connectIris();
-  // React to device hot-plug events
-  if (navigator.mediaDevices && 'ondevicechange' in navigator.mediaDevices) {
-    navigator.mediaDevices.addEventListener('devicechange', async () => {
-      await enumerateCameras();
-      // If selected device was removed, clear selection and inform IRIS
-      if (selectedDeviceId.value && !devices.value.some(d => d.deviceId === selectedDeviceId.value)) {
-        console.log('[Camera] Selected device removed:', selectedDeviceId.value);
-        const msg = { type: 'camera-removed', payload: { deviceId: selectedDeviceId.value, ts: Date.now() } };
-        lastSentMsg.value = JSON.stringify(msg, null, 2);
-        (window as any).electronAPI?.irisSend?.(msg);
-        selectedDeviceId.value = null;
-      }
-    });
-  }
   // React to showModel toggle
   watch(showModel, (v) => { if (modelRoot) modelRoot.visible = v; });
   // Focus management for camera menu
@@ -460,6 +433,7 @@ onBeforeUnmount(() => {
   if (isDev) {
     window.removeEventListener('keydown', onKeyDown);
   }
+  disposeCameras();
   if (frameId) cancelAnimationFrame(frameId);
   if (resizeObserver && sceneRef.value) resizeObserver.unobserve(sceneRef.value);
   if (renderer) { renderer.dispose(); renderer = null; }
