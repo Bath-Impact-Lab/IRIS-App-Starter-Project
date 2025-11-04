@@ -132,6 +132,7 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { COCO_KEYPOINTS, COCO_EDGES, MockPoseStream, type PoseFrame } from './pose';
 import { useCameras } from './composables/useCameras';
+import { useIris } from './composables/useIris';
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 const isDev = import.meta.env.DEV;
@@ -191,6 +192,24 @@ let modelRoot: THREE.Object3D | null = null;
 
 const showModel = ref(false); // off by default
 let irisUnsub: null | (()=>void) = null;
+
+// IRIS keepalive with auto-restart
+const iris = useIris({
+  onMessage: (msg: any) => {
+    // Mirror previous UI behavior: mark connected and show last received
+    irisConnected.value = true;
+    if (msg?.type === 'pose-frame') {
+      poseLogCount++;
+      if (poseLogCount % 10 === 0) console.log('[IRIS recv]', msg);
+    } else {
+      console.log('[IRIS recv]', msg);
+    }
+    lastRecvMsg.value = JSON.stringify(msg, null, 2);
+    if (msg?.type === 'pose-frame') {
+      // Hook for future: apply msg.payload to updateSkeleton
+    }
+  },
+});
 
 function onCameraButtonKeydown(e: KeyboardEvent) {
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -418,7 +437,8 @@ onMounted(() => {
   if (sceneRef.value) initThree(sceneRef.value);
   initCameras();
   startMockPose();
-  connectIris();
+  // Start IRIS keepalive + subscription
+  iris.init();
   // React to showModel toggle
   watch(showModel, (v) => { if (modelRoot) modelRoot.visible = v; });
   // Focus management for camera menu
@@ -438,6 +458,7 @@ onBeforeUnmount(() => {
   if (resizeObserver && sceneRef.value) resizeObserver.unobserve(sceneRef.value);
   if (renderer) { renderer.dispose(); renderer = null; }
   poseStream?.stop();
+  iris.dispose();
   if (irisUnsub) { try { irisUnsub(); } catch {}; irisUnsub = null; }
 });
 
@@ -448,30 +469,13 @@ function onKeyDown(e: KeyboardEvent) {
   }
 }
 
-function connectIris(){
-  try {
-    irisUnsub = (window as any).electronAPI?.irisSubscribe?.((msg:any) => {
-      // Mark connected when any message arrives from IRIS bridge
-      irisConnected.value = true;
-      if (msg?.type === 'pose-frame') {
-        poseLogCount++;
-        if (poseLogCount % 10 === 0) console.log('[IRIS recv]', msg);
-      } else {
-        console.log('[IRIS recv]', msg);
-      }
-      lastRecvMsg.value = JSON.stringify(msg, null, 2);
-      if (msg?.type === 'pose-frame') {
-        // Hook for future: apply msg.payload to updateSkeleton
-      }
-    }) ?? null;
-  } catch { irisConnected.value = false; }
-}
+function connectIris(){ /* handled by useIris(); kept for compatibility */ }
 
 function pingIris(){
   const msg = { type: 'ping', ts: Date.now() };
   console.log('[IRIS send] ping', msg);
   lastSentMsg.value = JSON.stringify(msg, null, 2);
-  (window as any).electronAPI?.irisSend?.(msg);
+  iris.send(msg);
 }
 
 function initSkeleton(scene: THREE.Scene){
