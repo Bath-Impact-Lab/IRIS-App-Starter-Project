@@ -8,7 +8,7 @@
       <div class="menu">
         <!-- Camera selection dropdown -->
         <span v-for="(item, index) in selectedDeviceLabel" style="height: 33px;">
-          <img :src="cameraIcons[index % cameraIcons.length]" alt="Camera Icon" style="height: 33px; width: 33px; fill: aliceblue;">
+          <img :src="cameraIcons[index % cameraIcons.length]" alt="Camera Icon" style="height: 33px; width: 33px;">
         </span>
         <div class="dropdown" :class="{ open: openCamera }">
           
@@ -64,14 +64,14 @@
 
         <!-- Tracking type dropdown -->
         <span v-for="(item, index) in trackingType" style="height: 33px;">
-          <img :src="item[1]" alt="Camera Icon" style="height: 33px; width: 33px; fill: aliceblue;">
+          <img :src="trackingIcons[trackingOptions.indexOf(item)][1]" alt="Camera Icon" style="height: 33px; width: 33px;">
         </span>
         <div class="dropdown" :class="{ open: openTrack }" style="margin-left: 12px;">
           <button class="btn" @click="toggleTrack">
             <span v-if="trackingType">
               <span v-for="(item, index) in trackingType">
-                <span v-if="trackingType.length-1 == index"> {{ item[0] }} </span>
-                <span v-else> {{ item[0] }} + </span>
+                <span v-if="trackingType.length-1 == index"> {{ item }} </span>
+                <span v-else> {{ item }} + </span>
               </span>
               Tracking
             </span>
@@ -81,9 +81,9 @@
           </button>
           <div class="dropdown-menu">
             <h4>Tracking</h4>
-            <div class="device" v-for="t in trackingOptions" :key="t[0]" @click="selectTracking(t)">
+            <div class="device" v-for="t in trackingOptions" :key="t" @click="selectTracking(t)">
               <div>
-                <div>{{ t[0] }}</div>
+                <div>{{ t }}</div>
               </div>
             </div>
           </div>
@@ -179,7 +179,7 @@ const cameraHoverIndex = ref(0);
 const userSignedIn = ref(false);
 
 const cameraIcons = [cameraIcon1, cameraIcon2, cameraIcon3];
-
+const trackingIcons = [['Full body', bodyIcon], ['Hand', handIcon], ['Face', emotionIcon], ['Multi-Person', groupIcon]];
 const {
   devices,
   selectedDeviceId,
@@ -195,8 +195,8 @@ const {
 const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt-${cameraHoverIndex.value}` : undefined));
 
 // Tracking options
-const trackingOptions = [['Full body', bodyIcon], ['Hand', handIcon], ['Face', emotionIcon], ['Multi-Person', groupIcon]];
-const trackingType = ref<string[][] | null>(null);
+const trackingOptions = ['Full body', 'Hand', 'Face', 'Multi-Person'];
+const trackingType = ref<string[] | null>(null);
 
 // Output options
 const outputOptions = ['SteamVR', 'Unity', 'Unreal', 'Gadot'];
@@ -549,7 +549,7 @@ function startMockPose(){
   poseStream.start();
 }
 
-function selectTracking(t: string[]) {
+function selectTracking(t: string) {
   if (trackingType.value && trackingType.value.includes(t)) {
     let idx = trackingType.value.indexOf(t);
     trackingType.value.splice(idx, 1);
