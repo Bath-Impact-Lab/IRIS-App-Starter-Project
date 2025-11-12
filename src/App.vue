@@ -7,7 +7,11 @@
       </div>
       <div class="menu">
         <!-- Camera selection dropdown -->
+        <span v-for="(item, index) in selectedDeviceLabel" style="height: 33px;">
+          <img :src="cameraIcons[index % cameraIcons.length]" alt="Camera Icon" style="height: 33px; width: 33px; fill: aliceblue;">
+        </span>
         <div class="dropdown" :class="{ open: openCamera }">
+          
           <button
             class="btn"
             ref="cameraButtonRef"
@@ -17,7 +21,12 @@
             :aria-expanded="openCamera"
             aria-controls="camera-listbox"
           >
-            {{ selectedDeviceLabel || 'Camera Selection' }}
+          <span v-if="selectedDeviceLabel">
+            + Add
+          </span>
+          <span v-else>
+            Camera Selection
+          </span>
           </button>
           <div
             class="dropdown-menu"
@@ -41,12 +50,12 @@
               class="device"
               role="option"
               :id="'cam-opt-' + i"
-              :aria-selected="i === cameraActiveIndex"
-              :class="{ active: i === cameraActiveIndex }"
+              :aria-selected="i === cameraHoverIndex"
+              :class="{ hovered: i === cameraHoverIndex, active: selectedDeviceLabel?.includes(d.label) && selectedDeviceId?.includes(d.deviceId) }"
               @click="selectDevice(d)"
             >
               <div>
-                <div>{{ d.label || 'Camera ' + d.deviceId.substring(0,6) }}</div>
+                <div>{{ d.label || ' Camera ' + d.deviceId.substring(0,6) }}</div>
                 <small>{{ d.kind }}</small>
               </div>
             </div>
@@ -54,15 +63,27 @@
         </div>
 
         <!-- Tracking type dropdown -->
+        <span v-for="(item, index) in trackingType" style="height: 33px;">
+          <img :src="item[1]" alt="Camera Icon" style="height: 33px; width: 33px; fill: aliceblue;">
+        </span>
         <div class="dropdown" :class="{ open: openTrack }" style="margin-left: 12px;">
           <button class="btn" @click="toggleTrack">
-            {{ trackingType || 'Tracking Type' }}
+            <span v-if="trackingType">
+              <span v-for="(item, index) in trackingType">
+                <span v-if="trackingType.length-1 == index"> {{ item[0] }} </span>
+                <span v-else> {{ item[0] }} + </span>
+              </span>
+              Tracking
+            </span>
+            <span v-else>
+              Tracking Type
+            </span>
           </button>
           <div class="dropdown-menu">
             <h4>Tracking</h4>
-            <div class="device" v-for="t in trackingOptions" :key="t" @click="selectTracking(t)">
+            <div class="device" v-for="t in trackingOptions" :key="t[0]" @click="selectTracking(t)">
               <div>
-                <div>{{ t }}</div>
+                <div>{{ t[0] }}</div>
               </div>
             </div>
           </div>
@@ -132,6 +153,14 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { COCO_KEYPOINTS, COCO_EDGES, MockPoseStream, type PoseFrame } from './pose';
 import { useCameras } from './composables/useCameras';
+import cameraIcon1 from "@/assets/cameraIcon.svg";
+import cameraIcon2 from "@/assets/cameraIcon2.svg";
+import cameraIcon3 from "@/assets/cameraIcon3.svg";
+import bodyIcon from "@/assets/bodyIcon.svg";
+import emotionIcon from "@/assets/emotionLine.svg";
+import handIcon from "@/assets/handIcon.svg";
+import groupIcon from "@/assets/groupIcon.svg";
+
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 const isDev = import.meta.env.DEV;
@@ -145,9 +174,11 @@ const openOutput = ref(false);
 // Camera menu focus + ARIA state
 const cameraButtonRef = ref<HTMLButtonElement | null>(null);
 const cameraListRef = ref<HTMLElement | null>(null);
-const cameraActiveIndex = ref(0);
+const cameraHoverIndex = ref(0);
 // Sign-in state
 const userSignedIn = ref(false);
+
+const cameraIcons = [cameraIcon1, cameraIcon2, cameraIcon3];
 
 const {
   devices,
@@ -161,14 +192,14 @@ const {
   autoReselect: true,
   onSend: (msg) => { try { lastSentMsg.value = JSON.stringify(msg, null, 2); } catch {} },
 });
-const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt-${cameraActiveIndex.value}` : undefined));
+const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt-${cameraHoverIndex.value}` : undefined));
 
 // Tracking options
-const trackingOptions = ['Full body', 'Hand', 'Face'];
-const trackingType = ref<string | null>(null);
+const trackingOptions = [['Full body', bodyIcon], ['Hand', handIcon], ['Face', emotionIcon], ['Multi-Person', groupIcon]];
+const trackingType = ref<string[][] | null>(null);
 
 // Output options
-const outputOptions = ['SteamVR', 'Unity', 'UnReal', 'Gadot'];
+const outputOptions = ['SteamVR', 'Unity', 'Unreal', 'Gadot'];
 const outputOption = ref<string | null>(null);
 
 const irisConnected = ref(false);
@@ -215,28 +246,28 @@ function onCameraListKeydown(e: KeyboardEvent) {
     return;
   }
   const max = devices.value.length - 1;
-  if (e.key === 'ArrowDown') { cameraActiveIndex.value = Math.min(max, cameraActiveIndex.value + 1); e.preventDefault(); scrollActiveIntoView(); }
-  else if (e.key === 'ArrowUp') { cameraActiveIndex.value = Math.max(0, cameraActiveIndex.value - 1); e.preventDefault(); scrollActiveIntoView(); }
-  else if (e.key === 'Home') { cameraActiveIndex.value = 0; e.preventDefault(); scrollActiveIntoView(); }
-  else if (e.key === 'End') { cameraActiveIndex.value = max; e.preventDefault(); scrollActiveIntoView(); }
-  else if (e.key === 'Enter') { const d = devices.value[cameraActiveIndex.value]; if (d) selectDevice(d); e.preventDefault(); }
+  if (e.key === 'ArrowDown') { cameraHoverIndex.value = Math.min(max, cameraHoverIndex.value + 1); e.preventDefault(); scrollActiveIntoView(); }
+  else if (e.key === 'ArrowUp') { cameraHoverIndex.value = Math.max(0, cameraHoverIndex.value - 1); e.preventDefault(); scrollActiveIntoView(); }
+  else if (e.key === 'Home') { cameraHoverIndex.value = 0; e.preventDefault(); scrollActiveIntoView(); }
+  else if (e.key === 'End') { cameraHoverIndex.value = max; e.preventDefault(); scrollActiveIntoView(); }
+  else if (e.key === 'Enter') { const d = devices.value[cameraHoverIndex.value]; if (d) selectDevice(d); e.preventDefault(); }
   else if (e.key === 'Escape') { openCamera.value = false; cameraButtonRef.value?.focus(); e.preventDefault(); }
 }
 
 function setInitialCameraActiveIndex(mode: 'first' | 'last' | 'current-or-first'){
-  if (devices.value.length === 0) { cameraActiveIndex.value = 0; return; }
-  if (mode === 'last') cameraActiveIndex.value = devices.value.length - 1;
+  if (devices.value.length === 0) { cameraHoverIndex.value = 0; return; }
+  if (mode === 'last') cameraHoverIndex.value = devices.value.length - 1;
   else if (mode === 'current-or-first') {
-    const idx = selectedDeviceId.value ? devices.value.findIndex(d => d.deviceId === selectedDeviceId.value) : -1;
-    cameraActiveIndex.value = idx >= 0 ? idx : 0;
-  } else cameraActiveIndex.value = 0;
+    const idx = selectedDeviceId.value ? devices.value.findIndex(d => (selectedDeviceId.value ? selectedDeviceId.value : []).includes(d.deviceId)) : -1;
+    cameraHoverIndex.value = idx >= 0 ? idx : 0;
+  } else cameraHoverIndex.value = 0;
 }
 
 function focusCameraListSoon(){ nextTick(() => cameraListRef.value?.focus()); }
 
 function scrollActiveIntoView(){
   nextTick(() => {
-    const el = document.getElementById(`cam-opt-${cameraActiveIndex.value}`);
+    const el = document.getElementById(`cam-opt-${cameraHoverIndex.value}`);
     el?.scrollIntoView({ block: 'nearest' });
   });
 }
@@ -273,7 +304,7 @@ function toggleOutput() {
 
 function selectDevice(d: MediaDeviceInfo){
   // close just the camera dropdown
-  openCamera.value = false;
+  // openCamera.value = false;
   // For now, just log and maybe change background color subtly to show selection
   console.log('Selected device', d);
   selectCamera(d);
@@ -518,8 +549,20 @@ function startMockPose(){
   poseStream.start();
 }
 
-function selectTracking(t: string) {
-  trackingType.value = t;
+function selectTracking(t: string[]) {
+  if (trackingType.value && trackingType.value.includes(t)) {
+    let idx = trackingType.value.indexOf(t);
+    trackingType.value.splice(idx, 1);
+    if (trackingType.value.length <= 0) {
+      trackingType.value = null;
+    }
+  }
+  else if (trackingType.value) {
+    trackingType.value = trackingType.value.concat([t]);
+  }
+  else {
+    trackingType.value = [t];
+  }
   openTrack.value = false;
   // notify backend/electron if desired
   const msg = { type: 'tracking-select', payload: { tracking: t, ts: Date.now() } };
@@ -596,6 +639,7 @@ function toggleSignIn() {
   outline-offset: 2px;
 }
 .dropdown-menu:focus { outline: none; }
+.device.hovered { background: rgb(85, 95, 88, 0.41); border-radius: 8px; }
 .device.active { background: rgba(107, 230, 117, 0.12); border-radius: 8px; }
 .device.active > div > div { color: #e6ffe9; }
 </style>

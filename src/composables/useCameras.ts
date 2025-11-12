@@ -17,8 +17,8 @@ export function useCameras(options: UseCamerasOptions = {}) {
   const persistKey = options.persistKey ?? 'iris.selectedCameraId';
 
   const devices = ref<MediaDeviceInfo[]>([]);
-  const selectedDeviceId = ref<string | null>(null);
-  const selectedDeviceLabel = ref<string | null>(null);
+  const selectedDeviceId = ref<string[] | null>(null);
+  const selectedDeviceLabel = ref<string[] | null>(null);
 
   let deviceChangeHandler: (() => void) | null = null;
 
@@ -55,7 +55,7 @@ export function useCameras(options: UseCamerasOptions = {}) {
       send(msg);
       // Auto reselect if desired
       if (autoReselect && selectedDeviceId.value) {
-        const stillThere = devices.value.some(d => d.deviceId === selectedDeviceId.value);
+        const stillThere = devices.value.some(d => (selectedDeviceId.value ? selectedDeviceId.value : []).includes(d.deviceId));
         if (!stillThere) {
           // previously selected removed
           const removedMsg = { type: 'camera-removed', payload: { deviceId: selectedDeviceId.value, ts: Date.now() } };
@@ -72,8 +72,8 @@ export function useCameras(options: UseCamerasOptions = {}) {
           const found = devices.value.find(d => d.deviceId === persistedId);
           if (found) {
             // Reselect silently (no side-effects beyond local state)
-            selectedDeviceId.value = found.deviceId;
-            selectedDeviceLabel.value = found.label || `Camera ${found.deviceId.substring(0,6)}`;
+            selectedDeviceId.value = [found.deviceId];
+            selectedDeviceLabel.value = [found.label || `Camera ${found.deviceId.substring(0,6)}`];
           }
         }
       }
@@ -87,14 +87,39 @@ export function useCameras(options: UseCamerasOptions = {}) {
   }
 
   function selectDevice(d: MediaDeviceInfo) {
-    selectedDeviceId.value = d.deviceId;
-    selectedDeviceLabel.value = d.label || `Camera ${d.deviceId.substring(0,6)}`;
+    if (selectedDeviceId.value && selectedDeviceId.value.includes(d.deviceId) && selectedDeviceLabel.value) {
+      let idx = selectedDeviceId.value.indexOf(d.deviceId);
+      selectedDeviceId.value.splice(idx, 1);
+      selectedDeviceLabel.value.splice(idx, 1);
+      if (selectedDeviceId.value.length <= 0 || selectedDeviceLabel.value.length <= 0) {
+        selectedDeviceId.value = null;
+        selectedDeviceLabel.value = null;
+      }
+
+    }
+    else if (selectedDeviceLabel.value && selectedDeviceId.value) {
+      selectedDeviceId.value = selectedDeviceId.value.concat([d.deviceId]);
+      selectedDeviceLabel.value =  selectedDeviceLabel.value.concat([d.label || `Camera ${d.deviceId.substring(0,6)}`]);
+    }
+    else {
+      selectedDeviceId.value = [d.deviceId];
+      selectedDeviceLabel.value = [d.label || `Camera ${d.deviceId.substring(0,6)}`];
+    }
+
     try { localStorage.setItem(persistKey, d.deviceId); } catch {}
   }
 
   function init() {
     // Load persisted selection early
-    try { selectedDeviceId.value = localStorage.getItem(persistKey); } catch {}
+    try { 
+      let temp = localStorage.getItem(persistKey);
+      if (temp) {
+        selectedDeviceId.value = [temp]; 
+      }
+      else {
+        selectedDeviceId.value = null;
+      }
+    } catch {}
     enumerateCameras();
     const handler = async () => { await enumerateCameras(); };
     navigator.mediaDevices?.addEventListener?.('devicechange', handler);
