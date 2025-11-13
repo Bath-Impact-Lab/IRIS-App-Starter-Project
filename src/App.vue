@@ -7,11 +7,11 @@
       </div>
       <div class="menu">
         <!-- Camera selection dropdown -->
-        <span v-for="(item, index) in selectedDeviceLabel" style="height: 33px;">
-          <img :src="cameraIcons[index % cameraIcons.length]" alt="Camera Icon" style="height: 33px; width: 33px;">
-        </span>
-        <div class="dropdown" :class="{ open: openCamera }">
-          
+        
+        <div class="dropdown menu-buttons" :class="{ open: openCamera }" style="right: 75%;">
+          <span v-for="(item, index) in selectedDeviceLabel" class="menu-icons">
+            <img :src="cameraIcons[index % cameraIcons.length]" alt="Camera Icon" style="height: 33px; width: 33px;">
+          </span>
           <button
             class="btn"
             ref="cameraButtonRef"
@@ -63,15 +63,22 @@
         </div>
 
         <!-- Tracking type dropdown -->
-        <span v-for="(item, index) in trackingType" style="height: 33px;">
-          <img :src="trackingIcons[trackingOptions.indexOf(item)][1]" alt="Camera Icon" style="height: 33px; width: 33px;">
-        </span>
-        <div class="dropdown" :class="{ open: openTrack }" style="margin-left: 12px;">
+
+        <div class="dropdown menu-buttons" :class="{ open: openTrack }" style="margin-left: 12px; right: 50%;">
+          <span v-if="trackingType" style="height: 33px;">
+            <span v-for="(item, index) in trackingOptions" class="menu-icons">
+              <span v-if="trackingType?.includes(item)">
+                <img :src="trackingIcons[trackingOptions.indexOf(item)]" alt="Tracking Icons" style="height: 33px; width: 33px;">
+              </span>
+            </span>
+          </span>
           <button class="btn" @click="toggleTrack">
             <span v-if="trackingType">
-              <span v-for="(item, index) in trackingType">
-                <span v-if="trackingType.length-1 == index"> {{ item }} </span>
-                <span v-else> {{ item }} + </span>
+              <span v-for="(item, index) in trackingOptions">
+                <span v-if="trackingType.includes(item)"> 
+                  <span v-if="index == trackingOptions.length - 1"> {{ item }} </span>
+                  <span v-else> {{ item }} + </span>  
+                </span>
               </span>
               Tracking
             </span>
@@ -83,14 +90,16 @@
             <h4>Tracking</h4>
             <div class="device" v-for="t in trackingOptions" :key="t" @click="selectTracking(t)">
               <div>
-                <div>{{ t }}</div>
+                <input type="checkbox" :id="t" :value="t" v-model="trackingType"/>
+                <label :for="t" style="padding-left: 5px;" @click="selectTracking(t)">{{ t }}</label>
+                <!-- <input/> -->
               </div>
             </div>
           </div>
         </div>
 
         <!-- Output option dropdown -->
-        <div class="dropdown" :class="{ open: openOutput }" style="margin-left: 12px;">
+        <div class="dropdown menu-buttons" :class="{ open: openOutput }" style="margin-left: 12px; right: 25%;">
           <button class="btn" @click="toggleOutput">
             {{ outputOption || 'Output' }}
           </button>
@@ -108,7 +117,17 @@
       <!-- Right side: sign-in area -->
       <div class="nav-right">
         <div class="menu-right">
-          <button class="btn btn-signin" @click="toggleSignIn">{{ userSignedIn ? 'Signed in' : 'Sign in' }}</button>
+          <div class="dropdown" :class="{open: openSignIn}">
+            <button 
+              class="btn btn-signin" 
+              @click="toggleSignIn">
+              {{ userSignedIn ? 'Signed in' : 'Sign in' }}
+            </button>
+            <div class="dropdown-menu">
+              <h4>Enter Key</h4>
+              <input></input>
+            </div>
+          </div>
         </div>
       </div>
     </nav>
@@ -160,7 +179,6 @@ import bodyIcon from "@/assets/bodyIcon.svg";
 import emotionIcon from "@/assets/emotionLine.svg";
 import handIcon from "@/assets/handIcon.svg";
 import groupIcon from "@/assets/groupIcon.svg";
-
 import { useIris } from './composables/useIris';
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
@@ -172,6 +190,7 @@ const splitRef = ref<HTMLElement | null>(null);
 const openCamera = ref(false);
 const openTrack = ref(false);
 const openOutput = ref(false);
+const openSignIn = ref(false);
 // Camera menu focus + ARIA state
 const cameraButtonRef = ref<HTMLButtonElement | null>(null);
 const cameraListRef = ref<HTMLElement | null>(null);
@@ -180,7 +199,7 @@ const cameraHoverIndex = ref(0);
 const userSignedIn = ref(false);
 
 const cameraIcons = [cameraIcon1, cameraIcon2, cameraIcon3];
-const trackingIcons = [['Full body', bodyIcon], ['Hand', handIcon], ['Face', emotionIcon], ['Multi-Person', groupIcon]];
+const trackingIcons = [bodyIcon,handIcon, emotionIcon, groupIcon];
 const {
   devices,
   selectedDeviceId,
@@ -554,6 +573,7 @@ function startMockPose(){
 }
 
 function selectTracking(t: string) {
+  console.log("recieving")
   if (trackingType.value && trackingType.value.includes(t)) {
     let idx = trackingType.value.indexOf(t);
     trackingType.value.splice(idx, 1);
@@ -567,7 +587,7 @@ function selectTracking(t: string) {
   else {
     trackingType.value = [t];
   }
-  openTrack.value = false;
+  // openTrack.value = false;
   // notify backend/electron if desired
   const msg = { type: 'tracking-select', payload: { tracking: t, ts: Date.now() } };
   lastSentMsg.value = JSON.stringify(msg, null, 2);
@@ -585,6 +605,7 @@ function selectOutput(o: string) {
 function toggleSignIn() {
   // Simple placeholder toggle. Replace with real auth flow later.
   userSignedIn.value = !userSignedIn.value;
+  openSignIn.value = !openSignIn.value;
   const msg = { type: 'auth', payload: { signedIn: userSignedIn.value, ts: Date.now() } };
   lastSentMsg.value = JSON.stringify(msg, null, 2);
   (window as any).electronAPI?.irisSend?.(msg);
@@ -617,12 +638,12 @@ function toggleSignIn() {
 }
 .brand{ display:flex; align-items:center; gap:10px; color:#e6edf3; font-weight:700; z-index:2; }
 .menu{
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  top: 50%;
+  /* position: absolute; */
+  /* left: 50%; */
+  /* transform: translateX(-50%); */
+  /* top: 50%; */
   transform-origin: center;
-  transform: translate(-50%, -50%); /* center vertically and horizontally inside navbar */
+  /* transform: translate(-50%, -50%); center vertically and horizontally inside navbar */
   display:flex;
   align-items:center;
   gap:12px;
@@ -642,6 +663,17 @@ function toggleSignIn() {
   outline: 2px solid #6be675;
   outline-offset: 2px;
 }
+
+.menu-buttons {
+  position: absolute;
+  display: flex;
+}
+
+.menu-icons {
+  height: 33px; 
+  padding-right: 5px;
+}
+
 .dropdown-menu:focus { outline: none; }
 .device.hovered { background: rgb(85, 95, 88, 0.41); border-radius: 8px; }
 .device.active { background: rgba(107, 230, 117, 0.12); border-radius: 8px; }
