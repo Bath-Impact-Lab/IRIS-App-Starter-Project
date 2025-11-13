@@ -8,10 +8,8 @@
       <div class="menu">
         <!-- Camera selection dropdown -->
         
-        <div class="dropdown menu-buttons" :class="{ open: openCamera }" style="right: 75%;">
-          <span v-for="(item, index) in selectedDeviceLabel" class="menu-icons">
-            <img :src="cameraIcons[index % cameraIcons.length]" alt="Camera Icon" style="height: 33px; width: 33px;">
-          </span>
+        <div class="dropdown menu-buttons" :class="{ open: openCamera }" >
+
           <button
             class="btn"
             ref="cameraButtonRef"
@@ -57,6 +55,7 @@
               <div>
                 <div>{{ d.label || ' Camera ' + d.deviceId.substring(0,6) }}</div>
                 <small>{{ d.kind }}</small>
+                <span v-if="selectedDeviceId?.includes(d.deviceId)"> Connected </span>
               </div>
             </div>
           </div>
@@ -64,14 +63,8 @@
 
         <!-- Tracking type dropdown -->
 
-        <div class="dropdown menu-buttons" :class="{ open: openTrack }" style="margin-left: 12px; right: 50%;">
-          <span v-if="trackingType" style="height: 33px;">
-            <span v-for="(item, index) in trackingOptions" class="menu-icons">
-              <span v-if="trackingType?.includes(item)">
-                <img :src="trackingIcons[trackingOptions.indexOf(item)]" alt="Tracking Icons" style="height: 33px; width: 33px;">
-              </span>
-            </span>
-          </span>
+        <div class="dropdown menu-buttons" :class="{ open: openTrack }" style="margin-left: 12px;">
+          
           <button class="btn" @click="toggleTrack">
             <span v-if="trackingType">
               <span v-for="(item, index) in trackingOptions">
@@ -99,7 +92,7 @@
         </div>
 
         <!-- Output option dropdown -->
-        <div class="dropdown menu-buttons" :class="{ open: openOutput }" style="margin-left: 12px; right: 25%;">
+        <div class="dropdown menu-buttons" :class="{ open: openOutput }" style="margin-left: 12px; ">
           <button class="btn" @click="toggleOutput">
             {{ outputOption || 'Output' }}
           </button>
@@ -125,11 +118,31 @@
             </button>
             <div class="dropdown-menu">
               <h4>Enter Key</h4>
-              <input></input>
+              <input type="text" style="margin-left: 6px;" v-model="activationKey" placeholder="Enter Activation Key">{{  }}</input>
+              <button type="submit" style="margin-left: 6px; cursor: pointer;" @click="submitKey">Submit</button>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- camera and tracking type icons -->
+      <div v-if="selectedDeviceLabel || trackingType" class="icon-tab">
+        <span v-if="selectedDeviceLabel" class="icon-group">
+          <span v-for="(item, index) in selectedDeviceLabel" class="menu-icons">
+            <img :src="cameraIcons[index % cameraIcons.length]" alt="Camera Icon" style="height: 33px; width: 33px;">
+          </span>
+        </span>
+        <span v-if="trackingType" class="icon-group">
+            <span v-for="(item, index) in trackingOptions" class="menu-icons">
+              <span v-if="trackingType?.includes(item)">
+                <img :src="trackingIcons[trackingOptions.indexOf(item)]" alt="Tracking Icons" style="height: 33px; width: 33px;">
+              </span>
+              <span v-else style="width: 0px; height: 0px;"></span>
+            </span>
+          </span>
+
+      </div>
+
     </nav>
     <section class="scene" ref="sceneRef"></section>
     <div class="hud">
@@ -180,7 +193,7 @@ import emotionIcon from "@/assets/emotionLine.svg";
 import handIcon from "@/assets/handIcon.svg";
 import groupIcon from "@/assets/groupIcon.svg";
 import { useIris } from './composables/useIris';
-
+import cookies from "js-cookie";
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 const isDev = import.meta.env.DEV;
 
@@ -197,6 +210,8 @@ const cameraListRef = ref<HTMLElement | null>(null);
 const cameraHoverIndex = ref(0);
 // Sign-in state
 const userSignedIn = ref(false);
+const activationKey = ref<string | null>(null);
+const signedInKey = ref<string | null>(null)
 
 const cameraIcons = [cameraIcon1, cameraIcon2, cameraIcon3];
 const trackingIcons = [bodyIcon,handIcon, emotionIcon, groupIcon];
@@ -275,6 +290,16 @@ function onCameraButtonKeydown(e: KeyboardEvent) {
     e.preventDefault();
   } else if (e.key === 'Escape') {
     openCamera.value = false; e.preventDefault();
+  }
+}
+
+window.onload = (event) => {
+  console.log("Page loaded")
+  const getCookie = cookies.get("activationKey")
+  if (getCookie) {
+    // implement method to send cookie key to a backend DB to validate and send a response back and sign in user
+    userSignedIn.value = true;
+    signedInKey.value = getCookie;
   }
 }
 
@@ -604,11 +629,25 @@ function selectOutput(o: string) {
 
 function toggleSignIn() {
   // Simple placeholder toggle. Replace with real auth flow later.
-  userSignedIn.value = !userSignedIn.value;
   openSignIn.value = !openSignIn.value;
   const msg = { type: 'auth', payload: { signedIn: userSignedIn.value, ts: Date.now() } };
   lastSentMsg.value = JSON.stringify(msg, null, 2);
   (window as any).electronAPI?.irisSend?.(msg);
+}
+
+function submitKey() {
+  openSignIn.value = false;
+  userSignedIn.value = !userSignedIn.value;
+  const cookieHeader = "activationKey";
+  const getCookie = cookies.get(cookieHeader)
+  if (activationKey.value && !getCookie) {
+    const setCookie = cookies.set(cookieHeader, activationKey.value)
+    console.log(setCookie)
+  }
+  else {
+    const deletedCookie = cookies.remove(cookieHeader)
+    console.log(deletedCookie)
+  }
 }
 </script>
 
@@ -638,12 +677,12 @@ function toggleSignIn() {
 }
 .brand{ display:flex; align-items:center; gap:10px; color:#e6edf3; font-weight:700; z-index:2; }
 .menu{
-  /* position: absolute; */
-  /* left: 50%; */
-  /* transform: translateX(-50%); */
-  /* top: 50%; */
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  top: 50%;
   transform-origin: center;
-  /* transform: translate(-50%, -50%); center vertically and horizontally inside navbar */
+  transform: translate(-50%, -50%);/*  center vertically and horizontally inside navbar */
   display:flex;
   align-items:center;
   gap:12px;
@@ -665,13 +704,34 @@ function toggleSignIn() {
 }
 
 .menu-buttons {
-  position: absolute;
+  /* position: absolute; */
   display: flex;
 }
 
+.icon-tab {
+  position: absolute;
+  left: 20px;
+  top: 70px;
+
+  border-radius: 12px;
+  background: var(--bg-elev);
+  padding: 8px;
+
+  border: 1px solid rgba(255, 255, 255, .08);
+  display: flex;
+  flex-direction: column;
+}
+
+.icon-group {
+  display: flex;
+  flex-direction: row;
+
+  height: 33px;
+}
 .menu-icons {
+  display: block;
   height: 33px; 
-  padding-right: 5px;
+  /* width: 33px; */
 }
 
 .dropdown-menu:focus { outline: none; }
