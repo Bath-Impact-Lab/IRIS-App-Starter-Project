@@ -95,6 +95,21 @@ function startIrisMockProcess(){
     }
 }
 
+function stopIrisMockProcess(){
+    try {
+        if (irisProc) {
+            const p = irisProc; irisProc = null; irisReady = false;
+            try { p.kill(); } catch {}
+        }
+    } catch {}
+}
+
+async function restartIrisMockProcess(){
+    stopIrisMockProcess();
+    startIrisMockProcess();
+    return { ok: irisReady };
+}
+
 // Allow renderer to send messages to IRIS process
 ipcMain.handle('iris-send', async (event, msg) => {
     if (!irisReady || !irisProc) return { ok: false };
@@ -111,4 +126,10 @@ ipcMain.on('iris-subscribe', (event) => {
     irisSubscribers.add(sendToRenderer);
     event.returnValue = { ok: true };
     webContents.once('destroyed', () => irisSubscribers.delete(sendToRenderer));
+});
+
+// Allow renderer to request a restart of the IRIS child process
+ipcMain.handle('iris-restart', async () => {
+    try { return await restartIrisMockProcess(); }
+    catch { return { ok: false }; }
 });

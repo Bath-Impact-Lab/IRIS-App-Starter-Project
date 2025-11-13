@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   resolveAsset: async (relPath) => ipcRenderer.invoke('resolve-asset', relPath),
   readAsset: async (relPath) => ipcRenderer.invoke('read-asset', relPath),
   irisSend: async (msg) => ipcRenderer.invoke('iris-send', msg),
+  irisRestart: async () => ipcRenderer.invoke('iris-restart'),
   irisSubscribe: (cb) => {
     try {
       ipcRenderer.send('iris-subscribe');
