@@ -53,6 +53,21 @@
           </div>
         </div>
 
+        <!-- Person count dropdown -->
+        <div class="dropdown" :class="{ open: openPersonCount }" style="margin-left: 12px;">
+          <button class="btn" @click="togglePersonCount">
+            {{ personCount || 'Person Count' }}
+          </button>
+          <div class="dropdown-menu">
+            <h4>Subjects</h4>
+            <div class="device" v-for="p in personCountOptions" :key="p" @click="selectPersonCount(p)">
+              <div>
+                <div>{{ p }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Tracking type dropdown -->
         <div class="dropdown" :class="{ open: openTrack }" style="margin-left: 12px;">
           <button class="btn" @click="toggleTrack">
@@ -87,7 +102,12 @@
       <!-- Right side: sign-in area -->
       <div class="nav-right">
         <div class="menu-right">
-          <button class="btn btn-signin" @click="toggleSignIn">{{ userSignedIn ? 'Signed in' : 'Sign in' }}</button>
+          <button class="btn btn-icon" @click="toggleSignIn" aria-label="Settings">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </button>
         </div>
       </div>
     </nav>
@@ -141,6 +161,7 @@ const sceneRef = ref<HTMLElement | null>(null);
 const splitRef = ref<HTMLElement | null>(null);
 // Individual dropdown open flags
 const openCamera = ref(false);
+const openPersonCount = ref(false);
 const openTrack = ref(false);
 const openOutput = ref(false);
 // Camera menu focus + ARIA state
@@ -166,7 +187,11 @@ const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt
 
 // Tracking options
 const trackingOptions = ['Full body', 'Hand', 'Face'];
-const trackingType = ref<string | null>(null);
+const trackingType = ref<string | null>('Full body');
+
+// Person count options
+const personCountOptions = ['Single Person', 'Multi-Person'];
+const personCount = ref<string | null>('Single Person');
 
 // Output options
 const outputOptions = ['SteamVR', 'Unity', 'UnReal', 'Gadot'];
@@ -269,23 +294,28 @@ function toggleCamera() {
   const willOpen = !openCamera.value;
   openCamera.value = willOpen;
   // close others
-  if (willOpen) { openTrack.value = false; openOutput.value = false; enumerateCameras(); }
+  if (willOpen) { openPersonCount.value = false; openTrack.value = false; openOutput.value = false; enumerateCameras(); }
+}
+function togglePersonCount() {
+  const willOpen = !openPersonCount.value;
+  openPersonCount.value = willOpen;
+  if (willOpen) { openCamera.value = false; openTrack.value = false; openOutput.value = false; }
 }
 function toggleTrack() {
   const willOpen = !openTrack.value;
   openTrack.value = willOpen;
-  if (willOpen) { openCamera.value = false; openOutput.value = false; }
+  if (willOpen) { openCamera.value = false; openPersonCount.value = false; openOutput.value = false; }
 }
 function toggleOutput() {
   const willOpen = !openOutput.value;
   openOutput.value = willOpen;
-  if (willOpen) { openCamera.value = false; openTrack.value = false; }
+  if (willOpen) { openCamera.value = false; openPersonCount.value = false; openTrack.value = false; }
 }
  function onClickOutside(e: MouseEvent) {
   // close any open dropdown if click outside
-  if (!openCamera.value && !openTrack.value && !openOutput.value) return;
+  if (!openCamera.value && !openPersonCount.value && !openTrack.value && !openOutput.value) return;
   const dd = (e.target as HTMLElement)?.closest('.dropdown');
-  if (!dd) { openCamera.value = false; openTrack.value = false; openOutput.value = false; }
+  if (!dd) { openCamera.value = false; openPersonCount.value = false; openTrack.value = false; openOutput.value = false; }
 }
 
 
@@ -531,6 +561,14 @@ function selectTracking(t: string) {
   (window as any).electronAPI?.irisSend?.(msg);
 }
 
+function selectPersonCount(p: string) {
+  personCount.value = p;
+  openPersonCount.value = false;
+  const msg = { type: 'person-count-select', payload: { personCount: p, ts: Date.now() } };
+  lastSentMsg.value = JSON.stringify(msg, null, 2);
+  (window as any).electronAPI?.irisSend?.(msg);
+}
+
 function selectOutput(o: string) {
   outputOption.value = o;
   openOutput.value = false;
@@ -586,13 +624,23 @@ function toggleSignIn() {
   z-index:1;
 }
 .nav-right{ display:flex; align-items:center; gap:12px; z-index:2; }
-.btn-signin{
-  padding:8px 12px;
-  border-radius:9px;
-  border:1px solid rgba(255,255,255,0.08);
+.btn-icon{
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 9px;
+  border: 1px solid rgba(255,255,255,0.08);
   background: rgba(26,35,48,0.9);
   color: #e6edf3;
   cursor: pointer;
+  transition: background 0.2s ease;
+}
+.btn-icon:hover{
+  background: rgba(40,50,65,0.9);
+}
+.btn-icon svg{
+  display: block;
 }
 /* Accessibility focus styles */
 .btn:focus-visible, .btn.btn-mini:focus-visible {
