@@ -1,54 +1,56 @@
 # IRIS Starter Application
+![github-banner](documentation/images/github-banner.png)
 
-Simple example application that connects to the IRIS real-time pose stream and 
-connects your movements to various example avatars in a 3D visualiser.
+This repo contains the official **IRIS Starter Application**, a production-ready template for building markerless 
+motion capture applications.
 
-## Features
-- Electron + Vite + Vue 3 renderer
-- Three.js OBJ loading
-- Camera Selection that auto-detects cameras via `mediaDevices`
+IRIS handles all the complexity of streaming real-time pose data allowing you to focus on building out your 
+core idea. If needed IRIS also supports running on existing video data to allow even higher accuracy.
 
-## Setup (Windows PowerShell)
+This application is built with Electron and Vue 3, and Typescript. 3D assets are provided in `.obj` format.
+
+## 🚀 Quick Start
+
+Get your development environment running in minutes:
+
 ```powershell
+# Install dependencies
 npm install
 
-# Development: runs with auto-reload
+# Launch the developer environment
 npm run dev
 
-# Build Windows executable ( run as administrator with developer mode enabled )
+# Build for production
 npm run build
-
-# Build static web bundle only
-npm run build:web
 ```
+You will need a FREE licence key for IRIS available from [iris.cs.bath.ac.uk](https://iris.cs.bath.ac.uk/).
 
-### Dependency hygiene
-- Core build/runtime packages are pinned (vite, @vitejs/plugin-vue, electron, three, vue) to reduce surprises.
-- To see available updates:
+## 🛠️ Key Features
+- **Real-time Pose Streaming**: Seamless integration with the IRIS vision engine.
+- **Ready-to-use 3D Scene**: Three.js integration with OBJ/glTF support pre-configured.
+- **Modern Tech Stack**: Built with Electron, Vite, and Vue 3 for optimal performance.
 
-```powershell
-npm run check:deps
-```
+## 📁 Project Structure
+- `src/pose.ts`: Logic for handling incoming pose data and keypoints.
+- `src/App.vue`: Main 3D scene implementation and application UI.
+- `src/composables/useIris.ts`: Composable for managing the IRIS stream connection.
+- `public/assets/`: Directory for 3D assets (default: `SMPLX_neutral.obj`).
 
-- To apply suggested updates (optional), run the command it prints with `-u` and then reinstall:
+## 💡 Example Use Cases
+- **Biomechanics Analysis**: Track joint angles and skeletal movement in real-time.
+- **Virtual Avatars**: Drive 3D characters using live body tracking.
+- **Human-Computer Interaction**: Build gesture-controlled interfaces and environments.
+- **Fitness & Sports**: Analyze form and provide feedback for physical activities.
 
-```powershell
-npx npm-check-updates -u
-npm install
-```
+## 🧪 Technical Notes
+- **Camera Configuration**: Ensure Windows Privacy Settings allow "Desktop App" access if the camera feed is not appearing.
+- **Performance Optimization**: For production use, we recommend using `.glb` (Draco compressed) models rather than `.obj`.
+- **Development Mock**: The SDK includes a `MockPoseStream` in `src/pose.ts` for development without active IRIS hardware.
 
-If the camera list is empty, Windows may be denying camera access to desktop apps. Open Windows Settings > Privacy & Security > Camera and allow access. The app will still show a mock device when access is unavailable.
+## 🆘 Resources & Support 
+Please request access from mrt64@bath.ac.uk if you can't see these repositories
+- [Documentation](https://github.com/Bath-Impact-Lab/IRIS-App-Starter-Projehttps://github.com/Bath-Impact-Lab/IRIS-App-Starter-Project/tree/main/documentation)
+- [Issue Tracker](https://github.com/Bath-Impact-Lab/IRIS/issues)
 
-## Replace the OBJ
-Drop your actual `SMPLX_neutral.obj` into `public/assets/` (same filename). Large OBJ files may take time to load. Consider using Draco-compressed glTF for production.
+Built with ❤️ by the **Bath Impact Lab**.
 
-## Structure
-- `electron/` main and preload scripts
-- `src/` Vue renderer, Three.js scene, styles
-- `public/assets/SMPLX_neutral.obj` placeholder
-
-## Next steps
-- Wire IRIS real-time pose stream (WebSocket/UDP/Shared memory) and animate skeleton
-- support changing of avatars
-- Add robust camera preview panel with selectable resolutions and frame rates
-- Crash reporting and auto-updates
