@@ -17,8 +17,8 @@ export function useCameras(options: UseCamerasOptions = {}) {
   const persistKey = options.persistKey ?? 'iris.selectedCameraId';
 
   const devices = ref<MediaDeviceInfo[]>([]);
-  const selectedDeviceId = ref<string | null>(null);
-  const selectedDeviceLabel = ref<string | null>(null);
+  const selectedDeviceId = ref<string[] | null>(null);
+  const selectedDevices = ref<MediaDeviceInfo[] | null>(null);
 
   let deviceChangeHandler: (() => void) | null = null;
 
@@ -55,14 +55,14 @@ export function useCameras(options: UseCamerasOptions = {}) {
       send(msg);
       // Auto reselect if desired
       if (autoReselect && selectedDeviceId.value) {
-        const stillThere = devices.value.some(d => d.deviceId === selectedDeviceId.value);
+        const stillThere = devices.value.some(d => (selectedDeviceId.value ? selectedDeviceId.value : []).includes(d.deviceId));
         if (!stillThere) {
           // previously selected removed
           const removedMsg = { type: 'camera-removed', payload: { deviceId: selectedDeviceId.value, ts: Date.now() } };
           send(removedMsg);
           // Try to reselect same id from persisted storage if different? Not available; fall back to no selection.
           selectedDeviceId.value = null;
-          selectedDeviceLabel.value = null;
+          selectedDevices.value = null;
         }
       }
       // If no current selection and we have a persisted one, reapply
@@ -72,8 +72,8 @@ export function useCameras(options: UseCamerasOptions = {}) {
           const found = devices.value.find(d => d.deviceId === persistedId);
           if (found) {
             // Reselect silently (no side-effects beyond local state)
-            selectedDeviceId.value = found.deviceId;
-            selectedDeviceLabel.value = found.label || `Camera ${found.deviceId.substring(0,6)}`;
+            selectedDeviceId.value = [found.deviceId];
+            selectedDevices.value = [found];
           }
         }
       }
@@ -87,14 +87,40 @@ export function useCameras(options: UseCamerasOptions = {}) {
   }
 
   function selectDevice(d: MediaDeviceInfo) {
-    selectedDeviceId.value = d.deviceId;
-    selectedDeviceLabel.value = d.label || `Camera ${d.deviceId.substring(0,6)}`;
+    if (selectedDeviceId.value && selectedDeviceId.value.includes(d.deviceId) && selectedDevices.value) {
+      let idx = selectedDevices.value.indexOf(d);
+      selectedDeviceId.value.splice(idx, 1);
+      selectedDevices.value.splice(idx, 1);
+      console.log(selectedDevices.value)
+      if (selectedDeviceId.value.length <= 0 || selectedDevices.value.length <= 0) {
+        selectedDeviceId.value = null;
+        selectedDevices.value = null;
+      }
+
+    }
+    else if (selectedDevices.value && selectedDeviceId.value) {
+      selectedDeviceId.value = selectedDeviceId.value.concat([d.deviceId]);
+      selectedDevices.value =  selectedDevices.value.concat([d]);
+    }
+    else {
+      selectedDeviceId.value = [d.deviceId];
+      selectedDevices.value = [d];
+    }
+
     try { localStorage.setItem(persistKey, d.deviceId); } catch {}
   }
 
   function init() {
     // Load persisted selection early
-    try { selectedDeviceId.value = localStorage.getItem(persistKey); } catch {}
+    try { 
+      let temp = localStorage.getItem(persistKey);
+      if (temp) {
+        selectedDeviceId.value = [temp]; 
+      }
+      else {
+        selectedDeviceId.value = null;
+      }
+    } catch {}
     enumerateCameras();
     const handler = async () => { await enumerateCameras(); };
     navigator.mediaDevices?.addEventListener?.('devicechange', handler);
@@ -109,7 +135,7 @@ export function useCameras(options: UseCamerasOptions = {}) {
   return {
     devices,
     selectedDeviceId,
-    selectedDeviceLabel,
+    selectedDevices,
     enumerateCameras,
     selectDevice,
     init,

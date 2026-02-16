@@ -17,7 +17,12 @@
             :aria-expanded="openCamera"
             aria-controls="camera-listbox"
           >
-            {{ selectedDeviceLabel || 'Camera Selection' }}
+          <div v-if="!selectedDevices">
+            Camera Selection
+          </div>
+          <div v-else>
+            Add More Cameras
+          </div>
           </button>
           <div
             class="dropdown-menu"
@@ -41,9 +46,9 @@
               class="device"
               role="option"
               :id="'cam-opt-' + i"
-              :aria-selected="i === cameraActiveIndex"
-              :class="{ active: i === cameraActiveIndex }"
-              @click="selectDevice(d)"
+              :aria-selected="i === cameraHoverIndex"
+              :class="{ hovered: i === cameraHoverIndex, active: selectedDevices?.includes(d) && selectedDeviceId?.includes(d.deviceId) }"
+              @click="selectDevice(d, i)"
             >
               <div>
                 <div>{{ d.label || 'Camera ' + d.deviceId.substring(0,6) }}</div>
@@ -111,6 +116,28 @@
         </div>
       </div>
     </nav>
+
+    <div class="sidenav">
+      Camera Config:
+      <div v-for="(d, i) in selectedDevices">
+        <div class="camera-list" style="width: 100%;">
+          <div class="camera-text">
+            {{ d.label }}
+            <div v-on:click="rotateCamera(d, i)">
+              <img style="width: 30px;" src="./../public/assets/anticlockwise-2-line.svg" alt="">
+            </div>
+          </div>
+          <video 
+          style="width: 100%;"
+          :id="`cameraFeed${i}`" 
+          autoplay
+          playsinline
+          >
+        </video>
+        </div>
+      </div>
+    </div>
+
     <section class="scene" ref="sceneRef"></section>
     <div class="hud">
       <label class="hud-item">
@@ -170,11 +197,13 @@ const cameraListRef = ref<HTMLElement | null>(null);
 const cameraActiveIndex = ref(0);
 // Sign-in state
 const userSignedIn = ref(false);
+const cameraHoverIndex = ref(0);
+
 
 const {
   devices,
   selectedDeviceId,
-  selectedDeviceLabel,
+  selectedDevices,
   enumerateCameras,
   selectDevice: selectCamera,
   init: initCameras,
@@ -183,7 +212,7 @@ const {
   autoReselect: true,
   onSend: (msg) => { try { lastSentMsg.value = JSON.stringify(msg, null, 2); } catch {} },
 });
-const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt-${cameraActiveIndex.value}` : undefined));
+const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt-${cameraHoverIndex.value}` : undefined));
 
 // Tracking options
 const trackingOptions = ['Full body', 'Hand', 'Face'];
@@ -225,9 +254,9 @@ const iris = useIris({
     irisConnected.value = true;
     if (msg?.type === 'pose-frame') {
       poseLogCount++;
-      if (poseLogCount % 10 === 0) console.log('[IRIS recv]', msg);
+      // if (poseLogCount % 10 === 0) console.log('[IRIS recv]', msg);
     } else {
-      console.log('[IRIS recv]', msg);
+      // console.log('[IRIS recv]', msg);
     }
     lastRecvMsg.value = JSON.stringify(msg, null, 2);
     if (msg?.type === 'pose-frame') {
@@ -263,7 +292,7 @@ function onCameraListKeydown(e: KeyboardEvent) {
   else if (e.key === 'ArrowUp') { cameraActiveIndex.value = Math.max(0, cameraActiveIndex.value - 1); e.preventDefault(); scrollActiveIntoView(); }
   else if (e.key === 'Home') { cameraActiveIndex.value = 0; e.preventDefault(); scrollActiveIntoView(); }
   else if (e.key === 'End') { cameraActiveIndex.value = max; e.preventDefault(); scrollActiveIntoView(); }
-  else if (e.key === 'Enter') { const d = devices.value[cameraActiveIndex.value]; if (d) selectDevice(d); e.preventDefault(); }
+  else if (e.key === 'Enter') { const d = devices.value[cameraActiveIndex.value]; if (d) selectDevice(d, cameraActiveIndex.value); e.preventDefault(); }
   else if (e.key === 'Escape') { openCamera.value = false; cameraButtonRef.value?.focus(); e.preventDefault(); }
 }
 
@@ -271,7 +300,7 @@ function setInitialCameraActiveIndex(mode: 'first' | 'last' | 'current-or-first'
   if (devices.value.length === 0) { cameraActiveIndex.value = 0; return; }
   if (mode === 'last') cameraActiveIndex.value = devices.value.length - 1;
   else if (mode === 'current-or-first') {
-    const idx = selectedDeviceId.value ? devices.value.findIndex(d => d.deviceId === selectedDeviceId.value) : -1;
+    const idx = selectedDeviceId.value ? devices.value.findIndex(d => (selectedDeviceId.value ? selectedDeviceId.value : []).includes(d.deviceId)) : -1;
     cameraActiveIndex.value = idx >= 0 ? idx : 0;
   } else cameraActiveIndex.value = 0;
 }
@@ -311,7 +340,7 @@ function toggleOutput() {
   openOutput.value = willOpen;
   if (willOpen) { openCamera.value = false; openPersonCount.value = false; openTrack.value = false; }
 }
- function onClickOutside(e: MouseEvent) {
+function onClickOutside(e: MouseEvent) {
   // close any open dropdown if click outside
   if (!openCamera.value && !openPersonCount.value && !openTrack.value && !openOutput.value) return;
   const dd = (e.target as HTMLElement)?.closest('.dropdown');
@@ -320,16 +349,18 @@ function toggleOutput() {
 
 
 
-function selectDevice(d: MediaDeviceInfo){
-  // close just the camera dropdown
-  openCamera.value = false;
-  // For now, just log and maybe change background color subtly to show selection
+function selectDevice(d: MediaDeviceInfo, i: number){
   console.log('Selected device', d);
   selectCamera(d);
-  if (renderer) {
-    const col = new THREE.Color(0x0b0f14).offsetHSL(0.02, 0.05, 0.02);
-    renderer.setClearColor(col, 1);
+  if (selectedDevices.value && selectedDevices.value.includes(d)) {
+    startCameraStream(d, i)
+    refresh()
   }
+  else {
+    stopCameraStream(d, i)
+    refresh()
+  }
+  
   // Start mock pose stream when a camera is chosen (until IRIS real stream is wired)
   startMockPose();
   // Send camera info to IRIS mock bridge
@@ -337,6 +368,41 @@ function selectDevice(d: MediaDeviceInfo){
   console.log('[IRIS send] camera-info', info);
   lastSentMsg.value = JSON.stringify(info, null, 2);
   (window as any).electronAPI?.irisSend?.(info);
+}
+
+async function startCameraStream(camera: MediaDeviceInfo, index: number) {
+  const stream = await navigator.mediaDevices.getUserMedia({video: {deviceId: {exact: camera.deviceId}, frameRate: 30}});
+
+  const video = document.getElementById(`cameraFeed${index}`) as HTMLVideoElement;
+  try {
+    if (video) {
+      video.srcObject = stream;
+      console.log("playing", selectedDevices.value);
+    } 
+  } catch (err) {
+    console.error("Camera access failed: ", err);
+  }
+}
+
+function stopCameraStream(camera: MediaDeviceInfo, index: number) {
+  const video = document.getElementById(`cameraFeed${index}`) as HTMLVideoElement;
+  const stream = video.srcObject as MediaStream;
+  const tracks = stream.getTracks();
+
+  tracks.forEach(track => {
+    track.stop();
+  });
+  video.srcObject = null;
+}
+
+function refresh() {
+  selectedDevices.value?.forEach((d, i) => {
+    startCameraStream(d, i)
+  })
+}
+
+function rotateCamera(d: MediaDeviceInfo, index: number) {
+
 }
 
 // Removed wireframe toggle to keep UI unchanged; skeleton remains visible
@@ -650,4 +716,34 @@ function toggleSignIn() {
 .dropdown-menu:focus { outline: none; }
 .device.active { background: rgba(107, 230, 117, 0.12); border-radius: 8px; }
 .device.active > div > div { color: #e6ffe9; }
+
+.sidenav {
+  position: absolute; 
+  right: 0px; 
+  height: calc(100% - 63px); 
+  width: 250px; 
+  background-color: rgba(12, 18, 25, .72);; 
+  z-index: 10;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px;
+}
+
+.camera-list {
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  margin: 5px 0;
+} 
+
+.camera-text {
+  display: flex;
+  flex-direction: row;
+  font-size: 14px;
+  align-items: center;
+  padding-bottom: 5px;
+}
+
 </style>

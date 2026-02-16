@@ -37,6 +37,6 @@ body{
 .device{ padding:8px 10px; border-radius:8px; display:flex; align-items:center; gap:10px; cursor:pointer; }
 .device:hover{ background:#16202c; }
 .device small{ color:var(--muted) }
-.scene{ position: absolute; inset: 56px 0 0 0; }
+.scene{ position: absolute; inset: 63px 250px 0 0; }
 canvas{ display:block; width:100%; height:100%; }
 @keyframes rise{ from{ transform: translateY(120%); opacity:0 } to { transform: translateY(0%); opacity:1 } }
