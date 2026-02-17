@@ -119,21 +119,23 @@
 
     <div class="sidenav">
       Camera Config:
-      <div v-for="(d, i) in selectedDevices">
+      <div style="width: 100%;" v-for="(d, i) in selectedDevices">
         <div class="camera-list" style="width: 100%;">
           <div class="camera-text">
             {{ d.label }}
-            <div v-on:click="rotateCamera(d, i)">
+            <button class="button" v-on:click="rotateCamera(d, i)">
               <img style="width: 30px;" src="./../public/assets/anticlockwise-2-line.svg" alt="">
-            </div>
+            </button>
           </div>
-          <video 
-          style="width: 100%;"
-          :id="`cameraFeed${i}`" 
-          autoplay
-          playsinline
-          >
-        </video>
+          <div :id="`camera-box${i}`">
+            <video 
+              style="width: 100%;"
+              :id="`cameraFeed${i}`" 
+              autoplay
+              playsinline
+            >
+            </video>
+          </div>
         </div>
       </div>
     </div>
@@ -180,6 +182,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { COCO_KEYPOINTS, COCO_EDGES, MockPoseStream, type PoseFrame } from './pose';
 import { useCameras } from './composables/useCameras';
 import { useIris } from './composables/useIris';
+import { FBXLoader } from 'three/examples/jsm/Addons.js';
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 const isDev = import.meta.env.DEV;
@@ -199,6 +202,7 @@ const cameraActiveIndex = ref(0);
 const userSignedIn = ref(false);
 const cameraHoverIndex = ref(0);
 
+const cameraRotation = ref<{device: MediaDeviceInfo | null, angle: number}[]>()
 
 const {
   devices,
@@ -244,6 +248,8 @@ let boneLines: THREE.LineSegments | null = null;
 let poseStream: MockPoseStream | null = null;
 let modelRoot: THREE.Object3D | null = null;
 
+const manager = new THREE.LoadingManager();
+let mixer: THREE.AnimationMixer | null;
 const showModel = ref(false); // off by default
 let irisUnsub: null | (()=>void) = null;
 
@@ -368,6 +374,34 @@ function selectDevice(d: MediaDeviceInfo, i: number){
   console.log('[IRIS send] camera-info', info);
   lastSentMsg.value = JSON.stringify(info, null, 2);
   (window as any).electronAPI?.irisSend?.(info);
+
+  if (!cameraRotation.value) {
+    cameraRotation.value = Array(selectedDevices.value?.length)
+    console.log(cameraRotation.value.length)
+    selectedDevices.value?.forEach((d, i) => {
+      if (cameraRotation.value) cameraRotation.value[i] = {device: selectedDevices.value ? selectedDevices.value[i] : null, angle: 0}
+    })
+
+  }
+  else {
+    const copy = cameraRotation.value
+    if (selectedDevices.value) {
+      cameraRotation.value = Array(selectedDevices.value?.length)
+    }
+    else {
+      cameraRotation.value = undefined
+    }
+    selectedDevices.value?.forEach((d, i) => {
+      cameraRotation.value?.push({device: selectedDevices.value ? selectedDevices.value[i] : null, angle: 0})
+      if (selectedDevices.value && selectedDevices.value[i] && cameraRotation.value) {
+        const idxOf = copy.map((val) => {
+            return val.device
+        }).indexOf(selectedDevices.value[i])
+        cameraRotation.value[i].angle = copy[idxOf].angle 
+      }
+    })
+  }
+  cameraRotation.value?.filter((val) => !val.device)
 }
 
 async function startCameraStream(camera: MediaDeviceInfo, index: number) {
@@ -402,10 +436,105 @@ function refresh() {
 }
 
 function rotateCamera(d: MediaDeviceInfo, index: number) {
+  if (cameraRotation.value && cameraRotation.value[index].device === d) {
+    const current = cameraRotation.value[index]
+    if (current.angle === 270) {
+      current.angle = 0
+    }
+    else {
+      current.angle += 90
+    }
+    console.log(current)
+    rotation(d, cameraRotation.value[index].angle, index)
+  }
 
 }
 
+async function rotation(d: MediaDeviceInfo, rotateAngle: number, i: number) {
+  let isOdd: boolean
+  let offsetX: number
+  let offsetY: number = 0
+  let origin: string
+  
+  const camera = await navigator.mediaDevices.getUserMedia({video: {deviceId: {exact: d.deviceId}}})
+  let aspectRatio = camera.getVideoTracks()[0].getSettings().aspectRatio
+  if (!aspectRatio) {
+    aspectRatio = 1.777778
+  }
+
+  if (rotateAngle % 180 === 0) {
+    isOdd = false
+  }
+  else {
+    aspectRatio = 1/aspectRatio
+    isOdd = true
+  }
+
+  const parent = document.getElementById(`camera-box${i}`) as HTMLDivElement
+  parent.style.width = "100%"
+
+  parent.style.aspectRatio = `${aspectRatio}`
+  const video = document.getElementById(`cameraFeed${i}`) as HTMLVideoElement
+  await new Promise(resolve => setTimeout(resolve, 50))
+  if (isOdd) {
+    const temp = parent.offsetWidth / aspectRatio
+    parent.style.height = temp + "px"
+    video.style.width = temp + "px"
+    video.style.maxWidth = temp + "px"
+    video.style.height = parent.offsetWidth + "px"
+    video.style.maxHeight = parent.offsetWidth + "px"
+
+
+    offsetX = video.offsetHeight
+    origin = "top left"
+    if (rotateAngle == 270) {
+      offsetY = video.offsetWidth;
+      offsetX = 0;
+    }
+  }
+  else {
+    video.style.width = parent.offsetWidth + "px"
+    video.style.height = "auto"
+    video.style.maxWidth = "100%"
+    parent.style.height = "auto"
+
+    offsetX = 0
+    origin = "center"
+  }
+  video.style.transform = `translate(${offsetX}px, ${offsetY}px) rotate(${rotateAngle}deg)`
+  video.style.transformOrigin = origin
+}
+
 // Removed wireframe toggle to keep UI unchanged; skeleton remains visible
+
+async function loadModel(scene: THREE.Scene) {
+  const loader = new FBXLoader( manager );
+  const file = "assets/Flair.fbx"
+
+  try {
+    loader.load(file, function (group) {
+      modelRoot = group
+      modelRoot.castShadow = true
+      modelRoot.receiveShadow = true
+      modelRoot.scale.set(0.01, 0.01, 0.01)
+      if (modelRoot.animations && modelRoot.animations.length) {
+        mixer = new THREE.AnimationMixer(modelRoot)
+        const action = mixer.clipAction(modelRoot.animations[0])
+        action.play()
+      }
+      else {
+        mixer = null
+      }
+      scene.add(modelRoot)
+      console.log(modelRoot, scene)
+
+    })
+  }
+  catch (err) {
+    console.log("error loading file")
+    console.log(err)
+  }
+}
 
 async function loadSMPLX(scene: THREE.Scene){
   const loader = new OBJLoader();
@@ -496,20 +625,26 @@ function initThree(container: HTMLElement){
   controls.minDistance = 0.1;
   controls.maxDistance = 100;
 
-  loadSMPLX(scene);
-
+  loadModel(scene)
+  // console.log(modelRoot)
+  if (modelRoot) modelRoot.visible = true
   // Skeleton geometry
-  initSkeleton(scene);
+  // loadSMPLX(scene);
+  // initSkeleton(scene);
 
   const clock = new THREE.Clock();
   const animate = () => {
-    const t = clock.getElapsedTime();
-    dir.position.x = Math.sin(t*0.5)*3; dir.position.z = Math.cos(t*0.5)*3;
-    controls?.update();
-    renderer!.render(scene, camera);
-    frameId = requestAnimationFrame(animate);
+    // const t = clock.getElapsedTime();
+    // dir.position.x = Math.sin(t*0.5)*3; dir.position.z = Math.cos(t*0.5)*3;
+    // controls?.update();
+    // renderer!.render(scene, camera);
+    // frameId = requestAnimationFrame(animate);
+    const delta = clock.getDelta()
+    if (mixer) mixer.update(delta);
+    renderer?.render(scene, camera)
   };
-  animate();
+  renderer.setAnimationLoop(animate)
+  // animate()
 
   resizeObserver = new ResizeObserver(entries => {
     for (const entry of entries){
@@ -565,7 +700,6 @@ function onKeyDown(e: KeyboardEvent) {
   }
 }
 
-function connectIris(){ /* handled by useIris(); kept for compatibility */ }
 
 function pingIris(){
   const msg = { type: 'ping', ts: Date.now() };
@@ -744,6 +878,21 @@ function toggleSignIn() {
   font-size: 14px;
   align-items: center;
   padding-bottom: 5px;
+  justify-content: space-between;
+}
+
+.button {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(12, 18, 25, .72);
+  border-radius: 10px;
+}
+
+.button:hover {
+  background: rgba(18, 27, 36, 0.72);
+}
+
+.button:active {
+  background: rgba(12, 18, 25, 0.808);
 }
 
 </style>
