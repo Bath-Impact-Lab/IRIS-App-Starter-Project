@@ -124,7 +124,7 @@
           <div class="camera-text">
             {{ d.label }}
             <button class="button" v-on:click="rotateCamera(d, i)">
-              <img style="width: 30px;" src="./../public/assets/anticlockwise-2-line.svg" alt="">
+              <img style="width: 30px;" src="/assets/anticlockwise-2-line.svg" alt="">
             </button>
           </div>
           <div :id="`camera-box${i}`">
@@ -246,10 +246,10 @@ let controls: OrbitControls | null = null;
 let jointSpheres: THREE.Mesh[] = [];
 let boneLines: THREE.LineSegments | null = null;
 let poseStream: MockPoseStream | null = null;
-let modelRoot: THREE.Object3D | null = null;
+let modelsRoot: THREE.Object3D[] | null = null;
 
 const manager = new THREE.LoadingManager();
-let mixer: THREE.AnimationMixer | null;
+let mixer: THREE.AnimationMixer[] | null;
 const showModel = ref(false); // off by default
 let irisUnsub: null | (()=>void) = null;
 
@@ -368,7 +368,7 @@ function selectDevice(d: MediaDeviceInfo, i: number){
   }
   
   // Start mock pose stream when a camera is chosen (until IRIS real stream is wired)
-  startMockPose();
+  // startMockPose();
   // Send camera info to IRIS mock bridge
   const info = { type: 'camera-info', payload: { deviceId: d.deviceId, label: d.label, kind: d.kind, ts: Date.now() } };
   console.log('[IRIS send] camera-info', info);
@@ -507,26 +507,41 @@ async function rotation(d: MediaDeviceInfo, rotateAngle: number, i: number) {
 
 // Removed wireframe toggle to keep UI unchanged; skeleton remains visible
 
-async function loadModel(scene: THREE.Scene) {
+async function loadModel(scene: THREE.Scene, type: string) {
   const loader = new FBXLoader( manager );
-  const file = "assets/Flair.fbx"
+  const file = `assets/${type}`
 
   try {
     loader.load(file, function (group) {
-      modelRoot = group
+      if (modelsRoot) {
+        modelsRoot.push(group)
+      }
+      else {
+        modelsRoot = [group]
+      }
+      const modelRoot = modelsRoot[modelsRoot.length-1]
       modelRoot.castShadow = true
       modelRoot.receiveShadow = true
       modelRoot.scale.set(0.01, 0.01, 0.01)
+      if (type === "Idle.fbx") {
+        modelRoot.position.set(-1.5, 0, -1.5)
+        modelRoot.setRotationFromAxisAngle(new THREE.Vector3(0, 1, 0), (45*3.14)/180)
+      }
       if (modelRoot.animations && modelRoot.animations.length) {
-        mixer = new THREE.AnimationMixer(modelRoot)
-        const action = mixer.clipAction(modelRoot.animations[0])
+        if (mixer){
+          mixer.push(new THREE.AnimationMixer(modelRoot))
+        }
+        else{
+          mixer = [new THREE.AnimationMixer(modelRoot)]
+        }
+        const mix = mixer[mixer.length-1] 
+        const action = mix.clipAction(modelRoot.animations[0])
         action.play()
       }
       else {
         mixer = null
       }
       scene.add(modelRoot)
-      console.log(modelRoot, scene)
 
     })
   }
@@ -536,49 +551,49 @@ async function loadModel(scene: THREE.Scene) {
   }
 }
 
-async function loadSMPLX(scene: THREE.Scene){
-  const loader = new OBJLoader();
-  const rel = 'assets/SMPLX_neutral.obj';
-  // Try direct path (dev), then Electron resolve, then read content and parse
-  const tryLoadPath = (url: string) => new Promise<THREE.Group>((resolve, reject) => loader.load(url, resolve, undefined, reject));
-  try {
-    const devUrl = rel; // Vite serves public/ at root in dev
-    let obj: THREE.Group | null = null;
-    try { obj = await tryLoadPath(devUrl); }
-    catch {
-      const assetPath = await (window as any).electronAPI?.resolveAsset?.(rel).catch(() => devUrl) ?? devUrl;
-      try { obj = await tryLoadPath(assetPath); }
-      catch {
-        const text = await (window as any).electronAPI?.readAsset?.(rel);
-        if (text) {
-          // OBJLoader can parse from string via parse
-          obj = loader.parse(text);
-        }
-      }
-    }
-    if (!obj) throw new Error('OBJ load failed');
-    obj.traverse((child: any) => {
-      if (child.isMesh) {
-        child.material = new THREE.MeshStandardMaterial({ color: 0x6b83c6, metalness: 0.1, roughness: 0.8, transparent: true, opacity: 0.85 });
-        child.castShadow = true; child.receiveShadow = true;
-      }
-    });
-    obj.position.set(0, 0, 0);
-    modelRoot = obj;
-    modelRoot.visible = showModel.value;
-    scene.add(modelRoot);
-    fitToObject(obj);
-  } catch (e) {
-    console.warn('Failed to load SMPLX OBJ, using fallback', e);
-    const geo = new THREE.TorusKnotGeometry(0.6, 0.2, 200, 32);
-    const mat = new THREE.MeshStandardMaterial({ color: 0x6be675, metalness: 0.4, roughness: 0.3 });
-    const mesh = new THREE.Mesh(geo, mat);
-    modelRoot = mesh;
-    modelRoot.visible = showModel.value;
-    scene.add(modelRoot);
-    fitToObject(mesh);
-  }
-}
+// async function loadSMPLX(scene: THREE.Scene){
+//   const loader = new OBJLoader();
+//   const rel = 'assets/SMPLX_neutral.obj';
+//   // Try direct path (dev), then Electron resolve, then read content and parse
+//   const tryLoadPath = (url: string) => new Promise<THREE.Group>((resolve, reject) => loader.load(url, resolve, undefined, reject));
+//   try {
+//     const devUrl = rel; // Vite serves public/ at root in dev
+//     let obj: THREE.Group | null = null;
+//     try { obj = await tryLoadPath(devUrl); }
+//     catch {
+//       const assetPath = await (window as any).electronAPI?.resolveAsset?.(rel).catch(() => devUrl) ?? devUrl;
+//       try { obj = await tryLoadPath(assetPath); }
+//       catch {
+//         const text = await (window as any).electronAPI?.readAsset?.(rel);
+//         if (text) {
+//           // OBJLoader can parse from string via parse
+//           obj = loader.parse(text);
+//         }
+//       }
+//     }
+//     if (!obj) throw new Error('OBJ load failed');
+//     obj.traverse((child: any) => {
+//       if (child.isMesh) {
+//         child.material = new THREE.MeshStandardMaterial({ color: 0x6b83c6, metalness: 0.1, roughness: 0.8, transparent: true, opacity: 0.85 });
+//         child.castShadow = true; child.receiveShadow = true;
+//       }
+//     });
+//     obj.position.set(0, 0, 0);
+//     modelRoot = obj;
+//     modelRoot.visible = showModel.value;
+//     scene.add(modelRoot);
+//     fitToObject(obj);
+//   } catch (e) {
+//     console.warn('Failed to load SMPLX OBJ, using fallback', e);
+//     const geo = new THREE.TorusKnotGeometry(0.6, 0.2, 200, 32);
+//     const mat = new THREE.MeshStandardMaterial({ color: 0x6be675, metalness: 0.4, roughness: 0.3 });
+//     const mesh = new THREE.Mesh(geo, mat);
+//     modelRoot = mesh;
+//     modelRoot.visible = showModel.value;
+//     scene.add(modelRoot);
+//     fitToObject(mesh);
+//   }
+// }
 
 function fitToObject(target: THREE.Object3D){
   const box = new THREE.Box3().setFromObject(target);
@@ -625,9 +640,11 @@ function initThree(container: HTMLElement){
   controls.minDistance = 0.1;
   controls.maxDistance = 100;
 
-  loadModel(scene)
-  // console.log(modelRoot)
-  if (modelRoot) modelRoot.visible = true
+  loadModel(scene, "Flair.fbx")
+  loadModel(scene, "Idle.fbx")
+  if (modelsRoot) {
+    modelsRoot.forEach((model) => model.visible = true) 
+  }
   // Skeleton geometry
   // loadSMPLX(scene);
   // initSkeleton(scene);
@@ -640,7 +657,7 @@ function initThree(container: HTMLElement){
     // renderer!.render(scene, camera);
     // frameId = requestAnimationFrame(animate);
     const delta = clock.getDelta()
-    if (mixer) mixer.update(delta);
+    if (mixer) mixer.forEach((mix) => mix.update(delta))
     renderer?.render(scene, camera)
   };
   renderer.setAnimationLoop(animate)
@@ -667,11 +684,11 @@ onMounted(() => {
 
   if (sceneRef.value) initThree(sceneRef.value);
   initCameras();
-  startMockPose();
+  // startMockPose();
   // Start IRIS keepalive + subscription
   iris.init();
   // React to showModel toggle
-  watch(showModel, (v) => { if (modelRoot) modelRoot.visible = v; });
+  // watch(showModel, (v) => { if (modelRoot) modelRoot.visible = v; });
   // Focus management for camera menu
   watch(openCamera, (isOpen) => {
     if (isOpen) { setInitialCameraActiveIndex('current-or-first'); focusCameraListSoon(); }
@@ -688,7 +705,7 @@ onBeforeUnmount(() => {
   if (frameId) cancelAnimationFrame(frameId);
   if (resizeObserver && sceneRef.value) resizeObserver.unobserve(sceneRef.value);
   if (renderer) { renderer.dispose(); renderer = null; }
-  poseStream?.stop();
+  // poseStream?.stop();
   iris.dispose();
   if (irisUnsub) { try { irisUnsub(); } catch {}; irisUnsub = null; }
 });
@@ -727,30 +744,30 @@ function initSkeleton(scene: THREE.Scene){
   scene.add(boneLines);
 }
 
-function updateSkeleton(frame: PoseFrame){
-  // Position joints
-  for (let i=0; i<COCO_KEYPOINTS.length; i++){
-    const p = frame.keypoints[i]?.position || [0,0,0];
-    jointSpheres[i].position.set(p[0], p[1], p[2]);
-  }
-  // Update bones
-  const posAttr = (boneLines!.geometry as THREE.BufferGeometry).getAttribute('position') as THREE.BufferAttribute;
-  let idx = 0;
-  for (const [a,b] of COCO_EDGES){
-    const pa = frame.keypoints[a]?.position || [0,0,0];
-    const pb = frame.keypoints[b]?.position || [0,0,0];
-    posAttr.setXYZ(idx++, pa[0], pa[1], pa[2]);
-    posAttr.setXYZ(idx++, pb[0], pb[1], pb[2]);
-  }
-  posAttr.needsUpdate = true;
-}
+// function updateSkeleton(frame: PoseFrame){
+//   // Position joints
+//   for (let i=0; i<COCO_KEYPOINTS.length; i++){
+//     const p = frame.keypoints[i]?.position || [0,0,0];
+//     jointSpheres[i].position.set(p[0], p[1], p[2]);
+//   }
+//   // Update bones
+//   const posAttr = (boneLines!.geometry as THREE.BufferGeometry).getAttribute('position') as THREE.BufferAttribute;
+//   let idx = 0;
+//   for (const [a,b] of COCO_EDGES){
+//     const pa = frame.keypoints[a]?.position || [0,0,0];
+//     const pb = frame.keypoints[b]?.position || [0,0,0];
+//     posAttr.setXYZ(idx++, pa[0], pa[1], pa[2]);
+//     posAttr.setXYZ(idx++, pb[0], pb[1], pb[2]);
+//   }
+//   posAttr.needsUpdate = true;
+// }
 
-function startMockPose(){
-  poseStream?.stop();
-  poseStream = new MockPoseStream();
-  poseStream.subscribe(updateSkeleton);
-  poseStream.start();
-}
+// function startMockPose(){
+//   poseStream?.stop();
+//   poseStream = new MockPoseStream();
+//   poseStream.subscribe(updateSkeleton);
+//   poseStream.start();
+// }
 
 function selectTracking(t: string) {
   trackingType.value = t;
