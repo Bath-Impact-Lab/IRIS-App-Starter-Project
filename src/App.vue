@@ -17,7 +17,12 @@
             :aria-expanded="openCamera"
             aria-controls="camera-listbox"
           >
-            {{ selectedDeviceLabel || 'Camera Selection' }}
+          <div v-if="!selectedDevices">
+            Camera Selection
+          </div>
+          <div v-else>
+            Add More Cameras
+          </div>
           </button>
           <div
             class="dropdown-menu"
@@ -41,9 +46,9 @@
               class="device"
               role="option"
               :id="'cam-opt-' + i"
-              :aria-selected="i === cameraActiveIndex"
-              :class="{ active: i === cameraActiveIndex }"
-              @click="selectDevice(d)"
+              :aria-selected="i === cameraHoverIndex"
+              :class="{ hovered: i === cameraHoverIndex, active: selectedDevices?.includes(d) && selectedDeviceId?.includes(d.deviceId) }"
+              @click="selectDevice(d, i)"
             >
               <div>
                 <div>{{ d.label || 'Camera ' + d.deviceId.substring(0,6) }}</div>
@@ -111,6 +116,30 @@
         </div>
       </div>
     </nav>
+
+    <div class="sidenav">
+      Camera Config:
+      <div style="width: 100%;" v-for="(d, i) in selectedDevices">
+        <div class="camera-list" style="width: 100%;">
+          <div class="camera-text">
+            {{ d.label }}
+            <button class="button" v-on:click="rotateCamera(d, i)">
+              <img style="width: 30px;" src="/assets/anticlockwise-2-line.svg" alt="">
+            </button>
+          </div>
+          <div :id="`camera-box${i}`">
+            <video 
+              style="width: 100%;"
+              :id="`cameraFeed${i}`" 
+              autoplay
+              playsinline
+            >
+            </video>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <section class="scene" ref="sceneRef"></section>
     <div class="hud">
       <label class="hud-item">
@@ -228,6 +257,7 @@ import { COCO_KEYPOINTS, COCO_EDGES, MockPoseStream, type PoseFrame } from './po
 import { useCameras } from './composables/useCameras';
 import { useIris } from './composables/useIris';
 import { useLicense } from './composables/useLicense';
+import { FBXLoader } from 'three/examples/jsm/Addons.js';
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 const isDev = import.meta.env.DEV;
@@ -266,11 +296,14 @@ const isPaidLicense = computed(() => {
 watch(storedLicenseKey, (newKey) => {
   licenseKeyInput.value = newKey;
 }, { immediate: true });
+const cameraHoverIndex = ref(0);
+
+const cameraRotation = ref<{device: MediaDeviceInfo | null, angle: number}[]>()
 
 const {
   devices,
   selectedDeviceId,
-  selectedDeviceLabel,
+  selectedDevices,
   enumerateCameras,
   selectDevice: selectCamera,
   init: initCameras,
@@ -279,7 +312,7 @@ const {
   autoReselect: true,
   onSend: (msg) => { try { lastSentMsg.value = JSON.stringify(msg, null, 2); } catch {} },
 });
-const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt-${cameraActiveIndex.value}` : undefined));
+const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt-${cameraHoverIndex.value}` : undefined));
 
 // Tracking options
 const trackingOptions = ['Full body', 'Hand', 'Face'];
@@ -309,8 +342,10 @@ let controls: OrbitControls | null = null;
 let jointSpheres: THREE.Mesh[] = [];
 let boneLines: THREE.LineSegments | null = null;
 let poseStream: MockPoseStream | null = null;
-let modelRoot: THREE.Object3D | null = null;
+let modelsRoot: THREE.Object3D[] | null = null;
 
+const manager = new THREE.LoadingManager();
+let mixer: THREE.AnimationMixer[] | null;
 const showModel = ref(false); // off by default
 let irisUnsub: null | (()=>void) = null;
 
@@ -321,9 +356,9 @@ const iris = useIris({
     irisConnected.value = true;
     if (msg?.type === 'pose-frame') {
       poseLogCount++;
-      if (poseLogCount % 10 === 0) console.log('[IRIS recv]', msg);
+      // if (poseLogCount % 10 === 0) console.log('[IRIS recv]', msg);
     } else {
-      console.log('[IRIS recv]', msg);
+      // console.log('[IRIS recv]', msg);
     }
     lastRecvMsg.value = JSON.stringify(msg, null, 2);
     if (msg?.type === 'pose-frame') {
@@ -359,7 +394,7 @@ function onCameraListKeydown(e: KeyboardEvent) {
   else if (e.key === 'ArrowUp') { cameraActiveIndex.value = Math.max(0, cameraActiveIndex.value - 1); e.preventDefault(); scrollActiveIntoView(); }
   else if (e.key === 'Home') { cameraActiveIndex.value = 0; e.preventDefault(); scrollActiveIntoView(); }
   else if (e.key === 'End') { cameraActiveIndex.value = max; e.preventDefault(); scrollActiveIntoView(); }
-  else if (e.key === 'Enter') { const d = devices.value[cameraActiveIndex.value]; if (d) selectDevice(d); e.preventDefault(); }
+  else if (e.key === 'Enter') { const d = devices.value[cameraActiveIndex.value]; if (d) selectDevice(d, cameraActiveIndex.value); e.preventDefault(); }
   else if (e.key === 'Escape') { openCamera.value = false; cameraButtonRef.value?.focus(); e.preventDefault(); }
 }
 
@@ -367,7 +402,7 @@ function setInitialCameraActiveIndex(mode: 'first' | 'last' | 'current-or-first'
   if (devices.value.length === 0) { cameraActiveIndex.value = 0; return; }
   if (mode === 'last') cameraActiveIndex.value = devices.value.length - 1;
   else if (mode === 'current-or-first') {
-    const idx = selectedDeviceId.value ? devices.value.findIndex(d => d.deviceId === selectedDeviceId.value) : -1;
+    const idx = selectedDeviceId.value ? devices.value.findIndex(d => (selectedDeviceId.value ? selectedDeviceId.value : []).includes(d.deviceId)) : -1;
     cameraActiveIndex.value = idx >= 0 ? idx : 0;
   } else cameraActiveIndex.value = 0;
 }
@@ -407,7 +442,7 @@ function toggleOutput() {
   openOutput.value = willOpen;
   if (willOpen) { openCamera.value = false; openPersonCount.value = false; openTrack.value = false; }
 }
- function onClickOutside(e: MouseEvent) {
+function onClickOutside(e: MouseEvent) {
   // close any open dropdown if click outside
   if (!openCamera.value && !openPersonCount.value && !openTrack.value && !openOutput.value) return;
   const dd = (e.target as HTMLElement)?.closest('.dropdown');
@@ -416,70 +451,245 @@ function toggleOutput() {
 
 
 
-function selectDevice(d: MediaDeviceInfo){
-  // close just the camera dropdown
-  openCamera.value = false;
-  // For now, just log and maybe change background color subtly to show selection
+function selectDevice(d: MediaDeviceInfo, i: number){
   console.log('Selected device', d);
   selectCamera(d);
-  if (renderer) {
-    const col = new THREE.Color(0x0b0f14).offsetHSL(0.02, 0.05, 0.02);
-    renderer.setClearColor(col, 1);
+  if (selectedDevices.value && selectedDevices.value.includes(d)) {
+    startCameraStream(d, i)
+    refresh()
   }
+  else {
+    stopCameraStream(d, i)
+    refresh()
+  }
+  
   // Start mock pose stream when a camera is chosen (until IRIS real stream is wired)
-  startMockPose();
+  // startMockPose();
   // Send camera info to IRIS mock bridge
   const info = { type: 'camera-info', payload: { deviceId: d.deviceId, label: d.label, kind: d.kind, ts: Date.now() } };
   console.log('[IRIS send] camera-info', info);
   lastSentMsg.value = JSON.stringify(info, null, 2);
   (window as any).electronAPI?.irisSend?.(info);
+
+  if (!cameraRotation.value) {
+    cameraRotation.value = Array(selectedDevices.value?.length)
+    console.log(cameraRotation.value.length)
+    selectedDevices.value?.forEach((d, i) => {
+      if (cameraRotation.value) cameraRotation.value[i] = {device: selectedDevices.value ? selectedDevices.value[i] : null, angle: 0}
+    })
+
+  }
+  else {
+    const copy = cameraRotation.value
+    if (selectedDevices.value) {
+      cameraRotation.value = Array(selectedDevices.value?.length)
+    }
+    else {
+      cameraRotation.value = undefined
+    }
+    selectedDevices.value?.forEach((d, i) => {
+      cameraRotation.value?.push({device: selectedDevices.value ? selectedDevices.value[i] : null, angle: 0})
+      if (selectedDevices.value && selectedDevices.value[i] && cameraRotation.value) {
+        const idxOf = copy.map((val) => {
+            return val.device
+        }).indexOf(selectedDevices.value[i])
+        cameraRotation.value[i].angle = copy[idxOf].angle 
+      }
+    })
+  }
+  cameraRotation.value?.filter((val) => !val.device)
+}
+
+async function startCameraStream(camera: MediaDeviceInfo, index: number) {
+  const stream = await navigator.mediaDevices.getUserMedia({video: {deviceId: {exact: camera.deviceId}, frameRate: 30}});
+
+  const video = document.getElementById(`cameraFeed${index}`) as HTMLVideoElement;
+  try {
+    if (video) {
+      video.srcObject = stream;
+      console.log("playing", selectedDevices.value);
+    } 
+  } catch (err) {
+    console.error("Camera access failed: ", err);
+  }
+}
+
+function stopCameraStream(camera: MediaDeviceInfo, index: number) {
+  const video = document.getElementById(`cameraFeed${index}`) as HTMLVideoElement;
+  const stream = video.srcObject as MediaStream;
+  const tracks = stream.getTracks();
+
+  tracks.forEach(track => {
+    track.stop();
+  });
+  video.srcObject = null;
+}
+
+function refresh() {
+  selectedDevices.value?.forEach((d, i) => {
+    startCameraStream(d, i)
+  })
+}
+
+function rotateCamera(d: MediaDeviceInfo, index: number) {
+  if (cameraRotation.value && cameraRotation.value[index].device === d) {
+    const current = cameraRotation.value[index]
+    if (current.angle === 270) {
+      current.angle = 0
+    }
+    else {
+      current.angle += 90
+    }
+    console.log(current)
+    rotation(d, cameraRotation.value[index].angle, index)
+  }
+
+}
+
+async function rotation(d: MediaDeviceInfo, rotateAngle: number, i: number) {
+  let isOdd: boolean
+  let offsetX: number
+  let offsetY: number = 0
+  let origin: string
+  
+  const camera = await navigator.mediaDevices.getUserMedia({video: {deviceId: {exact: d.deviceId}}})
+  let aspectRatio = camera.getVideoTracks()[0].getSettings().aspectRatio
+  if (!aspectRatio) {
+    aspectRatio = 1.777778
+  }
+
+  if (rotateAngle % 180 === 0) {
+    isOdd = false
+  }
+  else {
+    aspectRatio = 1/aspectRatio
+    isOdd = true
+  }
+
+  const parent = document.getElementById(`camera-box${i}`) as HTMLDivElement
+  parent.style.width = "100%"
+
+  parent.style.aspectRatio = `${aspectRatio}`
+  const video = document.getElementById(`cameraFeed${i}`) as HTMLVideoElement
+  await new Promise(resolve => setTimeout(resolve, 50))
+  if (isOdd) {
+    const temp = parent.offsetWidth / aspectRatio
+    parent.style.height = temp + "px"
+    video.style.width = temp + "px"
+    video.style.maxWidth = temp + "px"
+    video.style.height = parent.offsetWidth + "px"
+    video.style.maxHeight = parent.offsetWidth + "px"
+
+
+    offsetX = video.offsetHeight
+    origin = "top left"
+    if (rotateAngle == 270) {
+      offsetY = video.offsetWidth;
+      offsetX = 0;
+    }
+  }
+  else {
+    video.style.width = parent.offsetWidth + "px"
+    video.style.height = "auto"
+    video.style.maxWidth = "100%"
+    parent.style.height = "auto"
+
+    offsetX = 0
+    origin = "center"
+  }
+  video.style.transform = `translate(${offsetX}px, ${offsetY}px) rotate(${rotateAngle}deg)`
+  video.style.transformOrigin = origin
 }
 
 // Removed wireframe toggle to keep UI unchanged; skeleton remains visible
 
-async function loadSMPLX(scene: THREE.Scene){
-  const loader = new OBJLoader();
-  const rel = 'assets/SMPLX_neutral.obj';
-  // Try direct path (dev), then Electron resolve, then read content and parse
-  const tryLoadPath = (url: string) => new Promise<THREE.Group>((resolve, reject) => loader.load(url, resolve, undefined, reject));
+async function loadModel(scene: THREE.Scene, type: string) {
+  const loader = new FBXLoader( manager );
+  const file = `assets/${type}`
+
   try {
-    const devUrl = rel; // Vite serves public/ at root in dev
-    let obj: THREE.Group | null = null;
-    try { obj = await tryLoadPath(devUrl); }
-    catch {
-      const assetPath = await (window as any).electronAPI?.resolveAsset?.(rel).catch(() => devUrl) ?? devUrl;
-      try { obj = await tryLoadPath(assetPath); }
-      catch {
-        const text = await (window as any).electronAPI?.readAsset?.(rel);
-        if (text) {
-          // OBJLoader can parse from string via parse
-          obj = loader.parse(text);
+    loader.load(file, function (group) {
+      if (modelsRoot) {
+        modelsRoot.push(group)
+      }
+      else {
+        modelsRoot = [group]
+      }
+      const modelRoot = modelsRoot[modelsRoot.length-1]
+      modelRoot.castShadow = true
+      modelRoot.receiveShadow = true
+      modelRoot.scale.set(0.01, 0.01, 0.01)
+      if (type === "Idle.fbx") {
+        modelRoot.position.set(-1.5, 0, -1.5)
+        modelRoot.setRotationFromAxisAngle(new THREE.Vector3(0, 1, 0), (45*3.14)/180)
+      }
+      if (modelRoot.animations && modelRoot.animations.length) {
+        if (mixer){
+          mixer.push(new THREE.AnimationMixer(modelRoot))
         }
+        else{
+          mixer = [new THREE.AnimationMixer(modelRoot)]
+        }
+        const mix = mixer[mixer.length-1] 
+        const action = mix.clipAction(modelRoot.animations[0])
+        action.play()
       }
-    }
-    if (!obj) throw new Error('OBJ load failed');
-    obj.traverse((child: any) => {
-      if (child.isMesh) {
-        child.material = new THREE.MeshStandardMaterial({ color: 0x6b83c6, metalness: 0.1, roughness: 0.8, transparent: true, opacity: 0.85 });
-        child.castShadow = true; child.receiveShadow = true;
+      else {
+        mixer = null
       }
-    });
-    obj.position.set(0, 0, 0);
-    modelRoot = obj;
-    modelRoot.visible = showModel.value;
-    scene.add(modelRoot);
-    fitToObject(obj);
-  } catch (e) {
-    console.warn('Failed to load SMPLX OBJ, using fallback', e);
-    const geo = new THREE.TorusKnotGeometry(0.6, 0.2, 200, 32);
-    const mat = new THREE.MeshStandardMaterial({ color: 0x6be675, metalness: 0.4, roughness: 0.3 });
-    const mesh = new THREE.Mesh(geo, mat);
-    modelRoot = mesh;
-    modelRoot.visible = showModel.value;
-    scene.add(modelRoot);
-    fitToObject(mesh);
+      scene.add(modelRoot)
+
+    })
+  }
+  catch (err) {
+    console.log("error loading file")
+    console.log(err)
   }
 }
+
+// async function loadSMPLX(scene: THREE.Scene){
+//   const loader = new OBJLoader();
+//   const rel = 'assets/SMPLX_neutral.obj';
+//   // Try direct path (dev), then Electron resolve, then read content and parse
+//   const tryLoadPath = (url: string) => new Promise<THREE.Group>((resolve, reject) => loader.load(url, resolve, undefined, reject));
+//   try {
+//     const devUrl = rel; // Vite serves public/ at root in dev
+//     let obj: THREE.Group | null = null;
+//     try { obj = await tryLoadPath(devUrl); }
+//     catch {
+//       const assetPath = await (window as any).electronAPI?.resolveAsset?.(rel).catch(() => devUrl) ?? devUrl;
+//       try { obj = await tryLoadPath(assetPath); }
+//       catch {
+//         const text = await (window as any).electronAPI?.readAsset?.(rel);
+//         if (text) {
+//           // OBJLoader can parse from string via parse
+//           obj = loader.parse(text);
+//         }
+//       }
+//     }
+//     if (!obj) throw new Error('OBJ load failed');
+//     obj.traverse((child: any) => {
+//       if (child.isMesh) {
+//         child.material = new THREE.MeshStandardMaterial({ color: 0x6b83c6, metalness: 0.1, roughness: 0.8, transparent: true, opacity: 0.85 });
+//         child.castShadow = true; child.receiveShadow = true;
+//       }
+//     });
+//     obj.position.set(0, 0, 0);
+//     modelRoot = obj;
+//     modelRoot.visible = showModel.value;
+//     scene.add(modelRoot);
+//     fitToObject(obj);
+//   } catch (e) {
+//     console.warn('Failed to load SMPLX OBJ, using fallback', e);
+//     const geo = new THREE.TorusKnotGeometry(0.6, 0.2, 200, 32);
+//     const mat = new THREE.MeshStandardMaterial({ color: 0x6be675, metalness: 0.4, roughness: 0.3 });
+//     const mesh = new THREE.Mesh(geo, mat);
+//     modelRoot = mesh;
+//     modelRoot.visible = showModel.value;
+//     scene.add(modelRoot);
+//     fitToObject(mesh);
+//   }
+// }
 
 function fitToObject(target: THREE.Object3D){
   const box = new THREE.Box3().setFromObject(target);
@@ -526,20 +736,28 @@ function initThree(container: HTMLElement){
   controls.minDistance = 0.1;
   controls.maxDistance = 100;
 
-  loadSMPLX(scene);
-
+  loadModel(scene, "Flair.fbx")
+  loadModel(scene, "Idle.fbx")
+  if (modelsRoot) {
+    modelsRoot.forEach((model) => model.visible = true) 
+  }
   // Skeleton geometry
-  initSkeleton(scene);
+  // loadSMPLX(scene);
+  // initSkeleton(scene);
 
   const clock = new THREE.Clock();
   const animate = () => {
-    const t = clock.getElapsedTime();
-    dir.position.x = Math.sin(t*0.5)*3; dir.position.z = Math.cos(t*0.5)*3;
-    controls?.update();
-    renderer!.render(scene, camera);
-    frameId = requestAnimationFrame(animate);
+    // const t = clock.getElapsedTime();
+    // dir.position.x = Math.sin(t*0.5)*3; dir.position.z = Math.cos(t*0.5)*3;
+    // controls?.update();
+    // renderer!.render(scene, camera);
+    // frameId = requestAnimationFrame(animate);
+    const delta = clock.getDelta()
+    if (mixer) mixer.forEach((mix) => mix.update(delta))
+    renderer?.render(scene, camera)
   };
-  animate();
+  renderer.setAnimationLoop(animate)
+  // animate()
 
   resizeObserver = new ResizeObserver(entries => {
     for (const entry of entries){
@@ -562,11 +780,11 @@ onMounted(() => {
 
   if (sceneRef.value) initThree(sceneRef.value);
   initCameras();
-  startMockPose();
+  // startMockPose();
   // Start IRIS keepalive + subscription
   iris.init();
   // React to showModel toggle
-  watch(showModel, (v) => { if (modelRoot) modelRoot.visible = v; });
+  // watch(showModel, (v) => { if (modelRoot) modelRoot.visible = v; });
   // Focus management for camera menu
   watch(openCamera, (isOpen) => {
     if (isOpen) { setInitialCameraActiveIndex('current-or-first'); focusCameraListSoon(); }
@@ -583,7 +801,7 @@ onBeforeUnmount(() => {
   if (frameId) cancelAnimationFrame(frameId);
   if (resizeObserver && sceneRef.value) resizeObserver.unobserve(sceneRef.value);
   if (renderer) { renderer.dispose(); renderer = null; }
-  poseStream?.stop();
+  // poseStream?.stop();
   iris.dispose();
   if (irisUnsub) { try { irisUnsub(); } catch {}; irisUnsub = null; }
 });
@@ -595,7 +813,6 @@ function onKeyDown(e: KeyboardEvent) {
   }
 }
 
-function connectIris(){ /* handled by useIris(); kept for compatibility */ }
 
 function pingIris(){
   const msg = { type: 'ping', ts: Date.now() };
@@ -623,30 +840,30 @@ function initSkeleton(scene: THREE.Scene){
   scene.add(boneLines);
 }
 
-function updateSkeleton(frame: PoseFrame){
-  // Position joints
-  for (let i=0; i<COCO_KEYPOINTS.length; i++){
-    const p = frame.keypoints[i]?.position || [0,0,0];
-    jointSpheres[i].position.set(p[0], p[1], p[2]);
-  }
-  // Update bones
-  const posAttr = (boneLines!.geometry as THREE.BufferGeometry).getAttribute('position') as THREE.BufferAttribute;
-  let idx = 0;
-  for (const [a,b] of COCO_EDGES){
-    const pa = frame.keypoints[a]?.position || [0,0,0];
-    const pb = frame.keypoints[b]?.position || [0,0,0];
-    posAttr.setXYZ(idx++, pa[0], pa[1], pa[2]);
-    posAttr.setXYZ(idx++, pb[0], pb[1], pb[2]);
-  }
-  posAttr.needsUpdate = true;
-}
+// function updateSkeleton(frame: PoseFrame){
+//   // Position joints
+//   for (let i=0; i<COCO_KEYPOINTS.length; i++){
+//     const p = frame.keypoints[i]?.position || [0,0,0];
+//     jointSpheres[i].position.set(p[0], p[1], p[2]);
+//   }
+//   // Update bones
+//   const posAttr = (boneLines!.geometry as THREE.BufferGeometry).getAttribute('position') as THREE.BufferAttribute;
+//   let idx = 0;
+//   for (const [a,b] of COCO_EDGES){
+//     const pa = frame.keypoints[a]?.position || [0,0,0];
+//     const pb = frame.keypoints[b]?.position || [0,0,0];
+//     posAttr.setXYZ(idx++, pa[0], pa[1], pa[2]);
+//     posAttr.setXYZ(idx++, pb[0], pb[1], pb[2]);
+//   }
+//   posAttr.needsUpdate = true;
+// }
 
-function startMockPose(){
-  poseStream?.stop();
-  poseStream = new MockPoseStream();
-  poseStream.subscribe(updateSkeleton);
-  poseStream.start();
-}
+// function startMockPose(){
+//   poseStream?.stop();
+//   poseStream = new MockPoseStream();
+//   poseStream.subscribe(updateSkeleton);
+//   poseStream.start();
+// }
 
 function selectTracking(t: string) {
   trackingType.value = t;
@@ -1012,4 +1229,49 @@ async function buyLicense() {
   border-color: #6be675;
   transform: translateY(-1px);
 }
+
+.sidenav {
+  position: absolute; 
+  right: 0px; 
+  height: calc(100% - 63px); 
+  width: 250px; 
+  background-color: rgba(12, 18, 25, .72);; 
+  z-index: 10;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px;
+}
+
+.camera-list {
+  padding: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  margin: 5px 0;
+} 
+
+.camera-text {
+  display: flex;
+  flex-direction: row;
+  font-size: 14px;
+  align-items: center;
+  padding-bottom: 5px;
+  justify-content: space-between;
+}
+
+.button {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(12, 18, 25, .72);
+  border-radius: 10px;
+}
+
+.button:hover {
+  background: rgba(18, 27, 36, 0.72);
+}
+
+.button:active {
+  background: rgba(12, 18, 25, 0.808);
+}
+
 </style>
