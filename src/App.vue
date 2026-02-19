@@ -682,7 +682,7 @@ async function handleLicenseSubmit() {
 }
 
 async function buyLicense() {
-  const url = import.meta.env.VITE_LICENSE_URL || 'https://embodi.ecolizard.com';
+  const url = import.meta.env.VITE_LICENSE_URL || 'https://embodi.ecolizard.com/#pricing';
   console.log('Buy License clicked - opening:', url);
   
   if (!(window as any).electronAPI?.openExternal) {
