@@ -15,6 +15,7 @@
     "check:deps": "npx npm-check-updates"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.97.0",
     "three": "0.169.0",
     "vue": "3.5.10"
   },
