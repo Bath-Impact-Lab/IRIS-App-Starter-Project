@@ -202,6 +202,15 @@
             <div v-if="isValidLicense" class="settings-actions">
               <button class="btn-deactivate" @click="licenseLogout">Deactivate License</button>
             </div>
+
+            <!-- Upgrade Section -->
+            <div v-if="!isPaidLicense" class="settings-footer">
+              <div class="divider"><span>Support Us</span></div>
+              <button class="btn-buy" @click="buyLicense">
+                Get a License
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -246,6 +255,12 @@ const {
   validateLicense, 
   logout: licenseLogout 
 } = useLicense();
+
+const isPaidLicense = computed(() => {
+  if (!isValidLicense.value) return false;
+  const plan = planType.value?.toLowerCase();
+  return plan === 'creator' || plan === 'studio';
+});
 
 // Sync local input with stored key on mount
 watch(storedLicenseKey, (newKey) => {
@@ -665,6 +680,26 @@ function toggleSignIn() {
 async function handleLicenseSubmit() {
   await validateLicense(licenseKeyInput.value);
 }
+
+async function buyLicense() {
+  const url = import.meta.env.VITE_LICENSE_URL || 'https://embodi.ecolizard.com';
+  console.log('Buy License clicked - opening:', url);
+  
+  if (!(window as any).electronAPI?.openExternal) {
+    console.error('CRITICAL: electronAPI.openExternal is missing! Please restart the application.');
+    return;
+  }
+
+  try {
+    const result = await (window as any).electronAPI.openExternal(url);
+    console.log('Open External Result:', result);
+    if (result && !result.ok) {
+       console.error('System failed to open URL:', result.error);
+    }
+  } catch (err) {
+    console.error('IPC invocation failed:', err);
+  }
+}
 </script>
 
 <style scoped>
@@ -927,5 +962,54 @@ async function handleLicenseSubmit() {
   transform: translateX(2px);
   filter: brightness(1.1);
   box-shadow: 0 4px 15px rgba(107, 230, 117, 0.4);
+}
+
+.settings-footer {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.2);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.divider::before, .divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.divider:not(:empty)::before { margin-right: 12px; }
+.divider:not(:empty)::after { margin-left: 12px; }
+
+.btn-buy {
+  background: rgba(107, 230, 117, 0.1);
+  border: 1px solid rgba(107, 230, 117, 0.2);
+  color: #6be675;
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.2s ease;
+}
+
+.btn-buy:hover {
+  background: rgba(107, 230, 117, 0.15);
+  border-color: #6be675;
+  transform: translateY(-1px);
 }
 </style>
