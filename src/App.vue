@@ -47,7 +47,7 @@
               role="option"
               :id="'cam-opt-' + i"
               :aria-selected="i === cameraHoverIndex"
-              :class="{ hovered: i === cameraHoverIndex, active: selectedDevices?.includes(d) && selectedDeviceId?.includes(d.deviceId) }"
+              :class="{ hovered: i === cameraHoverIndex, active: selectedDevices != null && selectedDeviceId?.includes(d.deviceId) }"
               @click="selectDevice(d, i)"
             >
               <div>
@@ -120,7 +120,14 @@
     <div class="sidenav">
       Camera Config:
       <div style="width: 100%;" v-for="(d, i) in selectedDevices">
-        <div class="camera-list" style="width: 100%;">
+        <div
+          class="camera-list"
+          :style="{
+            width: '100%',
+            boxShadow: sceneCameras[i] ? `inset 4px 0 0 ${sceneCameras[i].color}` : 'none',
+            paddingLeft: sceneCameras[i] ? '8px' : '0',
+          }"
+        >
           <div class="camera-text">
             {{ d.label }}
             <button class="button" v-on:click="rotateCamera(d, i)">
@@ -255,6 +262,7 @@ import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { COCO_KEYPOINTS, COCO_EDGES, MockPoseStream, type PoseFrame } from './pose';
 import { useCameras } from './composables/useCameras';
+import { useSceneCameras } from './composables/useSceneCameras';
 import { useIris } from './composables/useIris';
 import { useLicense } from './composables/useLicense';
 import { FBXLoader } from 'three/examples/jsm/Addons.js';
@@ -298,7 +306,7 @@ watch(storedLicenseKey, (newKey) => {
 }, { immediate: true });
 const cameraHoverIndex = ref(0);
 
-const cameraRotation = ref<{device: MediaDeviceInfo | null, angle: number}[]>()
+const cameraRotation = ref<Record<string, number>>({});
 
 const {
   devices,
@@ -312,6 +320,32 @@ const {
   autoReselect: true,
   onSend: (msg) => { try { lastSentMsg.value = JSON.stringify(msg, null, 2); } catch {} },
 });
+
+const selectedCameraCount = computed(() => selectedDevices.value?.length ?? 0);
+
+// Watch selectedDevices to initialize rotation state for new cameras
+watch(selectedDevices, (newDevices) => {
+  if (newDevices) {
+    newDevices.forEach(d => {
+      if (cameraRotation.value[d.deviceId] === undefined) {
+        cameraRotation.value[d.deviceId] = 0;
+      }
+    });
+  }
+}, { immediate: true });
+
+const { sceneCameras, addToScene: addSceneCameras, dispose: disposeSceneCameras } = useSceneCameras(selectedCameraCount);
+
+/** Combined view: physical (selected) cameras + visible scene cameras */
+const allCameras = computed(() => {
+  const visibleScene = sceneCameras.value.filter(c => c.visible);
+  return {
+    physical: selectedDevices.value ?? [],
+    scene: visibleScene,
+    totalCount: (selectedDevices.value?.length ?? 0) + visibleScene.length,
+  };
+});
+
 const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt-${cameraHoverIndex.value}` : undefined));
 
 // Tracking options
@@ -454,50 +488,37 @@ function onClickOutside(e: MouseEvent) {
 function selectDevice(d: MediaDeviceInfo, i: number){
   console.log('Selected device', d);
   selectCamera(d);
-  if (selectedDevices.value && selectedDevices.value.includes(d)) {
-    startCameraStream(d, i)
-    refresh()
-  }
-  else {
-    stopCameraStream(d, i)
-    refresh()
+  
+  const isSelected = selectedDevices.value?.some(sd => sd.deviceId === d.deviceId);
+
+  if (isSelected) {
+    startCameraStream(d, i);
+    // Initialize rotation angle for this device if not already set
+    if (cameraRotation.value[d.deviceId] === undefined) {
+      cameraRotation.value[d.deviceId] = 0;
+    }
+  } else {
+    stopCameraStream(d, i);
+    // Optional: remove rotation state when deselected
+    // delete cameraRotation.value[d.deviceId];
   }
   
-  // Start mock pose stream when a camera is chosen (until IRIS real stream is wired)
-  // startMockPose();
-  // Send camera info to IRIS mock bridge
-  const info = { type: 'camera-info', payload: { deviceId: d.deviceId, label: d.label, kind: d.kind, ts: Date.now() } };
+  // Send camera info to IRIS mock bridge (including rotation)
+  const info = { 
+    type: 'camera-info', 
+    payload: { 
+      deviceId: d.deviceId, 
+      label: d.label, 
+      kind: d.kind, 
+      ts: Date.now(),
+      rotation: cameraRotation.value[d.deviceId] || 0
+    } 
+  };
   console.log('[IRIS send] camera-info', info);
   lastSentMsg.value = JSON.stringify(info, null, 2);
   (window as any).electronAPI?.irisSend?.(info);
 
-  if (!cameraRotation.value) {
-    cameraRotation.value = Array(selectedDevices.value?.length)
-    console.log(cameraRotation.value.length)
-    selectedDevices.value?.forEach((d, i) => {
-      if (cameraRotation.value) cameraRotation.value[i] = {device: selectedDevices.value ? selectedDevices.value[i] : null, angle: 0}
-    })
-
-  }
-  else {
-    const copy = cameraRotation.value
-    if (selectedDevices.value) {
-      cameraRotation.value = Array(selectedDevices.value?.length)
-    }
-    else {
-      cameraRotation.value = undefined
-    }
-    selectedDevices.value?.forEach((d, i) => {
-      cameraRotation.value?.push({device: selectedDevices.value ? selectedDevices.value[i] : null, angle: 0})
-      if (selectedDevices.value && selectedDevices.value[i] && cameraRotation.value) {
-        const idxOf = copy.map((val) => {
-            return val.device
-        }).indexOf(selectedDevices.value[i])
-        cameraRotation.value[i].angle = copy[idxOf].angle 
-      }
-    })
-  }
-  cameraRotation.value?.filter((val) => !val.device)
+  refresh();
 }
 
 async function startCameraStream(camera: MediaDeviceInfo, index: number) {
@@ -532,18 +553,26 @@ function refresh() {
 }
 
 function rotateCamera(d: MediaDeviceInfo, index: number) {
-  if (cameraRotation.value && cameraRotation.value[index].device === d) {
-    const current = cameraRotation.value[index]
-    if (current.angle === 270) {
-      current.angle = 0
-    }
-    else {
-      current.angle += 90
-    }
-    console.log(current)
-    rotation(d, cameraRotation.value[index].angle, index)
-  }
+  const currentAngle = cameraRotation.value[d.deviceId] || 0;
+  const newAngle = (currentAngle + 90) % 360;
+  cameraRotation.value[d.deviceId] = newAngle;
 
+  // Notify IRIS backend about the rotation change
+  const info = { 
+    type: 'camera-info', 
+    payload: { 
+      deviceId: d.deviceId, 
+      label: d.label, 
+      kind: d.kind, 
+      ts: Date.now(),
+      rotation: newAngle
+    } 
+  };
+  console.log('[IRIS send] camera-info (rotate)', info);
+  lastSentMsg.value = JSON.stringify(info, null, 2);
+  (window as any).electronAPI?.irisSend?.(info);
+  
+  rotation(d, newAngle, index);
 }
 
 async function rotation(d: MediaDeviceInfo, rotateAngle: number, i: number) {
@@ -741,6 +770,9 @@ function initThree(container: HTMLElement){
   if (modelsRoot) {
     modelsRoot.forEach((model) => model.visible = true) 
   }
+
+  // Add scene cameras from JSON config
+  addSceneCameras(scene);
   // Skeleton geometry
   // loadSMPLX(scene);
   // initSkeleton(scene);
@@ -798,6 +830,7 @@ onBeforeUnmount(() => {
     window.removeEventListener('keydown', onKeyDown);
   }
   disposeCameras();
+  disposeSceneCameras();
   if (frameId) cancelAnimationFrame(frameId);
   if (resizeObserver && sceneRef.value) resizeObserver.unobserve(sceneRef.value);
   if (renderer) { renderer.dispose(); renderer = null; }
