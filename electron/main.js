@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, nativeTheme } = require('electron');
+const { app, BrowserWindow, ipcMain, nativeTheme, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -71,7 +71,7 @@ ipcMain.handle('read-asset', async (event, relPath) => {
 });
 
 // Start a child process that simulates the IRIS exe (stdin/stdout JSON lines)
-function startIrisMockProcess(){
+function startIrisMockProcess() {
     try {
         const script = path.join(__dirname, 'iris-mock.js');
         // In Electron dev, process.execPath is the Electron binary; run Node mode
@@ -79,7 +79,7 @@ function startIrisMockProcess(){
         irisProc = spawn(process.execPath, [script], opts);
         // Fallback: try system 'node' if previous spawn fails quickly
         irisProc.on('error', () => {
-            try { irisProc = spawn('node', [script], { stdio: ['pipe','pipe','inherit'] }); } catch {}
+            try { irisProc = spawn('node', [script], { stdio: ['pipe', 'pipe', 'inherit'] }); } catch { }
         });
         irisReady = true;
         irisProc.stdout.on('data', (buf) => {
@@ -95,16 +95,16 @@ function startIrisMockProcess(){
     }
 }
 
-function stopIrisMockProcess(){
+function stopIrisMockProcess() {
     try {
         if (irisProc) {
             const p = irisProc; irisProc = null; irisReady = false;
-            try { p.kill(); } catch {}
+            try { p.kill(); } catch { }
         }
-    } catch {}
+    } catch { }
 }
 
-async function restartIrisMockProcess(){
+async function restartIrisMockProcess() {
     stopIrisMockProcess();
     startIrisMockProcess();
     return { ok: irisReady };
@@ -121,7 +121,7 @@ ipcMain.handle('iris-send', async (event, msg) => {
 ipcMain.on('iris-subscribe', (event) => {
     const webContents = event.sender;
     const sendToRenderer = (msg) => {
-        try { webContents.send('iris-message', msg); } catch {}
+        try { webContents.send('iris-message', msg); } catch { }
     };
     irisSubscribers.add(sendToRenderer);
     event.returnValue = { ok: true };
@@ -132,4 +132,17 @@ ipcMain.on('iris-subscribe', (event) => {
 ipcMain.handle('iris-restart', async () => {
     try { return await restartIrisMockProcess(); }
     catch { return { ok: false }; }
+});
+
+ipcMain.handle('open-external', async (event, url) => {
+    console.log('[Main] Received open-external request for:', url);
+    try {
+        console.log('[Main] Calling shell.openExternal...');
+        await shell.openExternal(url);
+        console.log('[Main] shell.openExternal call completed successfully.');
+        return { ok: true };
+    } catch (e) {
+        console.error('[Main] shell.openExternal failed:', e);
+        return { ok: false, error: e.message };
+    }
 });
