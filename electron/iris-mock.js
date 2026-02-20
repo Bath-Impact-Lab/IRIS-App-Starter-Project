@@ -50,3 +50,51 @@ process.on('SIGINT', () => { stopPose(); process.exit(0); });
 
 // Send an initial hello so the UI can mark connected immediately
 send({ type: 'hello', payload: { ts: Date.now(), note: 'iris-mock ready' } });
+
+
+function buildConfigFromOptions(opts = {}) {
+  const run_id = opts.run_id || `run-${Date.now()}`;
+  const devices = {
+    gpu: 0,
+    cuda_streams: 2,
+    nvenc: false,
+  };
+  const buffers = {
+    frame_capacity: 256,
+    pose_capacity: 256,
+    export_shm: false,
+    camera_count: opts.cameras?.length,
+    camera_slots: 1,
+    camera_width: opts.camera_width ?? 1920,
+    camera_height: opts.camera_height ?? 1080,
+  };
+
+  const capture = (opts.cameras || []).map((c, index) => ({
+    name: `cap${index}`,
+    params: {
+      camera_id: index,
+      width: c.width,
+      height: c.height,
+      rotate: c.rotation,
+      format: 'BGR8',
+      fps: c.fps,
+      use_camera: true,
+      device_id: 0,
+      batching: true,
+      batch_cameras: opts.cameras.map((_, idx) => idx),
+    }
+  }));
+
+  const output = {
+    name: 'output',
+    params: {
+      shm_name: "iris_shm_ipc",
+      capacity: 120,
+      frame_width: opts.camera_width ?? 1920,
+      frame_height: opts.camera_height ?? 1080,
+      num_cameras: opts.cameras.length(),
+    }
+  };
+
+  return { run_id, devices, buffers, capture, output };
+}

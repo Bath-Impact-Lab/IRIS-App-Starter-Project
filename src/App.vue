@@ -118,12 +118,14 @@
     </nav>
 
     <div class="sidenav">
-      Camera Config:
+      <div class="brand">
+        Camera Config:
+      </div>
       <div style="width: 100%;" v-for="(d, i) in selectedDevices">
         <div class="camera-list" style="width: 100%;">
           <div class="camera-text">
             {{ d.label }}
-            <button class="button" v-on:click="rotateCamera(d, i)">
+            <button class="button btn" v-on:click="rotateCamera(d, i)">
               <img style="width: 30px;" src="/assets/anticlockwise-2-line.svg" alt="">
             </button>
           </div>
@@ -137,6 +139,15 @@
             </video>
           </div>
         </div>
+      </div>
+
+      <div class="iris-controls" v-if="selectedDevices">
+        <button v-on:click="startIris" class="button btn">
+          Start IRIS
+        </button>
+        <button v-on:click="stopIris" class="button btn">
+          Stop IRIS
+        </button>
       </div>
     </div>
 
@@ -507,7 +518,7 @@ async function startCameraStream(camera: MediaDeviceInfo, index: number) {
   try {
     if (video) {
       video.srcObject = stream;
-      console.log("playing", selectedDevices.value);
+      // console.log("playing", selectedDevices.value);
     } 
   } catch (err) {
     console.error("Camera access failed: ", err);
@@ -911,12 +922,49 @@ async function buyLicense() {
     const result = await (window as any).electronAPI.openExternal(url);
     console.log('Open External Result:', result);
     if (result && !result.ok) {
-       console.error('System failed to open URL:', result.error);
+      console.error('System failed to open URL:', result.error);
     }
   } catch (err) {
     console.error('IPC invocation failed:', err);
   }
 }
+
+
+
+async function startIris() {
+  if (selectedDevices.value) {
+    const cameras = Array.from(selectedDevices.value, (d, i) => ({
+      uri: String(i),
+      width: 1920,
+      height: 1080,
+      fps: 100,
+      rotation: cameraRotation.value ? cameraRotation.value[i].angle : 0
+    })) 
+    const config = {
+      model: "Coco17",
+      subjects: personCount,
+      cameras: cameras,
+      camera_width: 1920,
+      camera_height: 1080, 
+      video_fps: 100,
+      output_dir: "",
+      stream: true,
+    } 
+  }
+
+  selectedDevices.value?.forEach((d, i) => {
+    stopCameraStream(d, i)
+  });
+  await new Promise( resolve => setTimeout(resolve, 1000))
+
+  // iris start command goes here:
+
+}
+
+function stopIris() {
+  
+}
+
 </script>
 
 <style scoped>
@@ -1090,8 +1138,8 @@ async function buyLicense() {
 /* License Badge Styles */
 .license-badge-container {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  left: 16px;
+  bottom: 75px;
   z-index: 900;
   transition: transform 0.2s ease;
 }
@@ -1156,6 +1204,7 @@ async function buyLicense() {
   font-size: 13px;
   font-weight: 600;
   color: #e6edf3;
+  background-color: var(--bg);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -1235,7 +1284,7 @@ async function buyLicense() {
   right: 0px; 
   height: calc(100% - 63px); 
   width: 250px; 
-  background-color: rgba(12, 18, 25, .72);; 
+  background-color: var(--sidebar); 
   z-index: 10;
   border-left: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
@@ -1262,7 +1311,7 @@ async function buyLicense() {
 
 .button {
   border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(12, 18, 25, .72);
+  background: var(--sidebar);
   border-radius: 10px;
 }
 
@@ -1272,6 +1321,23 @@ async function buyLicense() {
 
 .button:active {
   background: rgba(12, 18, 25, 0.808);
+}
+
+.iris-controls {
+  padding: 10px 5px;
+  background-color: var(--sidebar);
+  position: absolute; 
+  bottom: 0px;
+  width: 100%; 
+  height: 25%; 
+  display: flex; 
+  flex-direction: column; 
+  align-items: center;
+  z-index: 100;
+}
+
+.iris-controls button {
+  margin: 10px 0;
 }
 
 </style>
