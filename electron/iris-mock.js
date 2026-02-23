@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 // Simple IRIS mock process: reads JSON lines on stdin, writes JSON lines on stdout.
 // Messages are { type: string, payload?: any }
+'use strict';
+
 const readline = require('readline');
+const { app, ipcMain } = require('electron')
+
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
@@ -97,4 +101,14 @@ function buildConfigFromOptions(opts = {}) {
   };
 
   return { run_id, devices, buffers, capture, output };
+}
+
+function registerIrisIpc() {  
+  ipcMain.handle('start-iris', (event, options) =>{
+    console.log(options)
+  })
+  
+  ipcMain.handle('stop-iris', (event, Id) =>{
+    console.log(Id)
+  })
 }

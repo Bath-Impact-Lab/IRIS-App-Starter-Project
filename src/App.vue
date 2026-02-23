@@ -16,6 +16,7 @@
             aria-haspopup="listbox"
             :aria-expanded="openCamera"
             aria-controls="camera-listbox"
+            :disabled="running"
           >
           <div v-if="!selectedDevices">
             Camera Selection
@@ -60,7 +61,7 @@
 
         <!-- Person count dropdown -->
         <div class="dropdown" :class="{ open: openPersonCount }" style="margin-left: 12px;">
-          <button class="btn" @click="togglePersonCount">
+          <button class="btn" @click="togglePersonCount" :disabled="running">
             {{ personCount || 'Person Count' }}
           </button>
           <div class="dropdown-menu">
@@ -75,7 +76,7 @@
 
         <!-- Tracking type dropdown -->
         <div class="dropdown" :class="{ open: openTrack }" style="margin-left: 12px;">
-          <button class="btn" @click="toggleTrack">
+          <button class="btn" @click="toggleTrack" :disabled="running">
             {{ trackingType || 'Tracking Type' }}
           </button>
           <div class="dropdown-menu">
@@ -90,7 +91,7 @@
 
         <!-- Output option dropdown -->
         <div class="dropdown" :class="{ open: openOutput }" style="margin-left: 12px;">
-          <button class="btn" @click="toggleOutput">
+          <button class="btn" @click="toggleOutput" :disabled="running">
             {{ outputOption || 'Output' }}
           </button>
           <div class="dropdown-menu">
@@ -107,7 +108,7 @@
       <!-- Right side: sign-in area -->
       <div class="nav-right">
         <div class="menu-right">
-          <button class="btn btn-icon" @click="toggleSignIn" aria-label="Settings">
+          <button class="btn btn-icon" @click="toggleSignIn" aria-label="Settings" :disabled="running">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <circle cx="12" cy="12" r="3"></circle>
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
@@ -125,7 +126,7 @@
         <div class="camera-list" style="width: 100%;">
           <div class="camera-text">
             {{ d.label }}
-            <button class="button btn" v-on:click="rotateCamera(d, i)">
+            <button class="button btn" v-on:click="rotateCamera(d, i)" :disabled="running">
               <img style="width: 30px;" src="/assets/anticlockwise-2-line.svg" alt="">
             </button>
           </div>
@@ -342,6 +343,9 @@ const debugOpen = ref(false);
 const lastSentMsg = ref('');
 const lastRecvMsg = ref('');
 let poseLogCount = 0; // throttle console logs for pose-frame
+
+const running = ref(false)
+
 // Skeleton always visible by default
 
 let renderer: THREE.WebGLRenderer | null = null;
@@ -427,11 +431,6 @@ function scrollActiveIntoView(){
   });
 }
 
-function toggleMenu() {
-  // kept for backward compatibility but no-op now
-  // Toggle camera dropdown by default for original behavior
-  toggleCamera();
-}
 function toggleCamera() {
   const willOpen = !openCamera.value;
   openCamera.value = willOpen;
@@ -463,7 +462,6 @@ function onClickOutside(e: MouseEvent) {
 
 
 function selectDevice(d: MediaDeviceInfo, i: number){
-  console.log('Selected device', d);
   selectCamera(d);
   if (selectedDevices.value && selectedDevices.value.includes(d)) {
     startCameraStream(d, i)
@@ -484,7 +482,6 @@ function selectDevice(d: MediaDeviceInfo, i: number){
 
   if (!cameraRotation.value) {
     cameraRotation.value = Array(selectedDevices.value?.length)
-    console.log(cameraRotation.value.length)
     selectedDevices.value?.forEach((d, i) => {
       if (cameraRotation.value) cameraRotation.value[i] = {device: selectedDevices.value ? selectedDevices.value[i] : null, angle: 0}
     })
@@ -551,7 +548,6 @@ function rotateCamera(d: MediaDeviceInfo, index: number) {
     else {
       current.angle += 90
     }
-    console.log(current)
     rotation(d, cameraRotation.value[index].angle, index)
   }
 
@@ -940,9 +936,9 @@ async function startIris() {
       fps: 100,
       rotation: cameraRotation.value ? cameraRotation.value[i].angle : 0
     })) 
-    const config = {
+    const options = {
       model: "Coco17",
-      subjects: personCount,
+      subjects: personCount.value,
       cameras: cameras,
       camera_width: 1920,
       camera_height: 1080, 
@@ -950,18 +946,28 @@ async function startIris() {
       output_dir: "",
       stream: true,
     } 
+    
+    selectedDevices.value?.forEach((d, i) => {
+      stopCameraStream(d, i)
+    });
+    await new Promise( resolve => setTimeout(resolve, 1000))
+    
+    running.value = true 
+    // iris start command goes here:
+    await window.ipc?.startIRIS(options)
   }
-
-  selectedDevices.value?.forEach((d, i) => {
-    stopCameraStream(d, i)
-  });
-  await new Promise( resolve => setTimeout(resolve, 1000))
-
-  // iris start command goes here:
-
 }
 
-function stopIris() {
+async function stopIris() {
+  running.value = false
+
+  //stop iris command to ipc here
+  const Id = "example"
+  await window.ipc?.stopIRIS(Id)
+
+  selectedDevices.value?.forEach((d, i) => {
+    startCameraStream(d, i)
+  })
   
 }
 

@@ -15,3 +15,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     } catch { return () => { }; }
   }
 });
+
+
+contextBridge.exposeInMainWorld('ipc', {
+  startIRIS: (options) => ipcRenderer.invoke('start-iris', options),
+  stopIRIS: (Id) => ipcRenderer.invoke('stop-iris', Id),
+})

@@ -9,4 +9,8 @@ interface Window {
   electronAPI?: {
     resolveAsset?: (relPath: string) => Promise<string>
   }
-}
+  ipc?: {
+    startIRIS: (options: any) => Promise<any>;
+    stopIRIS: (Id: any) => Promise<any>;
+  }
+} 
