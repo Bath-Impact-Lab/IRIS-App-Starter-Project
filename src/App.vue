@@ -547,7 +547,6 @@ function rotateCamera(d: MediaDeviceInfo, index: number) {
     }
     rotation(d, cameraRotation.value[index].angle, index)
   }
-
 }
 
 async function rotation(d: MediaDeviceInfo, rotateAngle: number, i: number) {
@@ -583,7 +582,6 @@ async function rotation(d: MediaDeviceInfo, rotateAngle: number, i: number) {
     video.style.maxWidth = temp + "px"
     video.style.height = parent.offsetWidth + "px"
     video.style.maxHeight = parent.offsetWidth + "px"
-
 
     offsetX = video.offsetHeight
     origin = "top left"
@@ -651,69 +649,6 @@ async function loadModel(scene: THREE.Scene, type: string) {
   }
 }
 
-// async function loadSMPLX(scene: THREE.Scene){
-//   const loader = new OBJLoader();
-//   const rel = 'assets/SMPLX_neutral.obj';
-//   // Try direct path (dev), then Electron resolve, then read content and parse
-//   const tryLoadPath = (url: string) => new Promise<THREE.Group>((resolve, reject) => loader.load(url, resolve, undefined, reject));
-//   try {
-//     const devUrl = rel; // Vite serves public/ at root in dev
-//     let obj: THREE.Group | null = null;
-//     try { obj = await tryLoadPath(devUrl); }
-//     catch {
-//       const assetPath = await (window as any).electronAPI?.resolveAsset?.(rel).catch(() => devUrl) ?? devUrl;
-//       try { obj = await tryLoadPath(assetPath); }
-//       catch {
-//         const text = await (window as any).electronAPI?.readAsset?.(rel);
-//         if (text) {
-//           // OBJLoader can parse from string via parse
-//           obj = loader.parse(text);
-//         }
-//       }
-//     }
-//     if (!obj) throw new Error('OBJ load failed');
-//     obj.traverse((child: any) => {
-//       if (child.isMesh) {
-//         child.material = new THREE.MeshStandardMaterial({ color: 0x6b83c6, metalness: 0.1, roughness: 0.8, transparent: true, opacity: 0.85 });
-//         child.castShadow = true; child.receiveShadow = true;
-//       }
-//     });
-//     obj.position.set(0, 0, 0);
-//     modelRoot = obj;
-//     modelRoot.visible = showModel.value;
-//     scene.add(modelRoot);
-//     fitToObject(obj);
-//   } catch (e) {
-//     console.warn('Failed to load SMPLX OBJ, using fallback', e);
-//     const geo = new THREE.TorusKnotGeometry(0.6, 0.2, 200, 32);
-//     const mat = new THREE.MeshStandardMaterial({ color: 0x6be675, metalness: 0.4, roughness: 0.3 });
-//     const mesh = new THREE.Mesh(geo, mat);
-//     modelRoot = mesh;
-//     modelRoot.visible = showModel.value;
-//     scene.add(modelRoot);
-//     fitToObject(mesh);
-//   }
-// }
-
-function fitToObject(target: THREE.Object3D){
-  const box = new THREE.Box3().setFromObject(target);
-  const size = box.getSize(new THREE.Vector3());
-  const center = box.getCenter(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z);
-  const fov = camera.fov * (Math.PI/180);
-  let distance = (maxDim/2) / Math.tan(fov/2);
-  distance *= 1.4; // padding
-
-  const dir = new THREE.Vector3(0.8, 0.5, 1).normalize();
-  camera.position.copy(center.clone().add(dir.multiplyScalar(distance)));
-  camera.near = distance/100;
-  camera.far = distance*100;
-  camera.updateProjectionMatrix();
-  camera.lookAt(center);
-  controls?.target.copy(center);
-  controls?.update();
-}
-
 function initThree(container: HTMLElement){
   const width = container.clientWidth;
   const height = container.clientHeight;
@@ -745,23 +680,14 @@ function initThree(container: HTMLElement){
   if (modelsRoot) {
     modelsRoot.forEach((model) => model.visible = true) 
   }
-  // Skeleton geometry
-  // loadSMPLX(scene);
-  // initSkeleton(scene);
 
   const clock = new THREE.Clock();
   const animate = () => {
-    // const t = clock.getElapsedTime();
-    // dir.position.x = Math.sin(t*0.5)*3; dir.position.z = Math.cos(t*0.5)*3;
-    // controls?.update();
-    // renderer!.render(scene, camera);
-    // frameId = requestAnimationFrame(animate);
     const delta = clock.getDelta()
     if (mixer) mixer.forEach((mix) => mix.update(delta))
     renderer?.render(scene, camera)
   };
   renderer.setAnimationLoop(animate)
-  // animate()
 
   resizeObserver = new ResizeObserver(entries => {
     for (const entry of entries){
@@ -784,12 +710,7 @@ onMounted(() => {
 
   if (sceneRef.value) initThree(sceneRef.value);
   initCameras();
-  // startMockPose();
-  // Start IRIS keepalive + subscription
   iris.init();
-  // React to showModel toggle
-  // watch(showModel, (v) => { if (modelRoot) modelRoot.visible = v; });
-  // Focus management for camera menu
   watch(openCamera, (isOpen) => {
     if (isOpen) { setInitialCameraActiveIndex('current-or-first'); focusCameraListSoon(); }
     else if (document.activeElement === cameraListRef.value) { cameraButtonRef.value?.focus(); }
@@ -821,57 +742,12 @@ function onKeyDown(e: KeyboardEvent) {
   }
 }
 
-
 function pingIris(){
   const msg = { type: 'ping', ts: Date.now() };
   console.log('[IRIS send] ping', msg);
   lastSentMsg.value = JSON.stringify(msg, null, 2);
   iris.send(msg);
 }
-
-function initSkeleton(scene: THREE.Scene){
-  // Joints
-  const jointGeo = new THREE.SphereGeometry(0.02, 16, 16);
-  const jointMat = new THREE.MeshBasicMaterial({ color: 0xff5533, depthTest: false, depthWrite: false });
-  jointSpheres = COCO_KEYPOINTS.map(() => new THREE.Mesh(jointGeo, jointMat.clone()));
-  jointSpheres.forEach(m => { m.visible = true; scene.add(m); });
-  jointSpheres.forEach(m => m.renderOrder = 999);
-
-  // Bones
-  const positions = new Float32Array(COCO_EDGES.length * 2 * 3);
-  const geom = new THREE.BufferGeometry();
-  geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  const mat = new THREE.LineBasicMaterial({ color: 0xffffff, depthTest: false });
-  boneLines = new THREE.LineSegments(geom, mat);
-  boneLines.visible = true;
-  boneLines.renderOrder = 998;
-  scene.add(boneLines);
-}
-
-// function updateSkeleton(frame: PoseFrame){
-//   // Position joints
-//   for (let i=0; i<COCO_KEYPOINTS.length; i++){
-//     const p = frame.keypoints[i]?.position || [0,0,0];
-//     jointSpheres[i].position.set(p[0], p[1], p[2]);
-//   }
-//   // Update bones
-//   const posAttr = (boneLines!.geometry as THREE.BufferGeometry).getAttribute('position') as THREE.BufferAttribute;
-//   let idx = 0;
-//   for (const [a,b] of COCO_EDGES){
-//     const pa = frame.keypoints[a]?.position || [0,0,0];
-//     const pb = frame.keypoints[b]?.position || [0,0,0];
-//     posAttr.setXYZ(idx++, pa[0], pa[1], pa[2]);
-//     posAttr.setXYZ(idx++, pb[0], pb[1], pb[2]);
-//   }
-//   posAttr.needsUpdate = true;
-// }
-
-// function startMockPose(){
-//   poseStream?.stop();
-//   poseStream = new MockPoseStream();
-//   poseStream.subscribe(updateSkeleton);
-//   poseStream.start();
-// }
 
 function selectTracking(t: string) {
   trackingType.value = t;
