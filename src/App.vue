@@ -157,27 +157,11 @@
       </label>
       <div class="hud-sep"></div>
       <div class="hud-item">
-        <span :class="['dot', irisConnected ? 'ok' : 'warn']"></span>
-        <span>{{ irisConnected ? 'IRIS connected' : 'IRIS offline' }}</span>
+        <span :class="['dot', running ? 'ok' : 'warn']"></span>
+        <span>{{ running ? 'IRIS running' : 'IRIS inavtive' }}</span>
       </div>
       <div class="hud-sep" v-if="isDev"></div>
       <button class="btn btn-mini" v-if="isDev" @click="debugOpen = !debugOpen">{{ debugOpen ? 'Hide' : 'Show' }} debug</button>
-    </div>
-
-    <div class="debug" v-if="isDev && debugOpen">
-      <div class="debug-row">
-        <button class="btn btn-mini" @click="pingIris">Ping IRIS</button>
-      </div>
-      <div class="debug-row">
-        <div class="debug-col">
-          <div class="debug-title">Last sent</div>
-          <pre class="debug-pre">{{ lastSentMsg }}</pre>
-        </div>
-        <div class="debug-col">
-          <div class="debug-title">Last received</div>
-          <pre class="debug-pre">{{ lastRecvMsg }}</pre>
-        </div>
-      </div>
     </div>
 
     <!-- License Badge -->
@@ -260,11 +244,8 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, watch, nextTick, computed } from 'vue';
 import * as THREE from 'three';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { COCO_KEYPOINTS, COCO_EDGES, MockPoseStream, type PoseFrame } from './pose';
 import { useCameras } from './composables/useCameras';
-import { useIris } from './composables/useIris';
 import { useLicense } from './composables/useLicense';
 import { FBXLoader } from 'three/examples/jsm/Addons.js';
 
@@ -332,14 +313,12 @@ const personCountOptions = ['Single Person', 'Multi-Person'];
 const personCount = ref<string | null>('Single Person');
 
 // Output options
-const outputOptions = ['SteamVR', 'Unity', 'UnReal', 'Gadot'];
+const outputOptions = ['SteamVR', 'Unity', 'Unreal', 'Gadot'];
 const outputOption = ref<string | null>(null);
 
 const irisConnected = ref(false);
 const debugOpen = ref(false);
 const lastSentMsg = ref('');
-const lastRecvMsg = ref('');
-let poseLogCount = 0; // throttle console logs for pose-frame
 
 const running = ref(false)
 
@@ -353,31 +332,11 @@ let resizeObserver: ResizeObserver | null = null;
 let controls: OrbitControls | null = null;
 let jointSpheres: THREE.Mesh[] = [];
 let boneLines: THREE.LineSegments | null = null;
-let poseStream: MockPoseStream | null = null;
 let modelsRoot: THREE.Object3D[] | null = null;
 
 const manager = new THREE.LoadingManager();
 let mixer: THREE.AnimationMixer[] | null;
 const showModel = ref(false); // off by default
-let irisUnsub: null | (()=>void) = null;
-
-// IRIS keepalive with auto-restart
-const iris = useIris({
-  onMessage: (msg: any) => {
-    // Mirror previous UI behavior: mark connected and show last received
-    irisConnected.value = true;
-    if (msg?.type === 'pose-frame') {
-      poseLogCount++;
-      // if (poseLogCount % 10 === 0) console.log('[IRIS recv]', msg);
-    } else {
-      // console.log('[IRIS recv]', msg);
-    }
-    lastRecvMsg.value = JSON.stringify(msg, null, 2);
-    if (msg?.type === 'pose-frame') {
-      // Hook for future: apply msg.payload to updateSkeleton
-    }
-  },
-});
 
 function onCameraButtonKeydown(e: KeyboardEvent) {
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -468,14 +427,6 @@ function selectDevice(d: MediaDeviceInfo, i: number){
     stopCameraStream(d, i)
     refresh()
   }
-  
-  // Start mock pose stream when a camera is chosen (until IRIS real stream is wired)
-  // startMockPose();
-  // Send camera info to IRIS mock bridge
-  const info = { type: 'camera-info', payload: { deviceId: d.deviceId, label: d.label, kind: d.kind, ts: Date.now() } };
-  console.log('[IRIS send] camera-info', info);
-  lastSentMsg.value = JSON.stringify(info, null, 2);
-  (window as any).electronAPI?.irisSend?.(info);
 
   if (!cameraRotation.value) {
     cameraRotation.value = Array(selectedDevices.value?.length)
@@ -710,7 +661,6 @@ onMounted(() => {
 
   if (sceneRef.value) initThree(sceneRef.value);
   initCameras();
-  iris.init();
   watch(openCamera, (isOpen) => {
     if (isOpen) { setInitialCameraActiveIndex('current-or-first'); focusCameraListSoon(); }
     else if (document.activeElement === cameraListRef.value) { cameraButtonRef.value?.focus(); }
@@ -730,9 +680,6 @@ onBeforeUnmount(() => {
   if (frameId) cancelAnimationFrame(frameId);
   if (resizeObserver && sceneRef.value) resizeObserver.unobserve(sceneRef.value);
   if (renderer) { renderer.dispose(); renderer = null; }
-  // poseStream?.stop();
-  iris.dispose();
-  if (irisUnsub) { try { irisUnsub(); } catch {}; irisUnsub = null; }
 });
 
 function onKeyDown(e: KeyboardEvent) {
@@ -742,36 +689,19 @@ function onKeyDown(e: KeyboardEvent) {
   }
 }
 
-function pingIris(){
-  const msg = { type: 'ping', ts: Date.now() };
-  console.log('[IRIS send] ping', msg);
-  lastSentMsg.value = JSON.stringify(msg, null, 2);
-  iris.send(msg);
-}
-
 function selectTracking(t: string) {
   trackingType.value = t;
   openTrack.value = false;
-  // notify backend/electron if desired
-  const msg = { type: 'tracking-select', payload: { tracking: t, ts: Date.now() } };
-  lastSentMsg.value = JSON.stringify(msg, null, 2);
-  (window as any).electronAPI?.irisSend?.(msg);
 }
 
 function selectPersonCount(p: string) {
   personCount.value = p;
   openPersonCount.value = false;
-  const msg = { type: 'person-count-select', payload: { personCount: p, ts: Date.now() } };
-  lastSentMsg.value = JSON.stringify(msg, null, 2);
-  (window as any).electronAPI?.irisSend?.(msg);
 }
 
 function selectOutput(o: string) {
   outputOption.value = o;
   openOutput.value = false;
-  const msg = { type: 'output-select', payload: { output: o, ts: Date.now() } };
-  lastSentMsg.value = JSON.stringify(msg, null, 2);
-  (window as any).electronAPI?.irisSend?.(msg);
 }
 
 function toggleSignIn() {
