@@ -12,5 +12,6 @@ interface Window {
   ipc?: {
     startIRIS: (options: any) => Promise<any>;
     stopIRIS: (Id: any) => Promise<any>;
+    onIrisData: (callback: (data: any) => void) => void;
   }
 } 

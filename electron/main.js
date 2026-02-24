@@ -1,5 +1,5 @@
 const { app, BrowserWindow, ipcMain, nativeTheme, shell } = require('electron');
-// const { registerIrisIpc } = require('./iris-mock');
+const { registerIrisIpc } = require('./iris-mock');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -40,7 +40,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
-    // registerIrisIpc();
+    registerIrisIpc();
     createWindow();
     startIrisMockProcess();
 
@@ -149,11 +149,3 @@ ipcMain.handle('open-external', async (event, url) => {
     }
 });
 
-
-ipcMain.handle('start-iris', (event, options) =>{
-    console.log(options)    
-})
-
-ipcMain.handle('stop-iris', (event, Id) =>{
-    console.log(Id)
-})

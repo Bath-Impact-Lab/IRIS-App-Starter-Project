@@ -109,10 +109,7 @@
       <div class="nav-right">
         <div class="menu-right">
           <button class="btn btn-icon" @click="toggleSignIn" aria-label="Settings" :disabled="running">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="3"></circle>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-            </svg>
+            <img src="./../assets/settings.svg" alt="">
           </button>
         </div>
       </div>
@@ -126,7 +123,7 @@
         <div class="camera-list" style="width: 100%;">
           <div class="camera-text">
             {{ d.label }}
-            <button class="button btn" v-on:click="rotateCamera(d, i)" :disabled="running">
+            <button class="button btn" style="padding: 3px 5px;" v-on:click="rotateCamera(d, i)" :disabled="running">
               <img style="width: 30px;" src="/assets/anticlockwise-2-line.svg" alt="">
             </button>
           </div>
@@ -143,10 +140,10 @@
       </div>
 
       <div class="iris-controls" v-if="selectedDevices">
-        <button v-on:click="startIris" class="button btn">
+        <button v-on:click="startIris" class="button btn" :disabled="running">
           Start IRIS
         </button>
-        <button v-on:click="stopIris" class="button btn">
+        <button v-on:click="stopIris" class="button btn" :disabled="!running">
           Stop IRIS
         </button>
       </div>
@@ -628,7 +625,7 @@ async function loadModel(scene: THREE.Scene, type: string) {
       modelRoot.scale.set(0.01, 0.01, 0.01)
       if (type === "Idle.fbx") {
         modelRoot.position.set(-1.5, 0, -1.5)
-        modelRoot.setRotationFromAxisAngle(new THREE.Vector3(0, 1, 0), (45*3.14)/180)
+        modelRoot.setRotationFromAxisAngle(new THREE.Vector3(0, 1, 0), 45*(Math.PI/180))
       }
       if (modelRoot.animations && modelRoot.animations.length) {
         if (mixer){
@@ -797,6 +794,10 @@ onMounted(() => {
     if (isOpen) { setInitialCameraActiveIndex('current-or-first'); focusCameraListSoon(); }
     else if (document.activeElement === cameraListRef.value) { cameraButtonRef.value?.focus(); }
   });
+
+  window.ipc?.onIrisData((data) => {
+    console.log("recieved data", data)
+  })
 });
 
 onBeforeUnmount(() => {
@@ -937,7 +938,7 @@ async function startIris() {
       rotation: cameraRotation.value ? cameraRotation.value[i].angle : 0
     })) 
     const options = {
-      model: "Coco17",
+      kp_format: "Coco17",
       subjects: personCount.value,
       cameras: cameras,
       camera_width: 1920,
