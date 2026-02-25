@@ -316,7 +316,6 @@ const personCount = ref<string | null>('Single Person');
 const outputOptions = ['SteamVR', 'Unity', 'Unreal', 'Gadot'];
 const outputOption = ref<string | null>(null);
 
-const irisConnected = ref(false);
 const debugOpen = ref(false);
 const lastSentMsg = ref('');
 
@@ -333,6 +332,11 @@ let controls: OrbitControls | null = null;
 let jointSpheres: THREE.Mesh[] = [];
 let boneLines: THREE.LineSegments | null = null;
 let modelsRoot: THREE.Object3D[] | null = null;
+
+let spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null = null;
+const position = new THREE.Object3D()
+
+let irisData: IrisData[] | IrisData | null;
 
 const manager = new THREE.LoadingManager();
 let mixer: THREE.AnimationMixer[] | null;
@@ -424,7 +428,7 @@ function selectDevice(d: MediaDeviceInfo, i: number){
     refresh()
   }
   else {
-    stopCameraStream(d, i)
+    stopCameraStream(i)
     refresh()
   }
 
@@ -470,7 +474,7 @@ async function startCameraStream(camera: MediaDeviceInfo, index: number) {
   }
 }
 
-function stopCameraStream(camera: MediaDeviceInfo, index: number) {
+function stopCameraStream(index: number) {
   const video = document.getElementById(`cameraFeed${index}`) as HTMLVideoElement;
   const stream = video.srcObject as MediaStream;
   const tracks = stream.getTracks();
@@ -554,8 +558,6 @@ async function rotation(d: MediaDeviceInfo, rotateAngle: number, i: number) {
   video.style.transformOrigin = origin
 }
 
-// Removed wireframe toggle to keep UI unchanged; skeleton remains visible
-
 async function loadModel(scene: THREE.Scene, type: string) {
   const loader = new FBXLoader( manager );
   const file = `assets/${type}`
@@ -610,8 +612,8 @@ function initThree(container: HTMLElement){
   container.appendChild(renderer.domElement);
 
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(45, width/height, 0.01, 1000);
-  camera.position.set(1.8, 1.3, 2.4);
+  camera = new THREE.PerspectiveCamera(50, width/height, 0.01, 1000);
+  camera.position.set(5, 5, 5);
 
   const hemi = new THREE.HemisphereLight(0xffffff, 0x223344, 0.9);
   scene.add(hemi);
@@ -633,13 +635,36 @@ function initThree(container: HTMLElement){
   }
 
   const clock = new THREE.Clock();
-  const animate = () => {
+  
+  //if using a positions json
+  const fps = 30
+  const frameDuration = 1000/fps
+
+  let lastTime = 0
+  let currentFrame = 0
+  const animate = (time: number) => {
+    requestAnimationFrame(animate)
     const delta = clock.getDelta()
     if (mixer) mixer.forEach((mix) => mix.update(delta))
+    
+    if (irisData) {
+      //used for data from position json file
+      if (time - lastTime >= frameDuration && Array.isArray(irisData)) {
+        renderIRISdata(irisData[currentFrame])
+
+        currentFrame = (currentFrame + 1) % irisData.length
+        lastTime = time
+      }
+      //used for live data
+      else if (!Array.isArray(irisData)) {
+        renderIRISdata(irisData)
+      }
+    }
+    controls?.update()
     renderer?.render(scene, camera)
   };
-  renderer.setAnimationLoop(animate)
-
+  animate(lastTime)
+  
   resizeObserver = new ResizeObserver(entries => {
     for (const entry of entries){
       const w = entry.contentRect.width; const h = entry.contentRect.height;
@@ -649,6 +674,7 @@ function initThree(container: HTMLElement){
   });
   resizeObserver.observe(container);
 }
+
 
 onMounted(() => {
   document.addEventListener('click', onClickOutside);
@@ -667,7 +693,7 @@ onMounted(() => {
   });
 
   window.ipc?.onIrisData((data) => {
-    console.log("recieved data", data)
+    irisData = data
   })
 });
 
@@ -732,8 +758,6 @@ async function buyLicense() {
   }
 }
 
-
-
 async function startIris() {
   if (selectedDevices.value) {
     const cameras = Array.from(selectedDevices.value, (d, i) => ({
@@ -754,8 +778,8 @@ async function startIris() {
       stream: true,
     } 
     
-    selectedDevices.value?.forEach((d, i) => {
-      stopCameraStream(d, i)
+    selectedDevices.value?.forEach((_, i) => {
+      stopCameraStream(i)
     });
     await new Promise( resolve => setTimeout(resolve, 1000))
     
@@ -775,7 +799,44 @@ async function stopIris() {
   selectedDevices.value?.forEach((d, i) => {
     startCameraStream(d, i)
   })
-  
+
+  if (spheresMesh) scene.remove(spheresMesh)
+  spheresMesh = null
+
+  irisData = null
+}
+
+function renderIRISdata(poseInfo: IrisData) {
+  try {
+    poseInfo.entities.forEach((person, i) => {
+      const neck = person.analysis.centers.neck
+      const pelvis = person.analysis.centers.pelvis
+      const spine_mid = person.analysis.centers.spine_mid
+      const keypoints = [[neck.x, neck.y, neck.z], [pelvis.x, pelvis.y, pelvis.z], [spine_mid.x, spine_mid.y, spine_mid.z]]
+      if (!spheresMesh) {
+        const geometry = new THREE.SphereGeometry(0.025, 8, 8)
+        const material = new THREE.MeshBasicMaterial({color: 0xffffff})
+        spheresMesh = new THREE.InstancedMesh(geometry, material, (keypoints.length + person.skeleton.keypoints_3d.length))
+        scene.add(spheresMesh)
+      }
+
+      keypoints.forEach((points, i) => {
+        position.position.set(points[0], points[1], points[2])
+        position.updateMatrix()
+        spheresMesh?.setMatrixAt(i, position.matrix)
+      })
+      person.skeleton.keypoints_3d.forEach((points, i) => {
+        position.position.set(points.x, points.y, points.z)
+        position.updateMatrix()
+        spheresMesh?.setMatrixAt(i+3, position.matrix)
+      })
+
+      spheresMesh.instanceMatrix.needsUpdate = true
+    })
+  }
+  catch{
+    console.log("unable to pass the IRIS data")
+  }
 }
 
 </script>

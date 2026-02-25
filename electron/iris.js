@@ -104,87 +104,96 @@ function registerIrisIpc() {
     const paths = writeTempConfigFile(cfgObj)
     const cfgPath = paths.cfgPath
     const tmpDir = paths.tmpDir
-    try {
-      const args = ['--config', cfgPath]
-      //waiting for iris stuff to be done to implement
-      let exePath = path.join(__dirname, "..", "iris_runtime_bundle", "exe file")
-      if (app.isPackaged) {
-        exePath = path.join(process.resourcesPath, "app.asar.unpacked", "iris_runtime_bundle", "exe file")
-      }
+    if (fs.existsSync(path.join(__dirname, "..", "iris_runtime_bundle", "exe file"))) {
+      try {
+        const args = ['--config', cfgPath]
+        //waiting for iris stuff to be done to implement
+        let exePath = path.join(__dirname, "..", "iris_runtime_bundle", "exe file")
+        if (app.isPackaged) {
+          exePath = path.join(process.resourcesPath, "app.asar.unpacked", "iris_runtime_bundle", "exe file")
+        }
 
-      const exe = exePath
-      const exeDir = path.dirname(exePath)
-      //might be changed
-      const child = spawn(exe, args, {
-        cwd: exeDir,
-        env: {IRIS_SPEC_PATH: cfgPath}, 
-        windowHide: true,
-        detached: process.platform !== 'win32',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      })
+        const exe = exePath
+        const exeDir = path.dirname(exePath)
+        //might be changed
+        const child = spawn(exe, args, {
+          cwd: exeDir,
+          env: {IRIS_SPEC_PATH: cfgPath}, 
+          windowHide: true,
+          detached: process.platform !== 'win32',
+          stdio: ['pipe', 'pipe', 'pipe'],
+        })
 
-      console.log(`[iris:${sessionId}] START pid=${child.pid}`)
-      console.log(`[iris:${sessionId}] exe=${exe} args=${JSON.stringify(args)}`)
+        console.log(`[iris:${sessionId}] START pid=${child.pid}`)
+        console.log(`[iris:${sessionId}] exe=${exe} args=${JSON.stringify(args)}`)
 
-      child.stdout.on('data', (d) => {
-        //pass IRIS data to frontend to render
+        child.stdout.on('data', (d) => {
+          //pass IRIS data to frontend to render
           const targetWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow();
-        if (targetWindow && !targetWindow.isDestroyed()) {
-          targetWindow.webContents.send('iris-data', d);
-        }
-      })
-
-      child.stderr.on('data', (d) => {
-        console.log(`[iris:${sessionId}] stderr: ${d.toString().trim()}`)
-      })
-
-      child.on('error', (err) => {
-        console.error(`[iris:${sessionId}] PROCESS ERROR`, err)
-      })
-    
-      workers.set(sessionId, { child, tmpDir, cfgPath })
-
-      const cleanup = () => {
-        const entry = workers.get(sessionId)
-        if (!entry) return;
-
-        console.log(`[iris:${sessionId}] cleanup triggered`)
-
-        try {
-          if (entry.tmpDir && fs.existsSync(entry.tmpDir)) {
-            console.log(`[iris:${sessionId}] removing tmpDir=${entry.tmpDir}`)
-            try { fs.rmSync(entry.tmpDir, { recursive: true, force: true }); } catch { }
+          if (targetWindow && !targetWindow.isDestroyed()) {
+            targetWindow.webContents.send('iris-data', d);
           }
-        } finally {
-          console.log(`[iris:${sessionId}] removed worker entry`)
-          workers.delete(sessionId);
+        })
+
+        child.stderr.on('data', (d) => {
+          console.log(`[iris:${sessionId}] stderr: ${d.toString().trim()}`)
+        })
+
+        child.on('error', (err) => {
+          console.error(`[iris:${sessionId}] PROCESS ERROR`, err)
+        })
+      
+        workers.set(sessionId, { child, tmpDir, cfgPath })
+
+        const cleanup = () => {
+          const entry = workers.get(sessionId)
+          if (!entry) return;
+
+          console.log(`[iris:${sessionId}] cleanup triggered`)
+
+          try {
+            if (entry.tmpDir && fs.existsSync(entry.tmpDir)) {
+              console.log(`[iris:${sessionId}] removing tmpDir=${entry.tmpDir}`)
+              try { fs.rmSync(entry.tmpDir, { recursive: true, force: true }); } catch { }
+            }
+          } finally {
+            console.log(`[iris:${sessionId}] removed worker entry`)
+            workers.delete(sessionId);
+          }
         }
+
+        child.once('exit', (code, signal) => {
+          console.log(`[iris:${sessionId}] EXIT code=${code} signal=${signal}`)
+          cleanup()
+        })
+
+        child.once('close', (code, signal) => {
+          console.log(`[iris:${sessionId}] CLOSE code=${code} signal=${signal}`)
+          cleanup()
+        })
+
+        // Choose target window: current sender or focused
+        const targetWindow =
+          BrowserWindow.fromWebContents(event.sender) ||
+          BrowserWindow.getFocusedWindow()
+
+        return {
+          ok: true,
+          sessionId,
+          configPath: cfgPath,
+          pipeStarted: false,
+        };
       }
-
-      child.once('exit', (code, signal) => {
-        console.log(`[iris:${sessionId}] EXIT code=${code} signal=${signal}`)
-        cleanup()
-      })
-
-      child.once('close', (code, signal) => {
-        console.log(`[iris:${sessionId}] CLOSE code=${code} signal=${signal}`)
-        cleanup()
-      })
-
-      // Choose target window: current sender or focused
-      const targetWindow =
-        BrowserWindow.fromWebContents(event.sender) ||
-        BrowserWindow.getFocusedWindow()
-
-      return {
-        ok: true,
-        sessionId,
-        configPath: cfgPath,
-        pipeStarted: false,
-      };
+      catch {
+        console.log("failed")
+      }
     }
-    catch {
-      console.log("failed")
+    else {
+      const positions = require("./../public/assets/position 2.json")
+      const targetWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow()
+      if (targetWindow && !targetWindow.isDestroyed()) {
+        targetWindow.webContents.send('iris-data', positions)
+      }
     }
   })
   
