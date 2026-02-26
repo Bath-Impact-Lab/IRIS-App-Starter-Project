@@ -1,6 +1,6 @@
 import { ref, watch, type Ref } from 'vue';
 import * as THREE from 'three';
-import cameraConfig from '@/assets/cameraPositions.json';
+import cameraConfig from '../../public/assets/cameraPositions.json';
 
 export interface SceneCameraDef {
   name: string;
