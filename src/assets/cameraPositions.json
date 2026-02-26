@@ -1,0 +1,28 @@
+{
+  "staticCameras": [
+    {
+      "name": "Front",
+      "position": { "x": 0, "y": 1.5, "z": 3 },
+      "lookAt": { "x": 0, "y": 1, "z": 0 },
+      "color": "#ff4466"
+    },
+    {
+      "name": "Back",
+      "position": { "x": 0, "y": 1.5, "z": -3 },
+      "lookAt": { "x": 0, "y": 1, "z": 0 },
+      "color": "#44aaff"
+    },
+    {
+      "name": "Left",
+      "position": { "x": -3, "y": 1.5, "z": 0 },
+      "lookAt": { "x": 0, "y": 1, "z": 0 },
+      "color": "#ffaa22"
+    },
+    {
+      "name": "Right",
+      "position": { "x": 3, "y": 1.5, "z": 0 },
+      "lookAt": { "x": 0, "y": 1, "z": 0 },
+      "color": "#44dd88"
+    }
+  ]
+}
