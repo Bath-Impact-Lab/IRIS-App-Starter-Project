@@ -334,7 +334,24 @@ let boneLines: THREE.LineSegments | null = null;
 let modelsRoot: THREE.Object3D[] | null = null;
 
 let spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null = null;
+let skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null  = null;
 const position = new THREE.Object3D()
+
+const halpe26_pairs = [
+  [0,1], [0,2], [1,3], [2,4],
+  [17,18], [18,5], [18,6],
+  [5,7], [7,9],
+  [6,8], [8,10],
+  [5,6],
+  [11,12],
+  [11,13], [13,15],
+  [12,14], [14,16],
+  [18,19], [19,11], [19,12],
+  [15,20], [15,22], [15,24],
+  [16,21], [16,23], [16,25]
+]
+
+const linePositions = new Float32Array(halpe26_pairs.length * 3 * 2)
 
 let irisData: IrisData[] | IrisData | null;
 
@@ -759,6 +776,8 @@ async function buyLicense() {
 }
 
 async function startIris() {
+  spheresMesh = null
+  skeletonLine = null
   if (selectedDevices.value) {
     const cameras = Array.from(selectedDevices.value, (d, i) => ({
       uri: String(i),
@@ -768,7 +787,7 @@ async function startIris() {
       rotation: cameraRotation.value ? cameraRotation.value[i].angle : 0
     })) 
     const options = {
-      kp_format: "Coco17",
+      kp_format: "halpe26",
       subjects: personCount.value,
       cameras: cameras,
       camera_width: 1920,
@@ -802,7 +821,8 @@ async function stopIris() {
 
   if (spheresMesh) scene.remove(spheresMesh)
   spheresMesh = null
-
+  if (skeletonLine) scene.remove(skeletonLine)
+  skeletonLine = null
   irisData = null
 }
 
@@ -813,24 +833,47 @@ function renderIRISdata(poseInfo: IrisData) {
       const pelvis = person.analysis.centers.pelvis
       const spine_mid = person.analysis.centers.spine_mid
       const keypoints = [[neck.x, neck.y, neck.z], [pelvis.x, pelvis.y, pelvis.z], [spine_mid.x, spine_mid.y, spine_mid.z]]
-      if (!spheresMesh) {
-        const geometry = new THREE.SphereGeometry(0.025, 8, 8)
+      if (!(spheresMesh && skeletonLine)) {
+        const sphereGeometry = new THREE.SphereGeometry(0.025, 8, 8)
         const material = new THREE.MeshBasicMaterial({color: 0xffffff})
-        spheresMesh = new THREE.InstancedMesh(geometry, material, (keypoints.length + person.skeleton.keypoints_3d.length))
+        spheresMesh = new THREE.InstancedMesh(sphereGeometry, material, (keypoints.length + person.skeleton.keypoints_3d.length))
         scene.add(spheresMesh)
+
+        const lMaterial = new THREE.LineBasicMaterial({color:0xff0000})
+        const lGeometry = new THREE.BufferGeometry()
+        lGeometry.setAttribute('position', new THREE.BufferAttribute(linePositions, 3))
+
+        skeletonLine = new THREE.LineSegments(lGeometry, lMaterial)
+        scene.add(skeletonLine)
       }
+      const positionAttr = skeletonLine.geometry.attributes.position
+      let idx = 0
 
       keypoints.forEach((points, i) => {
-        position.position.set(points[0], points[1], points[2])
+        position.position.set(points[0], points[2], points[1])
         position.updateMatrix()
         spheresMesh?.setMatrixAt(i, position.matrix)
       })
       person.skeleton.keypoints_3d.forEach((points, i) => {
-        position.position.set(points.x, points.y, points.z)
+        position.position.set(points.x, points.z, points.y)
         position.updateMatrix()
         spheresMesh?.setMatrixAt(i+3, position.matrix)
       })
 
+      halpe26_pairs.forEach(([a, b]) => {
+        const pos1 = person.skeleton.keypoints_3d[a]
+        const pos2 = person.skeleton.keypoints_3d[b]
+
+        positionAttr.array[idx++] = pos1.x
+        positionAttr.array[idx++] = pos1.z
+        positionAttr.array[idx++] = pos1.y
+
+        positionAttr.array[idx++] = pos2.x
+        positionAttr.array[idx++] = pos2.z
+        positionAttr.array[idx++] = pos2.y
+      })
+
+      positionAttr.needsUpdate = true
       spheresMesh.instanceMatrix.needsUpdate = true
     })
   }
