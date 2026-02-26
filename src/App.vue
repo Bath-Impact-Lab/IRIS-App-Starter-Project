@@ -313,7 +313,7 @@ const {
 
 // Construct scene camera
 const selectedCameraCount = computed(() => selectedDevices.value?.length ?? 0);
-const { sceneCameras, addToScene: addSceneCameras, dispose: disposeSceneCameras } = useSceneCameras(selectedCameraCount);
+const { sceneCameras, addToScene: addSceneCameras, setGizmoRotation, dispose: disposeSceneCameras } = useSceneCameras(selectedCameraCount);
 
 const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt-${cameraHoverIndex.value}` : undefined));
 
@@ -544,6 +544,9 @@ function rotateCamera(d: MediaDeviceInfo, index: number) {
   console.log('[IRIS send] camera-info (rotate)', info);
   lastSentMsg.value = JSON.stringify(info, null, 2);
   (window as any).electronAPI?.irisSend?.(info);
+
+  // Update the 3D scene camera gizmo rotation
+  setGizmoRotation(index, newAngle);
 
   rotation(d, newAngle, index);
   cameraRotation.value[d.deviceId] = newAngle;

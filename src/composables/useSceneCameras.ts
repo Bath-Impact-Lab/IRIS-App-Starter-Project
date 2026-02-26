@@ -23,6 +23,7 @@ function createCameraGizmo(
   position: { x: number; y: number; z: number },
   lookAt: { x: number; y: number; z: number },
   color: string,
+  rotationDeg: number = 0,
 ): THREE.Group {
   const s = GIZMO_SCALE;
 
@@ -60,6 +61,10 @@ function createCameraGizmo(
 
   const lines = new THREE.LineSegments(lineGeo, lineMat);
 
+  // Apply camera body rotation around the local Z axis (the viewing direction)
+  const rotRad = (rotationDeg * Math.PI) / 180;
+  lines.rotation.z = rotRad;
+
   const gap   = s * 0.08;
   const triH  = s * 0.3;
   const triW  = s * 0.25;
@@ -82,6 +87,7 @@ function createCameraGizmo(
   });
 
   const triMesh = new THREE.Mesh(triGeo, triMat);
+  triMesh.rotation.z = rotRad;
 
   const group = new THREE.Group();
   group.add(lines);
@@ -98,10 +104,6 @@ export function useSceneCameras(selectedCount?: Ref<number>) {
   const sceneCameras = ref<SceneCameraEntry[]>([]);
   let attachedScene: THREE.Scene | null = null;
 
-  /**
-   * Create cameras from JSON config and add them (plus gizmo meshes) to the scene.
-   * All start hidden — visibility syncs with selectedCount.
-   */
   function addToScene(scene: THREE.Scene) {
     attachedScene = scene;
     const defs = (cameraConfig.staticCameras ?? []) as SceneCameraDef[];
@@ -115,7 +117,7 @@ export function useSceneCameras(selectedCount?: Ref<number>) {
 
       const gizmoMesh = createCameraGizmo(def.position, def.lookAt, def.color);
       gizmoMesh.name = `${def.name}_gizmo`;
-      gizmoMesh.visible = false; // hidden until synced
+      gizmoMesh.visible = false;
 
       scene.add(cam);
       scene.add(gizmoMesh);
@@ -129,7 +131,6 @@ export function useSceneCameras(selectedCount?: Ref<number>) {
       });
     }
 
-    // Initial sync
     syncVisibility();
   }
 
@@ -143,12 +144,22 @@ export function useSceneCameras(selectedCount?: Ref<number>) {
     }
   }
 
-  // Watch the selected count and re-sync automatically
+  /** Update the rotation of a scene camera gizmo by index. */
+  function setGizmoRotation(index: number, rotationDeg: number) {
+    const entry = sceneCameras.value[index];
+    if (!entry) return;
+
+    const rotRad = (rotationDeg * Math.PI) / 180;
+    // Both children (lines + triangle) rotate together
+    for (const child of entry.gizmoMesh.children) {
+      child.rotation.z = rotRad;
+    }
+  }
+
   if (selectedCount) {
     watch(selectedCount, () => syncVisibility());
   }
 
-  /** Remove all scene cameras and gizmo meshes from the scene. */
   function dispose() {
     for (const entry of sceneCameras.value) {
       attachedScene?.remove(entry.gizmoMesh);
@@ -170,6 +181,7 @@ export function useSceneCameras(selectedCount?: Ref<number>) {
     sceneCameras,
     addToScene,
     syncVisibility,
+    setGizmoRotation,
     dispose,
   } as const;
 }
