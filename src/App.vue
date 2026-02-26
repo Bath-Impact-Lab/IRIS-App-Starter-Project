@@ -16,6 +16,7 @@
             aria-haspopup="listbox"
             :aria-expanded="openCamera"
             aria-controls="camera-listbox"
+            :disabled="running"
           >
           <div v-if="!selectedDevices">
             Camera Selection
@@ -60,7 +61,7 @@
 
         <!-- Person count dropdown -->
         <div class="dropdown" :class="{ open: openPersonCount }" style="margin-left: 12px;">
-          <button class="btn" @click="togglePersonCount">
+          <button class="btn" @click="togglePersonCount" :disabled="running">
             {{ personCount || 'Person Count' }}
           </button>
           <div class="dropdown-menu">
@@ -75,7 +76,7 @@
 
         <!-- Tracking type dropdown -->
         <div class="dropdown" :class="{ open: openTrack }" style="margin-left: 12px;">
-          <button class="btn" @click="toggleTrack">
+          <button class="btn" @click="toggleTrack" :disabled="running">
             {{ trackingType || 'Tracking Type' }}
           </button>
           <div class="dropdown-menu">
@@ -90,7 +91,7 @@
 
         <!-- Output option dropdown -->
         <div class="dropdown" :class="{ open: openOutput }" style="margin-left: 12px;">
-          <button class="btn" @click="toggleOutput">
+          <button class="btn" @click="toggleOutput" :disabled="running">
             {{ outputOption || 'Output' }}
           </button>
           <div class="dropdown-menu">
@@ -107,18 +108,17 @@
       <!-- Right side: sign-in area -->
       <div class="nav-right">
         <div class="menu-right">
-          <button class="btn btn-icon" @click="toggleSignIn" aria-label="Settings">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="3"></circle>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-            </svg>
+          <button class="btn btn-icon" @click="toggleSignIn" aria-label="Settings" :disabled="running">
+            <img src="./../assets/settings.svg" alt="">
           </button>
         </div>
       </div>
     </nav>
 
     <div class="sidenav">
-      Camera Config:
+      <div class="brand">
+        Camera Config:
+      </div>
       <div style="width: 100%;" v-for="(d, i) in selectedDevices">
         <div
           class="camera-list"
@@ -130,7 +130,7 @@
         >
           <div class="camera-text">
             {{ d.label }}
-            <button class="button" v-on:click="rotateCamera(d, i)">
+            <button class="button btn" style="padding: 3px 5px;" v-on:click="rotateCamera(d, i)" :disabled="running">
               <img style="width: 30px;" src="/assets/anticlockwise-2-line.svg" alt="">
             </button>
           </div>
@@ -145,6 +145,15 @@
           </div>
         </div>
       </div>
+
+      <div class="iris-controls" v-if="selectedDevices">
+        <button v-on:click="startIris" class="button btn" :disabled="running">
+          Start IRIS
+        </button>
+        <button v-on:click="stopIris" class="button btn" :disabled="!running">
+          Stop IRIS
+        </button>
+      </div>
     </div>
 
     <section class="scene" ref="sceneRef"></section>
@@ -155,27 +164,11 @@
       </label>
       <div class="hud-sep"></div>
       <div class="hud-item">
-        <span :class="['dot', irisConnected ? 'ok' : 'warn']"></span>
-        <span>{{ irisConnected ? 'IRIS connected' : 'IRIS offline' }}</span>
+        <span :class="['dot', running ? 'ok' : 'warn']"></span>
+        <span>{{ running ? 'IRIS running' : 'IRIS inavtive' }}</span>
       </div>
       <div class="hud-sep" v-if="isDev"></div>
       <button class="btn btn-mini" v-if="isDev" @click="debugOpen = !debugOpen">{{ debugOpen ? 'Hide' : 'Show' }} debug</button>
-    </div>
-
-    <div class="debug" v-if="isDev && debugOpen">
-      <div class="debug-row">
-        <button class="btn btn-mini" @click="pingIris">Ping IRIS</button>
-      </div>
-      <div class="debug-row">
-        <div class="debug-col">
-          <div class="debug-title">Last sent</div>
-          <pre class="debug-pre">{{ lastSentMsg }}</pre>
-        </div>
-        <div class="debug-col">
-          <div class="debug-title">Last received</div>
-          <pre class="debug-pre">{{ lastRecvMsg }}</pre>
-        </div>
-      </div>
     </div>
 
     <!-- License Badge -->
@@ -258,12 +251,10 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, watch, nextTick, computed } from 'vue';
 import * as THREE from 'three';
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { COCO_KEYPOINTS, COCO_EDGES, MockPoseStream, type PoseFrame } from './pose';
 import { useCameras } from './composables/useCameras';
-import { useSceneCameras } from './composables/useSceneCameras';
 import { useIris } from './composables/useIris';
+import { useSceneCameras } from './composables/useSceneCameras';
 import { useLicense } from './composables/useLicense';
 import { FBXLoader } from 'three/examples/jsm/Addons.js';
 
@@ -336,14 +327,14 @@ const personCountOptions = ['Single Person', 'Multi-Person'];
 const personCount = ref<string | null>('Single Person');
 
 // Output options
-const outputOptions = ['SteamVR', 'Unity', 'UnReal', 'Gadot'];
+const outputOptions = ['SteamVR', 'Unity', 'Unreal', 'Gadot'];
 const outputOption = ref<string | null>(null);
 
-const irisConnected = ref(false);
 const debugOpen = ref(false);
 const lastSentMsg = ref('');
-const lastRecvMsg = ref('');
-let poseLogCount = 0; // throttle console logs for pose-frame
+
+const running = ref(false)
+
 // Skeleton always visible by default
 
 let renderer: THREE.WebGLRenderer | null = null;
@@ -354,31 +345,33 @@ let resizeObserver: ResizeObserver | null = null;
 let controls: OrbitControls | null = null;
 let jointSpheres: THREE.Mesh[] = [];
 let boneLines: THREE.LineSegments | null = null;
-let poseStream: MockPoseStream | null = null;
 let modelsRoot: THREE.Object3D[] | null = null;
+
+let spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null = null;
+let skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null  = null;
+const position = new THREE.Object3D()
+
+const halpe26_pairs = [
+  [0,1], [0,2], [1,3], [2,4],
+  [17,18], [18,5], [18,6],
+  [5,7], [7,9],
+  [6,8], [8,10],
+  [5,6],
+  [11,12],
+  [11,13], [13,15],
+  [12,14], [14,16],
+  [18,19], [19,11], [19,12],
+  [15,20], [15,22], [15,24],
+  [16,21], [16,23], [16,25]
+]
+
+const linePositions = new Float32Array(halpe26_pairs.length * 3 * 2)
+
+let irisData: IrisData[] | IrisData | null;
 
 const manager = new THREE.LoadingManager();
 let mixer: THREE.AnimationMixer[] | null;
 const showModel = ref(false); // off by default
-let irisUnsub: null | (()=>void) = null;
-
-// IRIS keepalive with auto-restart
-const iris = useIris({
-  onMessage: (msg: any) => {
-    // Mirror previous UI behavior: mark connected and show last received
-    irisConnected.value = true;
-    if (msg?.type === 'pose-frame') {
-      poseLogCount++;
-      // if (poseLogCount % 10 === 0) console.log('[IRIS recv]', msg);
-    } else {
-      // console.log('[IRIS recv]', msg);
-    }
-    lastRecvMsg.value = JSON.stringify(msg, null, 2);
-    if (msg?.type === 'pose-frame') {
-      // Hook for future: apply msg.payload to updateSkeleton
-    }
-  },
-});
 
 function onCameraButtonKeydown(e: KeyboardEvent) {
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -429,11 +422,6 @@ function scrollActiveIntoView(){
   });
 }
 
-function toggleMenu() {
-  // kept for backward compatibility but no-op now
-  // Toggle camera dropdown by default for original behavior
-  toggleCamera();
-}
 function toggleCamera() {
   const willOpen = !openCamera.value;
   openCamera.value = willOpen;
@@ -465,9 +453,8 @@ function onClickOutside(e: MouseEvent) {
 
 
 function selectDevice(d: MediaDeviceInfo, i: number){
-  console.log('Selected device', d);
   selectCamera(d);
-  
+
   const isSelected = selectedDevices.value?.some(sd => sd.deviceId === d.deviceId);
 
   if (isSelected) {
@@ -481,20 +468,30 @@ function selectDevice(d: MediaDeviceInfo, i: number){
   }
   
   // Send camera info to IRIS mock bridge (including rotation)
-  const info = { 
-    type: 'camera-info', 
-    payload: { 
-      deviceId: d.deviceId, 
-      label: d.label, 
-      kind: d.kind, 
+  const info = {
+    type: 'camera-info',
+    payload: {
+      deviceId: d.deviceId,
+      label: d.label,
+      kind: d.kind,
       ts: Date.now(),
       rotation: cameraRotation.value[d.deviceId] || 0
-    } 
+    }
   };
   console.log('[IRIS send] camera-info', info);
   lastSentMsg.value = JSON.stringify(info, null, 2);
   (window as any).electronAPI?.irisSend?.(info);
 
+  refresh();
+  if (isSelected) {
+    startCameraStream(d, i);
+    // Initialize rotation angle for this device if not already set
+    if (cameraRotation.value[d.deviceId] === undefined) {
+      cameraRotation.value[d.deviceId] = 0;
+    }
+  } else {
+    stopCameraStream(i);
+  }
   refresh();
 }
 
@@ -505,14 +502,14 @@ async function startCameraStream(camera: MediaDeviceInfo, index: number) {
   try {
     if (video) {
       video.srcObject = stream;
-      console.log("playing", selectedDevices.value);
+      // console.log("playing", selectedDevices.value);
     } 
   } catch (err) {
     console.error("Camera access failed: ", err);
   }
 }
 
-function stopCameraStream(camera: MediaDeviceInfo, index: number) {
+function stopCameraStream(index: number) {
   const video = document.getElementById(`cameraFeed${index}`) as HTMLVideoElement;
   const stream = video.srcObject as MediaStream;
   const tracks = stream.getTracks();
@@ -535,20 +532,22 @@ function rotateCamera(d: MediaDeviceInfo, index: number) {
   cameraRotation.value[d.deviceId] = newAngle;
 
   // Notify IRIS backend about the rotation change
-  const info = { 
-    type: 'camera-info', 
-    payload: { 
-      deviceId: d.deviceId, 
-      label: d.label, 
-      kind: d.kind, 
+  const info = {
+    type: 'camera-info',
+    payload: {
+      deviceId: d.deviceId,
+      label: d.label,
+      kind: d.kind,
       ts: Date.now(),
       rotation: newAngle
-    } 
+    }
   };
   console.log('[IRIS send] camera-info (rotate)', info);
   lastSentMsg.value = JSON.stringify(info, null, 2);
   (window as any).electronAPI?.irisSend?.(info);
-  
+
+  rotation(d, newAngle, index);
+  cameraRotation.value[d.deviceId] = newAngle;
   rotation(d, newAngle, index);
 }
 
@@ -586,7 +585,6 @@ async function rotation(d: MediaDeviceInfo, rotateAngle: number, i: number) {
     video.style.height = parent.offsetWidth + "px"
     video.style.maxHeight = parent.offsetWidth + "px"
 
-
     offsetX = video.offsetHeight
     origin = "top left"
     if (rotateAngle == 270) {
@@ -607,8 +605,6 @@ async function rotation(d: MediaDeviceInfo, rotateAngle: number, i: number) {
   video.style.transformOrigin = origin
 }
 
-// Removed wireframe toggle to keep UI unchanged; skeleton remains visible
-
 async function loadModel(scene: THREE.Scene, type: string) {
   const loader = new FBXLoader( manager );
   const file = `assets/${type}`
@@ -627,7 +623,7 @@ async function loadModel(scene: THREE.Scene, type: string) {
       modelRoot.scale.set(0.01, 0.01, 0.01)
       if (type === "Idle.fbx") {
         modelRoot.position.set(-1.5, 0, -1.5)
-        modelRoot.setRotationFromAxisAngle(new THREE.Vector3(0, 1, 0), (45*3.14)/180)
+        modelRoot.setRotationFromAxisAngle(new THREE.Vector3(0, 1, 0), 45*(Math.PI/180))
       }
       if (modelRoot.animations && modelRoot.animations.length) {
         if (mixer){
@@ -653,69 +649,6 @@ async function loadModel(scene: THREE.Scene, type: string) {
   }
 }
 
-// async function loadSMPLX(scene: THREE.Scene){
-//   const loader = new OBJLoader();
-//   const rel = 'assets/SMPLX_neutral.obj';
-//   // Try direct path (dev), then Electron resolve, then read content and parse
-//   const tryLoadPath = (url: string) => new Promise<THREE.Group>((resolve, reject) => loader.load(url, resolve, undefined, reject));
-//   try {
-//     const devUrl = rel; // Vite serves public/ at root in dev
-//     let obj: THREE.Group | null = null;
-//     try { obj = await tryLoadPath(devUrl); }
-//     catch {
-//       const assetPath = await (window as any).electronAPI?.resolveAsset?.(rel).catch(() => devUrl) ?? devUrl;
-//       try { obj = await tryLoadPath(assetPath); }
-//       catch {
-//         const text = await (window as any).electronAPI?.readAsset?.(rel);
-//         if (text) {
-//           // OBJLoader can parse from string via parse
-//           obj = loader.parse(text);
-//         }
-//       }
-//     }
-//     if (!obj) throw new Error('OBJ load failed');
-//     obj.traverse((child: any) => {
-//       if (child.isMesh) {
-//         child.material = new THREE.MeshStandardMaterial({ color: 0x6b83c6, metalness: 0.1, roughness: 0.8, transparent: true, opacity: 0.85 });
-//         child.castShadow = true; child.receiveShadow = true;
-//       }
-//     });
-//     obj.position.set(0, 0, 0);
-//     modelRoot = obj;
-//     modelRoot.visible = showModel.value;
-//     scene.add(modelRoot);
-//     fitToObject(obj);
-//   } catch (e) {
-//     console.warn('Failed to load SMPLX OBJ, using fallback', e);
-//     const geo = new THREE.TorusKnotGeometry(0.6, 0.2, 200, 32);
-//     const mat = new THREE.MeshStandardMaterial({ color: 0x6be675, metalness: 0.4, roughness: 0.3 });
-//     const mesh = new THREE.Mesh(geo, mat);
-//     modelRoot = mesh;
-//     modelRoot.visible = showModel.value;
-//     scene.add(modelRoot);
-//     fitToObject(mesh);
-//   }
-// }
-
-function fitToObject(target: THREE.Object3D){
-  const box = new THREE.Box3().setFromObject(target);
-  const size = box.getSize(new THREE.Vector3());
-  const center = box.getCenter(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z);
-  const fov = camera.fov * (Math.PI/180);
-  let distance = (maxDim/2) / Math.tan(fov/2);
-  distance *= 1.4; // padding
-
-  const dir = new THREE.Vector3(0.8, 0.5, 1).normalize();
-  camera.position.copy(center.clone().add(dir.multiplyScalar(distance)));
-  camera.near = distance/100;
-  camera.far = distance*100;
-  camera.updateProjectionMatrix();
-  camera.lookAt(center);
-  controls?.target.copy(center);
-  controls?.update();
-}
-
 function initThree(container: HTMLElement){
   const width = container.clientWidth;
   const height = container.clientHeight;
@@ -726,8 +659,8 @@ function initThree(container: HTMLElement){
   container.appendChild(renderer.domElement);
 
   scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(45, width/height, 0.01, 1000);
-  camera.position.set(1.8, 1.3, 2.4);
+  camera = new THREE.PerspectiveCamera(50, width/height, 0.01, 1000);
+  camera.position.set(5, 5, 5);
 
   const hemi = new THREE.HemisphereLight(0xffffff, 0x223344, 0.9);
   scene.add(hemi);
@@ -750,23 +683,37 @@ function initThree(container: HTMLElement){
 
   // Add scene cameras from JSON config
   addSceneCameras(scene);
-  // Skeleton geometry
-  // loadSMPLX(scene);
-  // initSkeleton(scene);
 
   const clock = new THREE.Clock();
-  const animate = () => {
-    // const t = clock.getElapsedTime();
-    // dir.position.x = Math.sin(t*0.5)*3; dir.position.z = Math.cos(t*0.5)*3;
-    // controls?.update();
-    // renderer!.render(scene, camera);
-    // frameId = requestAnimationFrame(animate);
+
+  //if using a positions json
+  const fps = 30
+  const frameDuration = 1000/fps
+
+  let lastTime = 0
+  let currentFrame = 0
+  const animate = (time: number) => {
+    requestAnimationFrame(animate)
     const delta = clock.getDelta()
     if (mixer) mixer.forEach((mix) => mix.update(delta))
+
+    if (irisData) {
+      //used for data from position json file
+      if (time - lastTime >= frameDuration && Array.isArray(irisData)) {
+        renderIRISdata(irisData[currentFrame])
+
+        currentFrame = (currentFrame + 1) % irisData.length
+        lastTime = time
+      }
+      //used for live data
+      else if (!Array.isArray(irisData)) {
+        renderIRISdata(irisData)
+      }
+    }
+    controls?.update()
     renderer?.render(scene, camera)
   };
-  renderer.setAnimationLoop(animate)
-  // animate()
+  animate(lastTime)
 
   resizeObserver = new ResizeObserver(entries => {
     for (const entry of entries){
@@ -777,6 +724,7 @@ function initThree(container: HTMLElement){
   });
   resizeObserver.observe(container);
 }
+
 
 onMounted(() => {
   document.addEventListener('click', onClickOutside);
@@ -789,16 +737,14 @@ onMounted(() => {
 
   if (sceneRef.value) initThree(sceneRef.value);
   initCameras();
-  // startMockPose();
-  // Start IRIS keepalive + subscription
-  iris.init();
-  // React to showModel toggle
-  // watch(showModel, (v) => { if (modelRoot) modelRoot.visible = v; });
-  // Focus management for camera menu
   watch(openCamera, (isOpen) => {
     if (isOpen) { setInitialCameraActiveIndex('current-or-first'); focusCameraListSoon(); }
     else if (document.activeElement === cameraListRef.value) { cameraButtonRef.value?.focus(); }
   });
+
+  window.ipc?.onIrisData((data) => {
+    irisData = data
+  })
 });
 
 onBeforeUnmount(() => {
@@ -811,9 +757,6 @@ onBeforeUnmount(() => {
   if (frameId) cancelAnimationFrame(frameId);
   if (resizeObserver && sceneRef.value) resizeObserver.unobserve(sceneRef.value);
   if (renderer) { renderer.dispose(); renderer = null; }
-  // poseStream?.stop();
-  iris.dispose();
-  if (irisUnsub) { try { irisUnsub(); } catch {}; irisUnsub = null; }
 });
 
 function onKeyDown(e: KeyboardEvent) {
@@ -823,81 +766,19 @@ function onKeyDown(e: KeyboardEvent) {
   }
 }
 
-
-function pingIris(){
-  const msg = { type: 'ping', ts: Date.now() };
-  console.log('[IRIS send] ping', msg);
-  lastSentMsg.value = JSON.stringify(msg, null, 2);
-  iris.send(msg);
-}
-
-function initSkeleton(scene: THREE.Scene){
-  // Joints
-  const jointGeo = new THREE.SphereGeometry(0.02, 16, 16);
-  const jointMat = new THREE.MeshBasicMaterial({ color: 0xff5533, depthTest: false, depthWrite: false });
-  jointSpheres = COCO_KEYPOINTS.map(() => new THREE.Mesh(jointGeo, jointMat.clone()));
-  jointSpheres.forEach(m => { m.visible = true; scene.add(m); });
-  jointSpheres.forEach(m => m.renderOrder = 999);
-
-  // Bones
-  const positions = new Float32Array(COCO_EDGES.length * 2 * 3);
-  const geom = new THREE.BufferGeometry();
-  geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  const mat = new THREE.LineBasicMaterial({ color: 0xffffff, depthTest: false });
-  boneLines = new THREE.LineSegments(geom, mat);
-  boneLines.visible = true;
-  boneLines.renderOrder = 998;
-  scene.add(boneLines);
-}
-
-// function updateSkeleton(frame: PoseFrame){
-//   // Position joints
-//   for (let i=0; i<COCO_KEYPOINTS.length; i++){
-//     const p = frame.keypoints[i]?.position || [0,0,0];
-//     jointSpheres[i].position.set(p[0], p[1], p[2]);
-//   }
-//   // Update bones
-//   const posAttr = (boneLines!.geometry as THREE.BufferGeometry).getAttribute('position') as THREE.BufferAttribute;
-//   let idx = 0;
-//   for (const [a,b] of COCO_EDGES){
-//     const pa = frame.keypoints[a]?.position || [0,0,0];
-//     const pb = frame.keypoints[b]?.position || [0,0,0];
-//     posAttr.setXYZ(idx++, pa[0], pa[1], pa[2]);
-//     posAttr.setXYZ(idx++, pb[0], pb[1], pb[2]);
-//   }
-//   posAttr.needsUpdate = true;
-// }
-
-// function startMockPose(){
-//   poseStream?.stop();
-//   poseStream = new MockPoseStream();
-//   poseStream.subscribe(updateSkeleton);
-//   poseStream.start();
-// }
-
 function selectTracking(t: string) {
   trackingType.value = t;
   openTrack.value = false;
-  // notify backend/electron if desired
-  const msg = { type: 'tracking-select', payload: { tracking: t, ts: Date.now() } };
-  lastSentMsg.value = JSON.stringify(msg, null, 2);
-  (window as any).electronAPI?.irisSend?.(msg);
 }
 
 function selectPersonCount(p: string) {
   personCount.value = p;
   openPersonCount.value = false;
-  const msg = { type: 'person-count-select', payload: { personCount: p, ts: Date.now() } };
-  lastSentMsg.value = JSON.stringify(msg, null, 2);
-  (window as any).electronAPI?.irisSend?.(msg);
 }
 
 function selectOutput(o: string) {
   outputOption.value = o;
   openOutput.value = false;
-  const msg = { type: 'output-select', payload: { output: o, ts: Date.now() } };
-  lastSentMsg.value = JSON.stringify(msg, null, 2);
-  (window as any).electronAPI?.irisSend?.(msg);
 }
 
 function toggleSignIn() {
@@ -921,12 +802,121 @@ async function buyLicense() {
     const result = await (window as any).electronAPI.openExternal(url);
     console.log('Open External Result:', result);
     if (result && !result.ok) {
-       console.error('System failed to open URL:', result.error);
+      console.error('System failed to open URL:', result.error);
     }
   } catch (err) {
     console.error('IPC invocation failed:', err);
   }
 }
+
+async function startIris() {
+  spheresMesh = null
+  skeletonLine = null
+  //Sends the camera information to IRIS
+  if (selectedDevices.value) {
+    const cameras = Array.from(selectedDevices.value, (d, i) => ({
+      uri: String(i),
+      width: 1920,
+      height: 1080,
+      fps: 100,
+      rotation: cameraRotation.value[d.deviceId] ? cameraRotation.value[d.deviceId] : 0
+    }))
+    const options = {
+      kp_format: "halpe26",
+      subjects: personCount.value,
+      cameras: cameras,
+      camera_width: 1920,
+      camera_height: 1080,
+      video_fps: 100,
+      output_dir: "",
+      stream: true,
+    }
+
+    selectedDevices.value?.forEach((_, i) => {
+      stopCameraStream(i)
+    });
+    await new Promise( resolve => setTimeout(resolve, 1000))
+
+    running.value = true
+    // iris start command goes here:
+    await window.ipc?.startIRIS(options)
+  }
+}
+
+async function stopIris() {
+  running.value = false
+
+  //stop iris command to ipc here
+  const Id = "example"
+  await window.ipc?.stopIRIS(Id)
+
+  selectedDevices.value?.forEach((d, i) => {
+    startCameraStream(d, i)
+  })
+
+  if (spheresMesh) scene.remove(spheresMesh)
+  spheresMesh = null
+  if (skeletonLine) scene.remove(skeletonLine)
+  skeletonLine = null
+  irisData = null
+}
+
+function renderIRISdata(poseInfo: IrisData) {
+  try {
+    poseInfo.entities.forEach((person, i) => {
+      const neck = person.analysis.centers.neck
+      const pelvis = person.analysis.centers.pelvis
+      const spine_mid = person.analysis.centers.spine_mid
+      const keypoints = [[neck.x, neck.y, neck.z], [pelvis.x, pelvis.y, pelvis.z], [spine_mid.x, spine_mid.y, spine_mid.z]]
+      if (!(spheresMesh && skeletonLine)) {
+        const sphereGeometry = new THREE.SphereGeometry(0.025, 8, 8)
+        const material = new THREE.MeshBasicMaterial({color: 0xffffff})
+        spheresMesh = new THREE.InstancedMesh(sphereGeometry, material, (keypoints.length + person.skeleton.keypoints_3d.length))
+        scene.add(spheresMesh)
+
+        const lMaterial = new THREE.LineBasicMaterial({color:0xff0000})
+        const lGeometry = new THREE.BufferGeometry()
+        lGeometry.setAttribute('position', new THREE.BufferAttribute(linePositions, 3))
+
+        skeletonLine = new THREE.LineSegments(lGeometry, lMaterial)
+        scene.add(skeletonLine)
+      }
+      const positionAttr = skeletonLine.geometry.attributes.position
+      let idx = 0
+
+      keypoints.forEach((points, i) => {
+        position.position.set(points[0], points[2], points[1])
+        position.updateMatrix()
+        spheresMesh?.setMatrixAt(i, position.matrix)
+      })
+      person.skeleton.keypoints_3d.forEach((points, i) => {
+        position.position.set(points.x, points.z, points.y)
+        position.updateMatrix()
+        spheresMesh?.setMatrixAt(i+3, position.matrix)
+      })
+
+      halpe26_pairs.forEach(([a, b]) => {
+        const pos1 = person.skeleton.keypoints_3d[a]
+        const pos2 = person.skeleton.keypoints_3d[b]
+
+        positionAttr.array[idx++] = pos1.x
+        positionAttr.array[idx++] = pos1.z
+        positionAttr.array[idx++] = pos1.y
+
+        positionAttr.array[idx++] = pos2.x
+        positionAttr.array[idx++] = pos2.z
+        positionAttr.array[idx++] = pos2.y
+      })
+
+      positionAttr.needsUpdate = true
+      spheresMesh.instanceMatrix.needsUpdate = true
+    })
+  }
+  catch{
+    console.log("unable to pass the IRIS data")
+  }
+}
+
 </script>
 
 <style scoped>
@@ -1100,8 +1090,8 @@ async function buyLicense() {
 /* License Badge Styles */
 .license-badge-container {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  left: 16px;
+  bottom: 75px;
   z-index: 900;
   transition: transform 0.2s ease;
 }
@@ -1166,6 +1156,7 @@ async function buyLicense() {
   font-size: 13px;
   font-weight: 600;
   color: #e6edf3;
+  background-color: var(--bg);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -1245,7 +1236,7 @@ async function buyLicense() {
   right: 0px; 
   height: calc(100% - 63px); 
   width: 250px; 
-  background-color: rgba(12, 18, 25, .72);; 
+  background-color: var(--sidebar);
   z-index: 10;
   border-left: 1px solid rgba(255, 255, 255, 0.06);
   display: flex;
@@ -1272,7 +1263,7 @@ async function buyLicense() {
 
 .button {
   border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(12, 18, 25, .72);
+  background: var(--sidebar);
   border-radius: 10px;
 }
 
@@ -1282,6 +1273,23 @@ async function buyLicense() {
 
 .button:active {
   background: rgba(12, 18, 25, 0.808);
+}
+
+.iris-controls {
+  padding: 10px 5px;
+  background-color: var(--sidebar);
+  position: absolute;
+  bottom: 0px;
+  width: 100%;
+  height: 25%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 100;
+}
+
+.iris-controls button {
+  margin: 10px 0;
 }
 
 </style>
