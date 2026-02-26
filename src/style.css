@@ -5,6 +5,7 @@
   --muted: #9fb1c1;
   --accent: #6be675;
   --accent-2: #44b0ff;
+  --sidebar: rgba(12, 18, 25);
 }
 *{ box-sizing:border-box; }
 html,body,#app{ height:100%; }
