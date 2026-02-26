@@ -109,7 +109,7 @@
       <div class="nav-right">
         <div class="menu-right">
           <button class="btn btn-icon" @click="toggleSignIn" aria-label="Settings" :disabled="running">
-            <img src="./../assets/settings.svg" alt="">
+            <img src="/assets/settings.svg" alt="">
           </button>
         </div>
       </div>
