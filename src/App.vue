@@ -463,51 +463,9 @@ function selectDevice(d: MediaDeviceInfo, i: number){
       cameraRotation.value[d.deviceId] = 0;
     }
   } else {
-    stopCameraStream(d, i);
+    stopCameraStream(i);
   }
-  
-  // Send camera info to IRIS mock bridge (including rotation)
-  const info = { 
-    type: 'camera-info', 
-    payload: { 
-      deviceId: d.deviceId, 
-      label: d.label, 
-      kind: d.kind, 
-      ts: Date.now(),
-      rotation: cameraRotation.value[d.deviceId] || 0
-    } 
-  };
-  console.log('[IRIS send] camera-info', info);
-  lastSentMsg.value = JSON.stringify(info, null, 2);
-  (window as any).electronAPI?.irisSend?.(info);
-
   refresh();
-  if (!cameraRotation.value) {
-    cameraRotation.value = Array(selectedDevices.value?.length)
-    selectedDevices.value?.forEach((d, i) => {
-      if (cameraRotation.value) cameraRotation.value[i] = {device: selectedDevices.value ? selectedDevices.value[i] : null, angle: 0}
-    })
-
-  }
-  else {
-    const copy = cameraRotation.value
-    if (selectedDevices.value) {
-      cameraRotation.value = Array(selectedDevices.value?.length)
-    }
-    else {
-      cameraRotation.value = undefined
-    }
-    selectedDevices.value?.forEach((d, i) => {
-      cameraRotation.value?.push({device: selectedDevices.value ? selectedDevices.value[i] : null, angle: 0})
-      if (selectedDevices.value && selectedDevices.value[i] && cameraRotation.value) {
-        const idxOf = copy.map((val) => {
-            return val.device
-        }).indexOf(selectedDevices.value[i])
-        cameraRotation.value[i].angle = copy[idxOf].angle 
-      }
-    })
-  }
-  cameraRotation.value?.filter((val) => !val.device)
 }
 
 async function startCameraStream(camera: MediaDeviceInfo, index: number) {
@@ -545,22 +503,6 @@ function rotateCamera(d: MediaDeviceInfo, index: number) {
   const currentAngle = cameraRotation.value[d.deviceId] || 0;
   const newAngle = (currentAngle + 90) % 360;
   cameraRotation.value[d.deviceId] = newAngle;
-
-  // Notify IRIS backend about the rotation change
-  const info = { 
-    type: 'camera-info', 
-    payload: { 
-      deviceId: d.deviceId, 
-      label: d.label, 
-      kind: d.kind, 
-      ts: Date.now(),
-      rotation: newAngle
-    } 
-  };
-  console.log('[IRIS send] camera-info (rotate)', info);
-  lastSentMsg.value = JSON.stringify(info, null, 2);
-  (window as any).electronAPI?.irisSend?.(info);
-  
   rotation(d, newAngle, index);
 }
 
@@ -825,13 +767,14 @@ async function buyLicense() {
 async function startIris() {
   spheresMesh = null
   skeletonLine = null
+  //Sends the camera information to IRIS
   if (selectedDevices.value) {
     const cameras = Array.from(selectedDevices.value, (d, i) => ({
       uri: String(i),
       width: 1920,
       height: 1080,
       fps: 100,
-      rotation: cameraRotation.value ? cameraRotation.value[i].angle : 0
+      rotation: cameraRotation.value[d.deviceId] ? cameraRotation.value[d.deviceId] : 0
     })) 
     const options = {
       kp_format: "halpe26",
