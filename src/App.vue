@@ -321,30 +321,9 @@ const {
   onSend: (msg) => { try { lastSentMsg.value = JSON.stringify(msg, null, 2); } catch {} },
 });
 
+// Construct scene camera
 const selectedCameraCount = computed(() => selectedDevices.value?.length ?? 0);
-
-// Watch selectedDevices to initialize rotation state for new cameras
-watch(selectedDevices, (newDevices) => {
-  if (newDevices) {
-    newDevices.forEach(d => {
-      if (cameraRotation.value[d.deviceId] === undefined) {
-        cameraRotation.value[d.deviceId] = 0;
-      }
-    });
-  }
-}, { immediate: true });
-
 const { sceneCameras, addToScene: addSceneCameras, dispose: disposeSceneCameras } = useSceneCameras(selectedCameraCount);
-
-/** Combined view: physical (selected) cameras + visible scene cameras */
-const allCameras = computed(() => {
-  const visibleScene = sceneCameras.value.filter(c => c.visible);
-  return {
-    physical: selectedDevices.value ?? [],
-    scene: visibleScene,
-    totalCount: (selectedDevices.value?.length ?? 0) + visibleScene.length,
-  };
-});
 
 const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt-${cameraHoverIndex.value}` : undefined));
 
@@ -499,8 +478,6 @@ function selectDevice(d: MediaDeviceInfo, i: number){
     }
   } else {
     stopCameraStream(d, i);
-    // Optional: remove rotation state when deselected
-    // delete cameraRotation.value[d.deviceId];
   }
   
   // Send camera info to IRIS mock bridge (including rotation)
