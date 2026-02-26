@@ -23,7 +23,7 @@ npm run dev
 # Build for production
 npm run build
 ```
-You will need a FREE licence key for IRIS available from [iris.cs.bath.ac.uk](https://iris.cs.bath.ac.uk/).
+You will need a FREE license key for IRIS available from [iris.cs.bath.ac.uk](https://iris.cs.bath.ac.uk/).
 
 ## 🛠️ Key Features
 - **Real-time Pose Streaming**: Seamless integration with the IRIS vision engine.
