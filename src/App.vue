@@ -253,7 +253,6 @@ import { onMounted, onBeforeUnmount, ref, watch, nextTick, computed } from 'vue'
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { useCameras } from './composables/useCameras';
-import { useIris } from './composables/useIris';
 import { useSceneCameras } from './composables/useSceneCameras';
 import { useLicense } from './composables/useLicense';
 import { FBXLoader } from 'three/examples/jsm/Addons.js';
@@ -464,7 +463,7 @@ function selectDevice(d: MediaDeviceInfo, i: number){
       cameraRotation.value[d.deviceId] = 0;
     }
   } else {
-    stopCameraStream(d, i);
+    stopCameraStream(i);
   }
   
   // Send camera info to IRIS mock bridge (including rotation)
