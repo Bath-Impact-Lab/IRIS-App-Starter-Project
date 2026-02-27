@@ -24,7 +24,7 @@ export interface PlaySpaceBounds {
   height: number; // suggested capture height
   centerX: number; centerZ: number;
   width: number; depth: number;
-  points: THREE.Vector3[]; // footprint polygon points
+  polygons: THREE.Vector3[][]; // array of footprint polygons
 }
 
 const GIZMO_SCALE = 0.2;
@@ -320,42 +320,35 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
   function computePlaySpaceBounds(captureHeight = 2.5): PlaySpaceBounds {
     const visibleCams = sceneCameras.value.filter(e => e.visible);
 
-    if (visibleCams.length === 0) {
-      return {
-        minX: -2, maxX: 2, minZ: -2, maxZ: 2,
-        height: captureHeight, centerX: 0, centerZ: 0, width: 4, depth: 4,
-        points: []
-      };
-    }
+    const emptyBounds = {
+      minX: -2, maxX: 2, minZ: -2, maxZ: 2,
+      height: captureHeight, centerX: 0, centerZ: 0, width: 4, depth: 4,
+      polygons: []
+    };
 
-    const intersectionPts: THREE.Vector3[] = [];
+    if (visibleCams.length < 2) return emptyBounds;
+
     const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-    const EPS = 1e-6;
+    const footprints: THREE.Vector3[][] = [];
 
+    // 1. Get ground footprints for each camera
     for (const entry of visibleCams) {
       const cam = entry.camera;
       cam.updateMatrixWorld(true);
+      cam.updateProjectionMatrix();
 
-      // Get camera FOV and aspect
       const fovV = THREE.MathUtils.degToRad(cam.fov);
       const halfV = fovV / 2;
       const aspect = cam.aspect;
-      const halfH = Math.atan(Math.tan(halfV) * aspect);
       const tanV = Math.tan(halfV);
-      const tanH = Math.tan(halfH);
+      const tanH = tanV * aspect;
 
-      const camPos = new THREE.Vector3();
-      cam.getWorldPosition(camPos);
-
-      const xAxis = new THREE.Vector3();
-      const yAxis = new THREE.Vector3();
-      const zAxis = new THREE.Vector3();
+      const camPos = cam.getWorldPosition(new THREE.Vector3());
+      const xAxis = new THREE.Vector3(), yAxis = new THREE.Vector3(), zAxis = new THREE.Vector3();
       cam.matrixWorld.extractBasis(xAxis, yAxis, zAxis);
-
-      // In Three.js PerspectiveCamera, forward is -zAxis
       const fwd = zAxis.clone().multiplyScalar(-1);
 
-      // Ray directions for the 4 corners of the frustum
+      const poly: THREE.Vector3[] = [];
       const dirs = [
         fwd.clone().add(xAxis.clone().multiplyScalar(tanH)).add(yAxis.clone().multiplyScalar(tanV)),
         fwd.clone().add(xAxis.clone().multiplyScalar(tanH)).add(yAxis.clone().multiplyScalar(-tanV)),
@@ -365,60 +358,77 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
 
       for (const dir of dirs) {
         const denom = plane.normal.dot(dir);
-        if (Math.abs(denom) > EPS) {
+        if (Math.abs(denom) > 1e-6) {
           const t = -plane.normal.dot(camPos) / denom;
-          if (t > EPS) {
-            const pt = camPos.clone().addScaledVector(dir, t);
-            intersectionPts.push(pt);
-          }
+          if (t > 0) poly.push(camPos.clone().addScaledVector(dir, t));
         }
+      }
+      if (poly.length === 4) footprints.push(poly);
+    }
+
+    if (footprints.length < 2) return emptyBounds;
+
+    // 2. Pairwise Footprint Intersection logic
+    // Sutherland-Hodgman clipping to find intersection of two convex 2D polygons
+    const getLineIntersection = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, d: THREE.Vector3) => {
+      const det = (b.x - a.x) * (d.z - c.z) - (b.z - a.z) * (d.x - c.x);
+      if (Math.abs(det) < 1e-8) return null;
+      const t = ((c.x - a.x) * (d.z - c.z) - (c.z - a.z) * (d.x - c.x)) / det;
+      return new THREE.Vector3(a.x + t * (b.x - a.x), 0, a.z + t * (b.z - a.z));
+    };
+
+    const clipPoly = (subjectPoly: THREE.Vector3[], clipPoly: THREE.Vector3[]) => {
+      let outputList = subjectPoly;
+      for (let i = 0; i < clipPoly.length; i++) {
+        const edgeStart = clipPoly[i];
+        const edgeEnd = clipPoly[(i + 1) % clipPoly.length];
+        const inputList = outputList;
+        outputList = [];
+        if (inputList.length === 0) break;
+        let startPoint = inputList[inputList.length - 1];
+        for (const endPoint of inputList) {
+          const isInside = (p: THREE.Vector3) =>
+            ((edgeEnd.x - edgeStart.x) * (p.z - edgeStart.z) - (edgeEnd.z - edgeStart.z) * (p.x - edgeStart.x)) >= -1e-5;
+          if (isInside(endPoint)) {
+            if (!isInside(startPoint)) {
+              const intersect = getLineIntersection(startPoint, endPoint, edgeStart, edgeEnd);
+              if (intersect) outputList.push(intersect);
+            }
+            outputList.push(endPoint);
+          } else if (isInside(startPoint)) {
+            const intersect = getLineIntersection(startPoint, endPoint, edgeStart, edgeEnd);
+            if (intersect) outputList.push(intersect);
+          }
+          startPoint = endPoint;
+        }
+      }
+      return outputList;
+    };
+
+    const resultPolygons: THREE.Vector3[][] = [];
+    for (let i = 0; i < footprints.length; i++) {
+      for (let j = i + 1; j < footprints.length; j++) {
+        const overlap = clipPoly(footprints[i], footprints[j]);
+        if (overlap.length >= 3) resultPolygons.push(overlap);
       }
     }
 
-    if (intersectionPts.length === 0) {
-      return {
-        minX: -2, maxX: 2, minZ: -2, maxZ: 2,
-        height: captureHeight, centerX: 0, centerZ: 0, width: 4, depth: 4,
-        points: []
-      };
-    }
+    if (resultPolygons.length === 0) return emptyBounds;
 
-    // Project points onto the plane just in case and find min/max
+    // 3. Compute metadata
     let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    const flat: THREE.Vector3[] = [];
-
-    for (const p of intersectionPts) {
-      const pFlat = p.clone();
-      pFlat.y = 0; // ensure it's on ground
-      flat.push(pFlat);
-      minX = Math.min(minX, pFlat.x);
-      maxX = Math.max(maxX, pFlat.x);
-      minZ = Math.min(minZ, pFlat.z);
-      maxZ = Math.max(maxZ, pFlat.z);
-    }
-
-    // Sort points angularly around center to create a clean boundary polygon
-    const centerX = (minX + maxX) / 2;
-    const centerZ = (minZ + maxZ) / 2;
-    const center = new THREE.Vector3(centerX, 0, centerZ);
-
-    flat.sort((a, b) =>
-      Math.atan2(a.z - center.z, a.x - center.x) -
-      Math.atan2(b.z - center.z, b.x - center.x)
-    );
-
-    // Limit AABB to reasonable range
-    const CLAMP = 15;
-    minX = Math.max(minX, -CLAMP); maxX = Math.min(maxX, CLAMP);
-    minZ = Math.max(minZ, -CLAMP); maxZ = Math.min(maxZ, CLAMP);
+    resultPolygons.forEach(p => p.forEach(v => {
+      minX = Math.min(minX, v.x); maxX = Math.max(maxX, v.x);
+      minZ = Math.min(minZ, v.z); maxZ = Math.max(maxZ, v.z);
+    }));
 
     return {
       minX, maxX, minZ, maxZ,
       height: captureHeight,
-      centerX, centerZ,
-      width: Math.min(maxX - minX, CLAMP * 2),
-      depth: Math.min(maxZ - minZ, CLAMP * 2),
-      points: flat
+      centerX: (minX + maxX) / 2,
+      centerZ: (minZ + maxZ) / 2,
+      width: maxX - minX, depth: maxZ - minZ,
+      polygons: resultPolygons
     };
   }
 

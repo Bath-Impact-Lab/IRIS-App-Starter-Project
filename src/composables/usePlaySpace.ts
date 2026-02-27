@@ -24,22 +24,22 @@ export function usePlaySpace(
     }
 
     const bounds = computePlaySpaceBounds();
-    const { width, depth, height, centerX, centerZ, points } = bounds;
+    const { width, depth, height, centerX, centerZ, polygons } = bounds;
 
     const group = new THREE.Group();
-    // Neutralize group position as we'll use world coordinates for the polygon
-    // But pillars still benefit from a local offset if we want, 
-    // actually it's easier to just keep group at 0,0,0 if points are world space
     group.position.set(0, 0, 0);
 
-    if (points && points.length > 2) {
-      // 1. Floor polygon
+    if (polygons && polygons.length > 0) {
+      // 1. Floor polygon (can be multiple islands)
       const shape = new THREE.Shape();
-      shape.moveTo(points[0].x, points[0].z);
-      for (let i = 1; i < points.length; i++) {
-        shape.lineTo(points[i].x, points[i].z);
-      }
-      shape.closePath();
+      polygons.forEach(poly => {
+        if (poly.length < 3) return;
+        shape.moveTo(poly[0].x, poly[0].z);
+        for (let i = 1; i < poly.length; i++) {
+          shape.lineTo(poly[i].x, poly[i].z);
+        }
+        shape.closePath();
+      });
 
       const floorGeo = new THREE.ShapeGeometry(shape);
       const floorMat = new THREE.MeshBasicMaterial({
@@ -49,31 +49,31 @@ export function usePlaySpace(
         side: THREE.DoubleSide
       });
       const floor = new THREE.Mesh(floorGeo, floorMat);
-      floor.rotation.x = Math.PI / 2; // Flat on ground (X-Z plane is Y=0)
-      // Note: ShapeGeometry is in XY plane by default, so we rotate it to XZ
+      floor.rotation.x = Math.PI / 2; // Flat on ground
       group.add(floor);
 
-      // 2. Outline boundary
-      const outlineGeo = new THREE.BufferGeometry().setFromPoints(points);
-      const outlineMat = new THREE.LineBasicMaterial({ color: 0x4a9eff, linewidth: 2 });
-      const outline = new THREE.LineLoop(outlineGeo, outlineMat);
-      group.add(outline);
+      // 2. Outline boundary (as line segments for multiple islands)
+      const outlinePoints: THREE.Vector3[] = [];
+      polygons.forEach(poly => {
+        if (poly.length < 3) return;
+        for (let i = 0; i < poly.length; i++) {
+          outlinePoints.push(poly[i]);
+          outlinePoints.push(poly[(i + 1) % poly.length]);
+        }
+      });
+
+      if (outlinePoints.length > 0) {
+        const outlineGeo = new THREE.BufferGeometry().setFromPoints(outlinePoints);
+        const outlineMat = new THREE.LineBasicMaterial({ color: 0x4a9eff, linewidth: 2 });
+        const outline = new THREE.LineSegments(outlineGeo, outlineMat);
+        group.add(outline);
+      }
+
+      group.visible = showPlaySpace.value;
     } else {
-      // Fallback to simple plane if no points
-      group.position.set(centerX, 0, centerZ);
-      const floorGeo = new THREE.PlaneGeometry(width, depth);
-      const floorMat = new THREE.MeshBasicMaterial({ color: 0x1a2a3a, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
-      const floor = new THREE.Mesh(floorGeo, floorMat);
-      floor.rotation.x = -Math.PI / 2;
-      group.add(floor);
-
-      const outlineGeo = new THREE.EdgesGeometry(floorGeo);
-      const outlineMat = new THREE.LineBasicMaterial({ color: 0x4a9eff, transparent: true, opacity: 0.6 });
-      const outline = new THREE.LineSegments(outlineGeo, outlineMat);
-      group.add(outline);
+      group.visible = false;
     }
 
-    group.visible = showPlaySpace.value;
     scene.add(group);
     playSpaceGroup = group;
 
