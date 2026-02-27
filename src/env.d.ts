@@ -63,6 +63,7 @@ interface Window {
   ipc?: {
     startIRIS: (options: any) => Promise<any>;
     stopIRIS: (Id: any) => Promise<any>;
+    getExtrinsics: () => Promise<any>;
     onIrisData: (callback: (data: IrisData[] | IrisData) => void) => void;
   }
 } 
