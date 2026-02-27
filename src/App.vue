@@ -156,7 +156,18 @@
       </div>
     </div>
 
-    <section class="scene" ref="sceneRef"></section>
+    <section class="scene" ref="sceneRef">
+      <Transition name="demo-fade">
+        <div v-if="selectedCameraCount < 2" class="demo-banner">
+          <span class="demo-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </span>
+          Demo mode &mdash; connect 2 cameras to begin tracking
+        </div>
+      </Transition>
+    </section>
     <div class="hud">
       <button
         class="hud-icon-btn"
@@ -193,23 +204,26 @@
         <span>{{ running ? 'IRIS running' : 'IRIS inactive' }}</span>
       </div>
     </div>
-
-    <!-- License Badge -->
-    <div
-      class="license-badge-container"
-      :class="{ 'clickable': !isValidLicense || planType === 'Trial' }"
-      @click="(!isValidLicense || planType === 'Trial') ? showSettings = true : null"
-    >
-      <div v-if="isValidLicense" class="badge glass">
-        <span class="badge-dot" :class="planType?.toLowerCase()"></span>
-        <span class="badge-text">{{ planType || 'Trial' }} License</span>
-      </div>
-      <div v-else class="badge-upgrade glass">
-        <span class="badge-dot invalid"></span>
-        <span class="badge-text">FREE Trial</span>
-        <div class="upgrade-action">
-          Upgrade
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    <!-- License Badge — bottom-right pill -->
+    <div class="hud hud-right">
+      <div
+        class="license-badge-container"
+        :class="{ 'clickable': !isValidLicense || planType === 'Trial' }"
+        @click="(!isValidLicense || planType === 'Trial') ? showSettings = true : null"
+      >
+        <div v-if="isValidLicense" class="badge glass">
+          <span class="badge-dot" :class="planType?.toLowerCase()"></span>
+          <span class="badge-text">{{ planType || 'Trial' }} License</span>
+        </div>
+        <div v-else class="badge-upgrade glass">
+          <svg class="badge-trial-icon" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+          </svg>
+          <span class="badge-text">FREE Trial</span>
+          <div class="upgrade-action">
+            Upgrade
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </div>
         </div>
       </div>
     </div>
@@ -944,7 +958,32 @@ function renderIRISdata(poseInfo: IrisData) {
 </script>
 
 <style scoped>
-.hud{ position: fixed; left: 16px; bottom: 16px; display:flex; gap:8px; padding:8px 10px; background: rgba(12,18,25,.6); border:1px solid rgba(255,255,255,.08); border-radius: 12px; backdrop-filter: blur(10px); }
+.hud{ position: fixed; left: 16px; bottom: 16px; height: 48px; display:flex; align-items:center; gap:8px; padding:0 10px; background: rgba(12,18,25,.6); border:1px solid rgba(255,255,255,.08); border-radius: 12px; backdrop-filter: blur(10px); }
+.hud-right{ left: auto; right: 266px; /* 250px sidenav + 16px gap */ }
+.demo-banner{
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(12,18,25,.65);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 20px;
+  backdrop-filter: blur(10px);
+  color: rgba(255,255,255,.55);
+  font-size: .8rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 10;
+}
+.demo-icon{ display:flex; align-items:center; color: rgba(255,180,50,.7); }
+.demo-fade-enter-active, .demo-fade-leave-active{ transition: opacity .4s ease, transform .4s ease; }
+.demo-fade-enter-from, .demo-fade-leave-to{ opacity: 0; transform: translateX(-50%) translateY(-6px); }
 .hud-item{ display:flex; align-items:center; gap:8px; color:#e6edf3; font-weight:600; }
 .hud-sep{ width:1px; background:rgba(255,255,255,.1); margin:0 6px; }
 .hud-icon-btn{ display:flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:8px; border:1px solid rgba(255,255,255,.1); background:transparent; color:rgba(255,255,255,.35); cursor:pointer; transition:color .2s, background .2s, border-color .2s; padding:0; }
@@ -1115,10 +1154,8 @@ function renderIRISdata(poseInfo: IrisData) {
 
 /* License Badge Styles */
 .license-badge-container {
-  position: fixed;
-  left: 16px;
-  bottom: 75px;
-  z-index: 900;
+  display: flex;
+  align-items: center;
   transition: transform 0.2s ease;
 }
 
@@ -1130,21 +1167,19 @@ function renderIRISdata(poseInfo: IrisData) {
   transform: translateY(-2px);
 }
 
-.badge {
+.license-badge-container .badge,
+.license-badge-container .badge-upgrade {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  border-radius: 12px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  backdrop-filter: none;
   font-size: 13px;
   font-weight: 600;
   color: #e6edf3;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.badge.glass {
-  background: rgba(12, 18, 25, 0.6);
-  backdrop-filter: blur(10px);
 }
 
 .badge.error {
@@ -1169,22 +1204,16 @@ function renderIRISdata(poseInfo: IrisData) {
   box-shadow: 0 0 8px rgba(255, 59, 48, 0.4);
 }
 
+.badge-trial-icon {
+  color: #ff9a5c;
+  filter: drop-shadow(0 0 4px rgba(255, 154, 92, 0.6));
+  flex-shrink: 0;
+}
+
 .badge-text {
   letter-spacing: 0.5px;
 }
 
-.badge-upgrade {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 6px 6px 14px;
-  border-radius: 16px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #e6edf3;
-  background-color: var(--bg);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
 
 .upgrade-action {
   background: linear-gradient(135deg, #6be675, #4ecb58);
