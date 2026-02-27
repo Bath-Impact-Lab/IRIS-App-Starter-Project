@@ -24,35 +24,37 @@ export function usePlaySpace(
     }
 
     const bounds = computePlaySpaceBounds();
-    const { width, depth, height, centerX, centerZ, polygons } = bounds;
+    const { polygons } = bounds;
 
     const group = new THREE.Group();
-    group.position.set(0, 0, 0);
+    group.position.set(0, 0.005, 0); // Tiny offset to prevent grid flickering
 
     if (polygons && polygons.length > 0) {
-      // 1. Floor polygon (can be multiple islands)
-      const shape = new THREE.Shape();
+      // 1. Floor Infill (Separate mesh per island to avoid triangulation artifacts)
+      const floorMat = new THREE.MeshBasicMaterial({
+        color: 0x00f2ff,
+        transparent: true,
+        opacity: 0.1,
+        side: THREE.DoubleSide,
+        depthWrite: false
+      });
+
       polygons.forEach(poly => {
         if (poly.length < 3) return;
+        const shape = new THREE.Shape();
         shape.moveTo(poly[0].x, poly[0].z);
         for (let i = 1; i < poly.length; i++) {
           shape.lineTo(poly[i].x, poly[i].z);
         }
         shape.closePath();
+
+        const floorGeo = new THREE.ShapeGeometry(shape);
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = Math.PI / 2;
+        group.add(floor);
       });
 
-      const floorGeo = new THREE.ShapeGeometry(shape);
-      const floorMat = new THREE.MeshBasicMaterial({
-        color: 0x1a2a3a,
-        transparent: true,
-        opacity: 0.4,
-        side: THREE.DoubleSide
-      });
-      const floor = new THREE.Mesh(floorGeo, floorMat);
-      floor.rotation.x = Math.PI / 2; // Flat on ground
-      group.add(floor);
-
-      // 2. Outline boundary (as line segments for multiple islands)
+      // 2. Outline boundary
       const outlinePoints: THREE.Vector3[] = [];
       polygons.forEach(poly => {
         if (poly.length < 3) return;
@@ -64,7 +66,12 @@ export function usePlaySpace(
 
       if (outlinePoints.length > 0) {
         const outlineGeo = new THREE.BufferGeometry().setFromPoints(outlinePoints);
-        const outlineMat = new THREE.LineBasicMaterial({ color: 0x4a9eff, linewidth: 2 });
+        const outlineMat = new THREE.LineBasicMaterial({
+          color: 0x00ffff,
+          transparent: true,
+          opacity: 0.8,
+          linewidth: 2
+        });
         const outline = new THREE.LineSegments(outlineGeo, outlineMat);
         group.add(outline);
       }
