@@ -109,3 +109,16 @@ app.on('window-all-closed', () => {
     if (mockTimer) { clearInterval(mockTimer); mockTimer = null; }
     if (process.platform !== 'darwin') app.quit();
 });
+
+ipcMain.handle('open-external', async (event, url) => {
+    console.log('[Main] Received open-external request for:', url);
+    try {
+        console.log('[Main] Calling shell.openExternal...');
+        await shell.openExternal(url);
+        console.log('[Main] shell.openExternal call completed successfully.');
+        return { ok: true };
+    } catch (e) {
+        console.error('[Main] shell.openExternal failed:', e);
+        return { ok: false, error: e.message };
+    }
+});
