@@ -24,36 +24,54 @@ export function usePlaySpace(
     }
 
     const bounds = computePlaySpaceBounds();
-    const { width, depth, height, centerX, centerZ } = bounds;
+    const { width, depth, height, centerX, centerZ, points } = bounds;
 
     const group = new THREE.Group();
-    group.position.set(centerX, 0, centerZ);
+    // Neutralize group position as we'll use world coordinates for the polygon
+    // But pillars still benefit from a local offset if we want, 
+    // actually it's easier to just keep group at 0,0,0 if points are world space
+    group.position.set(0, 0, 0);
 
-    // Floor plane sized to the computed footprint
-    const floorGeo = new THREE.PlaneGeometry(width, depth);
-    const floorMat = new THREE.MeshBasicMaterial({ color: 0x1a2a3a, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
-    const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.rotation.x = -Math.PI / 2;
-    group.add(floor);
+    if (points && points.length > 2) {
+      // 1. Floor polygon
+      const shape = new THREE.Shape();
+      shape.moveTo(points[0].x, points[0].z);
+      for (let i = 1; i < points.length; i++) {
+        shape.lineTo(points[i].x, points[i].z);
+      }
+      shape.closePath();
 
-    // Boundary box edges sized to frustum intersection
-    const boxGeo = new THREE.BoxGeometry(width, height, depth);
-    const edges = new THREE.EdgesGeometry(boxGeo);
-    const edgeMat = new THREE.LineBasicMaterial({ color: 0x4a9eff, transparent: true, opacity: 0.6 });
-    const boundaryBox = new THREE.LineSegments(edges, edgeMat);
-    boundaryBox.position.y = height / 2;
-    group.add(boundaryBox);
+      const floorGeo = new THREE.ShapeGeometry(shape);
+      const floorMat = new THREE.MeshBasicMaterial({
+        color: 0x1a2a3a,
+        transparent: true,
+        opacity: 0.4,
+        side: THREE.DoubleSide
+      });
+      const floor = new THREE.Mesh(floorGeo, floorMat);
+      floor.rotation.x = Math.PI / 2; // Flat on ground (X-Z plane is Y=0)
+      // Note: ShapeGeometry is in XY plane by default, so we rotate it to XZ
+      group.add(floor);
 
-    // Corner pillars
-    const pillarGeo = new THREE.CylinderGeometry(0.03, 0.03, height, 8);
-    const pillarMat = new THREE.MeshBasicMaterial({ color: 0x4a9eff, transparent: true, opacity: 0.5 });
-    const hw = width / 2;
-    const hd = depth / 2;
-    ([[-hw, -hd], [-hw, hd], [hw, -hd], [hw, hd]] as [number, number][]).forEach(([x, z]) => {
-      const pillar = new THREE.Mesh(pillarGeo, pillarMat);
-      pillar.position.set(x, height / 2, z);
-      group.add(pillar);
-    });
+      // 2. Outline boundary
+      const outlineGeo = new THREE.BufferGeometry().setFromPoints(points);
+      const outlineMat = new THREE.LineBasicMaterial({ color: 0x4a9eff, linewidth: 2 });
+      const outline = new THREE.LineLoop(outlineGeo, outlineMat);
+      group.add(outline);
+    } else {
+      // Fallback to simple plane if no points
+      group.position.set(centerX, 0, centerZ);
+      const floorGeo = new THREE.PlaneGeometry(width, depth);
+      const floorMat = new THREE.MeshBasicMaterial({ color: 0x1a2a3a, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
+      const floor = new THREE.Mesh(floorGeo, floorMat);
+      floor.rotation.x = -Math.PI / 2;
+      group.add(floor);
+
+      const outlineGeo = new THREE.EdgesGeometry(floorGeo);
+      const outlineMat = new THREE.LineBasicMaterial({ color: 0x4a9eff, transparent: true, opacity: 0.6 });
+      const outline = new THREE.LineSegments(outlineGeo, outlineMat);
+      group.add(outline);
+    }
 
     group.visible = showPlaySpace.value;
     scene.add(group);

@@ -314,7 +314,17 @@ const {
 
 // Construct scene camera
 const selectedCameraCount = computed(() => selectedDevices.value?.length ?? 0);
-const { sceneCameras, addToScene: addSceneCameras, setGizmoRotation, computePlaySpaceBounds, dispose: disposeSceneCameras } = useSceneCameras(selectedCameraCount);
+
+const showPlaySpace = ref(true);
+
+const { 
+  sceneCameras, 
+  addToScene: addSceneCameras, 
+  syncVisibility, 
+  setGizmoRotation, 
+  computePlaySpaceBounds, 
+  dispose: disposeSceneCameras 
+} = useSceneCameras(selectedCameraCount, showPlaySpace);
 
 const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt-${cameraHoverIndex.value}` : undefined));
 
@@ -371,7 +381,6 @@ let irisData: IrisData[] | IrisData | null;
 
 const manager = new THREE.LoadingManager();
 let mixer: THREE.AnimationMixer[] | null;
-const showPlaySpace = ref(true);
 const { create: createPlaySpace, rebuild: rebuildPlaySpace, dispose: disposePlaySpace } = usePlaySpace(showPlaySpace, computePlaySpaceBounds);
 
 function onCameraButtonKeydown(e: KeyboardEvent) {

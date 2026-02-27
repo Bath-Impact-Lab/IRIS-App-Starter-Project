@@ -14,6 +14,7 @@ export interface SceneCameraEntry {
   color: string;
   camera: THREE.PerspectiveCamera;
   gizmoMesh: THREE.Group;
+  frustumLines: THREE.LineSegments;
   visible: boolean;
 }
 
@@ -23,6 +24,7 @@ export interface PlaySpaceBounds {
   height: number; // suggested capture height
   centerX: number; centerZ: number;
   width: number; depth: number;
+  points: THREE.Vector3[]; // footprint polygon points
 }
 
 const GIZMO_SCALE = 0.2;
@@ -42,9 +44,9 @@ function createCameraGizmo(
 
   const apex: [number, number, number] = [0, 0, 0];
 
-  const tl: [number, number, number] = [-hw,  hh, fd];
-  const tr: [number, number, number] = [ hw,  hh, fd];
-  const br: [number, number, number] = [ hw, -hh, fd];
+  const tl: [number, number, number] = [-hw, hh, fd];
+  const tr: [number, number, number] = [hw, hh, fd];
+  const br: [number, number, number] = [hw, -hh, fd];
   const bl: [number, number, number] = [-hw, -hh, fd];
 
   const lineVerts = new Float32Array([
@@ -73,15 +75,15 @@ function createCameraGizmo(
   const rotRad = (rotationDeg * Math.PI) / 180;
   lines.rotation.z = rotRad;
 
-  const gap   = s * 0.08;
-  const triH  = s * 0.3;
-  const triW  = s * 0.25;
-  const triY  = hh + gap;
+  const gap = s * 0.08;
+  const triH = s * 0.3;
+  const triW = s * 0.25;
+  const triY = hh + gap;
 
   const triVerts = new Float32Array([
-    -triW, triY,        fd,
-     triW, triY,        fd,
-        0, triY + triH, fd,
+    -triW, triY, fd,
+    triW, triY, fd,
+    0, triY + triH, fd,
   ]);
 
   const triGeo = new THREE.BufferGeometry();
@@ -108,7 +110,78 @@ function createCameraGizmo(
   return group;
 }
 
-export function useSceneCameras(selectedCount?: Ref<number>) {
+function createFrustumLines(cam: THREE.PerspectiveCamera, color: string): THREE.LineSegments {
+  const lineMat = new THREE.LineBasicMaterial({
+    color: new THREE.Color(color),
+    transparent: true,
+    opacity: 0.15,
+    depthTest: true,
+  });
+
+  const geo = new THREE.BufferGeometry();
+  // We'll update positions in updateFrustumLines
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(4 * 3 * 2), 3));
+
+  const lines = new THREE.LineSegments(geo, lineMat);
+  lines.frustumCulled = false;
+  return lines;
+}
+
+function updateFrustumLines(entry: SceneCameraEntry) {
+  const cam = entry.camera;
+  cam.updateMatrixWorld(true);
+
+  const fovV = THREE.MathUtils.degToRad(cam.fov);
+  const halfV = fovV / 2;
+  const aspect = cam.aspect;
+  const halfH = Math.atan(Math.tan(halfV) * aspect);
+  const tanV = Math.tan(halfV);
+  const tanH = Math.tan(halfH);
+
+  const camPos = new THREE.Vector3();
+  cam.getWorldPosition(camPos);
+
+  const xAxis = new THREE.Vector3();
+  const yAxis = new THREE.Vector3();
+  const zAxis = new THREE.Vector3();
+  cam.matrixWorld.extractBasis(xAxis, yAxis, zAxis);
+  const fwd = zAxis.clone().multiplyScalar(-1);
+
+  const dirs = [
+    fwd.clone().add(xAxis.clone().multiplyScalar(tanH)).add(yAxis.clone().multiplyScalar(tanV)),
+    fwd.clone().add(xAxis.clone().multiplyScalar(tanH)).add(yAxis.clone().multiplyScalar(-tanV)),
+    fwd.clone().add(xAxis.clone().multiplyScalar(-tanH)).add(yAxis.clone().multiplyScalar(-tanV)),
+    fwd.clone().add(xAxis.clone().multiplyScalar(-tanH)).add(yAxis.clone().multiplyScalar(tanV)),
+  ].map(d => d.normalize());
+
+  const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+  const EPS = 1e-6;
+  const verts = new Float32Array(4 * 3 * 2);
+
+  dirs.forEach((dir, i) => {
+    const denom = plane.normal.dot(dir);
+    let target = camPos.clone().addScaledVector(dir, 10); // Default 10m
+    if (Math.abs(denom) > EPS) {
+      const t = -plane.normal.dot(camPos) / denom;
+      if (t > EPS) {
+        target = camPos.clone().addScaledVector(dir, t);
+      }
+    }
+
+    // Line i: camPos -> target
+    verts[i * 6 + 0] = camPos.x;
+    verts[i * 6 + 1] = camPos.y;
+    verts[i * 6 + 2] = camPos.z;
+    verts[i * 6 + 3] = target.x;
+    verts[i * 6 + 4] = target.y;
+    verts[i * 6 + 5] = target.z;
+  });
+
+  entry.frustumLines.geometry.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+  entry.frustumLines.geometry.attributes.position.needsUpdate = true;
+}
+
+export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<boolean>) {
   const sceneCameras = ref<SceneCameraEntry[]>([]);
   let attachedScene: THREE.Scene | null = null;
 
@@ -188,29 +261,42 @@ export function useSceneCameras(selectedCount?: Ref<number>) {
       gizmoMesh.name = `${def.name}_gizmo`;
       gizmoMesh.visible = false;
 
+      const frustumLines = createFrustumLines(cam, def.color);
+      frustumLines.name = `${def.name}_frustum`;
+      frustumLines.visible = false;
+
       scene.add(cam);
       scene.add(gizmoMesh);
+      scene.add(frustumLines);
 
-      sceneCameras.value.push({
+      const entry: SceneCameraEntry = {
         name: def.name,
         color: def.color,
         camera: cam,
         gizmoMesh,
+        frustumLines,
         visible: false,
-      });
+      };
+
+      updateFrustumLines(entry);
+      sceneCameras.value.push(entry);
     }
 
     syncVisibility();
   }
 
   /** Show all cameras in mock mode; otherwise show only the first N matching selected physical cameras. */
-  function syncVisibility() {
+  function syncVisibility(forceShowFrustums?: boolean) {
     const count = selectedCount?.value ?? 0;
     const showAll = isMockExtrinsics && count === 0;
+    const frustumVis = forceShowFrustums !== undefined ? forceShowFrustums : (showFrustums?.value ?? true);
+
     for (let i = 0; i < sceneCameras.value.length; i++) {
       const show = showAll || i < count;
-      sceneCameras.value[i].gizmoMesh.visible = show;
-      sceneCameras.value[i].visible = show;
+      const entry = sceneCameras.value[i];
+      entry.gizmoMesh.visible = show;
+      entry.frustumLines.visible = show && frustumVis;
+      entry.visible = show;
     }
   }
 
@@ -235,101 +321,104 @@ export function useSceneCameras(selectedCount?: Ref<number>) {
     const visibleCams = sceneCameras.value.filter(e => e.visible);
 
     if (visibleCams.length === 0) {
-      return { minX: -2, maxX: 2, minZ: -2, maxZ: 2, height: captureHeight, centerX: 0, centerZ: 0, width: 4, depth: 4 };
+      return {
+        minX: -2, maxX: 2, minZ: -2, maxZ: 2,
+        height: captureHeight, centerX: 0, centerZ: 0, width: 4, depth: 4,
+        points: []
+      };
     }
 
-    // For each camera compute the convex footprint on Y=0 by projecting the
-    // four bottom frustum corners (at the far plane) down onto the floor.
-    const footprints: Array<{ minX: number; maxX: number; minZ: number; maxZ: number }> = [];
+    const intersectionPts: THREE.Vector3[] = [];
+    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const EPS = 1e-6;
 
     for (const entry of visibleCams) {
       const cam = entry.camera;
       cam.updateMatrixWorld(true);
-      cam.updateProjectionMatrix();
 
-      // NDC corners at far plane (z = 1 in NDC)
-      const ndcCorners = [
-        new THREE.Vector3(-1, -1, 1),
-        new THREE.Vector3( 1, -1, 1),
-        new THREE.Vector3( 1,  1, 1),
-        new THREE.Vector3(-1,  1, 1),
-        // also mid-near to anchor the near end
-        new THREE.Vector3(-1, -1, -1),
-        new THREE.Vector3( 1, -1, -1),
-        new THREE.Vector3( 1,  1, -1),
-        new THREE.Vector3(-1,  1, -1),
-      ];
+      // Get camera FOV and aspect
+      const fovV = THREE.MathUtils.degToRad(cam.fov);
+      const halfV = fovV / 2;
+      const aspect = cam.aspect;
+      const halfH = Math.atan(Math.tan(halfV) * aspect);
+      const tanV = Math.tan(halfV);
+      const tanH = Math.tan(halfH);
 
-      const worldCorners = ndcCorners.map(v => v.unproject(cam));
+      const camPos = new THREE.Vector3();
+      cam.getWorldPosition(camPos);
 
-      // For each edge from camera position → far-plane corner, intersect with Y=0
-      const camPos = cam.position;
-      const floorPoints: THREE.Vector3[] = [];
+      const xAxis = new THREE.Vector3();
+      const yAxis = new THREE.Vector3();
+      const zAxis = new THREE.Vector3();
+      cam.matrixWorld.extractBasis(xAxis, yAxis, zAxis);
 
-      for (const wc of worldCorners) {
-        const dir = wc.clone().sub(camPos);
-        // Ray: P = camPos + t*dir,  solve for P.y = 0
-        if (Math.abs(dir.y) > 1e-6) {
-          const t = -camPos.y / dir.y;
-          if (t > 0) {
-            floorPoints.push(camPos.clone().addScaledVector(dir, t));
+      // In Three.js PerspectiveCamera, forward is -zAxis
+      const fwd = zAxis.clone().multiplyScalar(-1);
+
+      // Ray directions for the 4 corners of the frustum
+      const dirs = [
+        fwd.clone().add(xAxis.clone().multiplyScalar(tanH)).add(yAxis.clone().multiplyScalar(tanV)),
+        fwd.clone().add(xAxis.clone().multiplyScalar(tanH)).add(yAxis.clone().multiplyScalar(-tanV)),
+        fwd.clone().add(xAxis.clone().multiplyScalar(-tanH)).add(yAxis.clone().multiplyScalar(-tanV)),
+        fwd.clone().add(xAxis.clone().multiplyScalar(-tanH)).add(yAxis.clone().multiplyScalar(tanV)),
+      ].map(d => d.normalize());
+
+      for (const dir of dirs) {
+        const denom = plane.normal.dot(dir);
+        if (Math.abs(denom) > EPS) {
+          const t = -plane.normal.dot(camPos) / denom;
+          if (t > EPS) {
+            const pt = camPos.clone().addScaledVector(dir, t);
+            intersectionPts.push(pt);
           }
         }
-        // If the corner itself is already near the floor include it
-        if (Math.abs(wc.y) < 0.5) floorPoints.push(wc.clone());
       }
+    }
 
-      // Also include the camera position projected to floor (covers overhead cams)
-      floorPoints.push(new THREE.Vector3(camPos.x, 0, camPos.z));
-
-      if (floorPoints.length === 0) continue;
-
-      const fp = {
-        minX: Infinity, maxX: -Infinity,
-        minZ: Infinity, maxZ: -Infinity,
+    if (intersectionPts.length === 0) {
+      return {
+        minX: -2, maxX: 2, minZ: -2, maxZ: 2,
+        height: captureHeight, centerX: 0, centerZ: 0, width: 4, depth: 4,
+        points: []
       };
-      for (const p of floorPoints) {
-        fp.minX = Math.min(fp.minX, p.x);
-        fp.maxX = Math.max(fp.maxX, p.x);
-        fp.minZ = Math.min(fp.minZ, p.z);
-        fp.maxZ = Math.max(fp.maxZ, p.z);
-      }
-      footprints.push(fp);
     }
 
-    // Intersect all footprints
-    let minX = footprints[0].minX;
-    let maxX = footprints[0].maxX;
-    let minZ = footprints[0].minZ;
-    let maxZ = footprints[0].maxZ;
+    // Project points onto the plane just in case and find min/max
+    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+    const flat: THREE.Vector3[] = [];
 
-    for (let i = 1; i < footprints.length; i++) {
-      minX = Math.max(minX, footprints[i].minX);
-      maxX = Math.min(maxX, footprints[i].maxX);
-      minZ = Math.max(minZ, footprints[i].minZ);
-      maxZ = Math.min(maxZ, footprints[i].maxZ);
+    for (const p of intersectionPts) {
+      const pFlat = p.clone();
+      pFlat.y = 0; // ensure it's on ground
+      flat.push(pFlat);
+      minX = Math.min(minX, pFlat.x);
+      maxX = Math.max(maxX, pFlat.x);
+      minZ = Math.min(minZ, pFlat.z);
+      maxZ = Math.max(maxZ, pFlat.z);
     }
 
-    // If the intersection is degenerate fall back to union
-    if (minX >= maxX || minZ >= maxZ) {
-      minX = Math.min(...footprints.map(f => f.minX));
-      maxX = Math.max(...footprints.map(f => f.maxX));
-      minZ = Math.min(...footprints.map(f => f.minZ));
-      maxZ = Math.max(...footprints.map(f => f.maxZ));
-    }
+    // Sort points angularly around center to create a clean boundary polygon
+    const centerX = (minX + maxX) / 2;
+    const centerZ = (minZ + maxZ) / 2;
+    const center = new THREE.Vector3(centerX, 0, centerZ);
 
-    // Clamp to a sensible range
-    const CLAMP = 20;
+    flat.sort((a, b) =>
+      Math.atan2(a.z - center.z, a.x - center.x) -
+      Math.atan2(b.z - center.z, b.x - center.x)
+    );
+
+    // Limit AABB to reasonable range
+    const CLAMP = 15;
     minX = Math.max(minX, -CLAMP); maxX = Math.min(maxX, CLAMP);
     minZ = Math.max(minZ, -CLAMP); maxZ = Math.min(maxZ, CLAMP);
 
     return {
       minX, maxX, minZ, maxZ,
       height: captureHeight,
-      centerX: (minX + maxX) / 2,
-      centerZ: (minZ + maxZ) / 2,
-      width: maxX - minX,
-      depth: maxZ - minZ,
+      centerX, centerZ,
+      width: Math.min(maxX - minX, CLAMP * 2),
+      depth: Math.min(maxZ - minZ, CLAMP * 2),
+      points: flat
     };
   }
 
@@ -338,10 +427,13 @@ export function useSceneCameras(selectedCount?: Ref<number>) {
     for (const entry of sceneCameras.value) {
       attachedScene?.remove(entry.gizmoMesh);
       attachedScene?.remove(entry.camera);
+      attachedScene?.remove(entry.frustumLines);
       entry.gizmoMesh.traverse((child) => {
         if ((child as THREE.Mesh).geometry) (child as THREE.Mesh).geometry.dispose();
         if ((child as THREE.Mesh).material) ((child as THREE.Mesh).material as THREE.Material).dispose();
       });
+      entry.frustumLines.geometry.dispose();
+      (entry.frustumLines.material as THREE.Material).dispose();
     }
     sceneCameras.value = [];
   }
@@ -360,10 +452,17 @@ export function useSceneCameras(selectedCount?: Ref<number>) {
     });
   }
 
+  if (showFrustums) {
+    watch(showFrustums, (val) => {
+      syncVisibility(val);
+    });
+  }
+
   function dispose() {
     for (const entry of sceneCameras.value) {
       attachedScene?.remove(entry.gizmoMesh);
       attachedScene?.remove(entry.camera);
+      attachedScene?.remove(entry.frustumLines);
       entry.gizmoMesh.traverse((child) => {
         if ((child as THREE.Mesh).geometry) {
           (child as THREE.Mesh).geometry.dispose();
@@ -372,6 +471,8 @@ export function useSceneCameras(selectedCount?: Ref<number>) {
           ((child as THREE.Mesh).material as THREE.Material).dispose();
         }
       });
+      entry.frustumLines.geometry.dispose();
+      (entry.frustumLines.material as THREE.Material).dispose();
     }
     sceneCameras.value = [];
     attachedScene = null;
