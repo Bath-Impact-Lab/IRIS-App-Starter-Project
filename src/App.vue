@@ -2,8 +2,17 @@
   <div>
     <nav class="navbar">
       <div class="brand">
-        <div class="dot"></div>
-        <div class="split" ref="splitRef">{{ appTitle }}</div>
+        <img
+          v-if="!logoError"
+          :src="`/assets/logo/${appTitle.toLowerCase()}.png`"
+          :alt="appTitle"
+          class="brand-logo"
+          @error="logoError = true"
+        />
+        <template v-else>
+          <div class="dot"></div>
+          <div class="split" ref="splitRef">{{ appTitle }}</div>
+        </template>
       </div>
       <div class="menu">
         <!-- Camera selection dropdown -->
@@ -295,6 +304,7 @@ import { usePlaySpace } from './composables/usePlaySpace';
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 const isDev = import.meta.env.DEV;
+const logoError = ref(false);
 
 const sceneRef = ref<HTMLElement | null>(null);
 const splitRef = ref<HTMLElement | null>(null);
@@ -1037,6 +1047,7 @@ function renderIRISdata(poseInfo: IrisData) {
   padding:12px 18px;
 }
 .brand{ display:flex; align-items:center; gap:10px; color:#e6edf3; font-weight:700; z-index:2; }
+.brand-logo{ height: 28px; width: auto; object-fit: contain; display: block; }
 .menu{
   position: absolute;
   left: 50%;
