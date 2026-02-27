@@ -116,9 +116,6 @@
     </nav>
 
     <div class="sidenav">
-      <div class="brand">
-        Camera Config:
-      </div>
       <div style="width: 100%;" v-for="(d, i) in selectedDevices">
         <div
           class="camera-list"
@@ -199,7 +196,7 @@
         </svg>
       </button>
     </div>
-    <div class="hud hud-center" v-if="!running">
+    <div class="hud hud-center" v-if="running">
       <span class="activity-blinker"></span>
       <span class="hud-item">IRIS Engine</span>
       <div class="hud-sep"></div>
@@ -1010,7 +1007,7 @@ function renderIRISdata(poseInfo: IrisData) {
   letter-spacing: .02em;
   pointer-events: none;
   white-space: nowrap;
-  z-index: 10;
+  z-index: 1;
 }
 .demo-icon{ display:flex; align-items:center; color: rgba(255,180,50,.7); }
 .demo-fade-enter-active, .demo-fade-leave-active{ transition: opacity .4s ease, transform .4s ease; }
