@@ -198,13 +198,14 @@
           <rect x="1" y="5" width="15" height="14" rx="2"/>
         </svg>
       </button>
-      <div class="hud-sep"></div>
-      <div class="hud-item">
-        <span :class="['dot', running ? 'ok' : 'warn']"></span>
-        <span>{{ running ? 'IRIS running' : 'IRIS inactive' }}</span>
-      </div>
     </div>
-    <!-- License Badge — bottom-right pill -->
+    <div class="hud hud-center" v-if="!running">
+      <span class="activity-blinker"></span>
+      <span class="hud-item">IRIS Engine</span>
+      <div class="hud-sep"></div>
+      <span class="hud-item fps-counter">{{ irisDisplayFps }} <span class="fps-unit">FPS</span></span>
+    </div>
+    <!-- License Badge — bottom-centre pill -->
     <div class="hud hud-right">
       <div
         class="license-badge-container"
@@ -380,7 +381,10 @@ const outputOption = ref<string | null>(null);
 
 const lastSentMsg = ref('');
 
-const running = ref(false)
+const running = ref(false);
+const irisDisplayFps = ref(0);
+let irisFrameCount = 0;
+let irisLastFpsTime = 0;
 
 // Skeleton always visible by default
 
@@ -748,6 +752,16 @@ async function initThree(container: HTMLElement){
     if (mixer) mixer.forEach((mix) => mix.update(delta))
 
     if (irisData) {
+      // Count frames for FPS display
+      irisFrameCount++;
+      if (irisLastFpsTime === 0) irisLastFpsTime = time;
+      const elapsed = time - irisLastFpsTime;
+      if (elapsed >= 1000) {
+        irisDisplayFps.value = Math.round(irisFrameCount * 1000 / elapsed);
+        irisFrameCount = 0;
+        irisLastFpsTime = time;
+      }
+
       //used for data from position json file
       if (time - lastTime >= frameDuration && Array.isArray(irisData)) {
         renderIRISdata(irisData[currentFrame])
@@ -882,7 +896,10 @@ async function startIris() {
 }
 
 async function stopIris() {
-  running.value = false
+  running.value = false;
+  irisDisplayFps.value = 0;
+  irisFrameCount = 0;
+  irisLastFpsTime = 0;
 
   //stop iris command to ipc here
   const Id = "example"
@@ -960,6 +977,20 @@ function renderIRISdata(poseInfo: IrisData) {
 <style scoped>
 .hud{ position: fixed; left: 16px; bottom: 16px; height: 48px; display:flex; align-items:center; gap:8px; padding:0 10px; background: rgba(12,18,25,.6); border:1px solid rgba(255,255,255,.08); border-radius: 12px; backdrop-filter: blur(10px); }
 .hud-right{ left: auto; right: 266px; /* 250px sidenav + 16px gap */ }
+.hud-center{ left: calc(50% - 125px); transform: translateX(-50%); }
+.activity-blinker{
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #6be675;
+  box-shadow: 0 0 6px rgba(107,230,117,0.8);
+  animation: blink 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes blink{
+  0%, 100%{ opacity: 1; box-shadow: 0 0 6px rgba(107,230,117,0.8); }
+  50%{ opacity: 0.25; box-shadow: none; }
+}
+.fps-counter{ font-variant-numeric: tabular-nums; font-size: .85rem; color: #e6edf3; font-weight: 700; }
+.fps-unit{ font-size: .7rem; font-weight: 600; color: rgba(255,255,255,.45); margin-left: 2px; }
 .demo-banner{
   position: absolute;
   top: 18px;
