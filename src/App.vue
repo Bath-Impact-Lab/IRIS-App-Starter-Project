@@ -270,7 +270,7 @@ import { useCameras } from './lib/useCameras';
 import { useSceneCameras } from './lib/useSceneCameras';
 import { useLicense } from './lib/useLicense';
 import { FBXLoader } from 'three/examples/jsm/Addons.js';
-import { usePlaySpace } from './composables/usePlaySpace';
+import { usePlaySpace } from './lib/usePlaySpace';
 import sidebar from './components/sidebar.vue';
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
