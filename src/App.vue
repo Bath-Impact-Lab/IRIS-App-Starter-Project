@@ -158,17 +158,40 @@
 
     <section class="scene" ref="sceneRef"></section>
     <div class="hud">
-      <label class="hud-item">
-        <input type="checkbox" v-model="showPlaySpace" />
-        <span>Playspace</span>
-      </label>
+      <button
+        class="hud-icon-btn"
+        :class="{ active: showPlaySpace }"
+        @click="showPlaySpace = !showPlaySpace"
+        title="Toggle Playspace"
+        aria-label="Toggle Playspace"
+      >
+        <!-- floor/grid icon -->
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <line x1="3" y1="9" x2="21" y2="9"/>
+          <line x1="3" y1="15" x2="21" y2="15"/>
+          <line x1="9" y1="3" x2="9" y2="21"/>
+          <line x1="15" y1="3" x2="15" y2="21"/>
+        </svg>
+      </button>
+      <button
+        class="hud-icon-btn"
+        :class="{ active: showCameras }"
+        @click="showCameras = !showCameras"
+        title="Toggle Cameras"
+        aria-label="Toggle Cameras"
+      >
+        <!-- camera icon -->
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 7l-7 5 7 5V7z"/>
+          <rect x="1" y="5" width="15" height="14" rx="2"/>
+        </svg>
+      </button>
       <div class="hud-sep"></div>
       <div class="hud-item">
         <span :class="['dot', running ? 'ok' : 'warn']"></span>
         <span>{{ running ? 'IRIS running' : 'IRIS inactive' }}</span>
       </div>
-      <div class="hud-sep" v-if="isDev"></div>
-      <button class="btn btn-mini" v-if="isDev" @click="debugOpen = !debugOpen">{{ debugOpen ? 'Hide' : 'Show' }} debug</button>
     </div>
 
     <!-- License Badge -->
@@ -316,6 +339,7 @@ const {
 const selectedCameraCount = computed(() => selectedDevices.value?.length ?? 0);
 
 const showPlaySpace = ref(true);
+const showCameras = ref(true);
 
 const { 
   sceneCameras, 
@@ -324,7 +348,7 @@ const {
   setGizmoRotation, 
   computePlaySpaceBounds, 
   dispose: disposeSceneCameras 
-} = useSceneCameras(selectedCameraCount, showPlaySpace);
+} = useSceneCameras(selectedCameraCount, showPlaySpace, showCameras);
 
 const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt-${cameraHoverIndex.value}` : undefined));
 
@@ -340,7 +364,6 @@ const personCount = ref<string | null>('Single Person');
 const outputOptions = ['SteamVR', 'Unity', 'Unreal', 'Gadot'];
 const outputOption = ref<string | null>(null);
 
-const debugOpen = ref(false);
 const lastSentMsg = ref('');
 
 const running = ref(false)
@@ -741,10 +764,6 @@ async function initThree(container: HTMLElement){
 
 onMounted(() => {
   document.addEventListener('click', onClickOutside);
-  // Dev-only keyboard toggle for debug overlay
-  if (isDev) {
-    window.addEventListener('keydown', onKeyDown);
-  }
   // Trigger split animation
   requestAnimationFrame(() => { splitRef.value?.classList.add('ready'); });
 
@@ -762,9 +781,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onClickOutside);
-  if (isDev) {
-    window.removeEventListener('keydown', onKeyDown);
-  }
   disposeCameras();
   disposeSceneCameras();
   disposePlaySpace();
@@ -773,12 +789,6 @@ onBeforeUnmount(() => {
   if (renderer) { renderer.dispose(); renderer = null; }
 });
 
-function onKeyDown(e: KeyboardEvent) {
-  if (!isDev) return;
-  if (e.key === 'F2') {
-    debugOpen.value = !debugOpen.value;
-  }
-}
 
 function selectTracking(t: string) {
   trackingType.value = t;
@@ -936,8 +946,10 @@ function renderIRISdata(poseInfo: IrisData) {
 <style scoped>
 .hud{ position: fixed; left: 16px; bottom: 16px; display:flex; gap:8px; padding:8px 10px; background: rgba(12,18,25,.6); border:1px solid rgba(255,255,255,.08); border-radius: 12px; backdrop-filter: blur(10px); }
 .hud-item{ display:flex; align-items:center; gap:8px; color:#e6edf3; font-weight:600; }
-.hud-item input{ accent-color:#6be675; width:16px; height:16px; }
 .hud-sep{ width:1px; background:rgba(255,255,255,.1); margin:0 6px; }
+.hud-icon-btn{ display:flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:8px; border:1px solid rgba(255,255,255,.1); background:transparent; color:rgba(255,255,255,.35); cursor:pointer; transition:color .2s, background .2s, border-color .2s; padding:0; }
+.hud-icon-btn:hover{ background:rgba(255,255,255,.08); color:rgba(255,255,255,.7); }
+.hud-icon-btn.active{ color:#6be675; border-color:rgba(107,230,117,.4); background:rgba(107,230,117,.08); }
 .dot{ width:8px; height:8px; border-radius:50%; display:inline-block; box-shadow:0 0 10px rgba(0,0,0,.5) }
 .dot.ok{ background:#6be675 }
 .dot.warn{ background:#ff9a5c }

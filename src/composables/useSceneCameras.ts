@@ -216,7 +216,7 @@ function updateFrustumLines(entry: SceneCameraEntry) {
   posAttr.needsUpdate = true;
 }
 
-export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<boolean>) {
+export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<boolean>, showGizmos?: Ref<boolean>) {
   const sceneCameras = ref<SceneCameraEntry[]>([]);
   let attachedScene: THREE.Scene | null = null;
 
@@ -321,15 +321,16 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
   }
 
   /** Show all cameras in mock mode; otherwise show only the first N matching selected physical cameras. */
-  function syncVisibility(forceShowFrustums?: boolean) {
+  function syncVisibility(forceShowFrustums?: boolean, forceShowGizmos?: boolean) {
     const count = selectedCount?.value ?? 0;
     const showAll = isMockExtrinsics && count === 0;
     const frustumVis = forceShowFrustums !== undefined ? forceShowFrustums : (showFrustums?.value ?? true);
+    const gizmoVis = forceShowGizmos !== undefined ? forceShowGizmos : (showGizmos?.value ?? true);
 
     for (let i = 0; i < sceneCameras.value.length; i++) {
       const show = showAll || i < count;
       const entry = sceneCameras.value[i];
-      entry.gizmoMesh.visible = show;
+      entry.gizmoMesh.visible = show && gizmoVis;
       entry.frustumLines.visible = show && frustumVis;
       entry.visible = show;
     }
@@ -504,9 +505,11 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
   }
 
   if (showFrustums) {
-    watch(showFrustums, (val) => {
-      syncVisibility(val);
-    });
+    watch(showFrustums, () => syncVisibility());
+  }
+
+  if (showGizmos) {
+    watch(showGizmos, () => syncVisibility());
   }
 
   function dispose() {
