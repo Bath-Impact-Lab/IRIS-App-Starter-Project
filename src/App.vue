@@ -116,36 +116,37 @@
     </nav>
 
     <div class="sidenav">
-      <div class="brand">
-        Camera Config:
-      </div>
-      <div style="width: 100%;" v-for="(d, i) in selectedDevices">
-        <div
-          class="camera-list"
-          :style="{
-            width: '100%',
-            boxShadow: sceneCameras[i] ? `inset 4px 0 0 ${sceneCameras[i].color}` : 'none',
-            paddingLeft: sceneCameras[i] ? '8px' : '0',
-          }"
-        >
-          <div class="camera-text">
-            {{ d.label }}
-            <button class="button btn" style="padding: 3px 5px;" v-on:click="rotateCamera(d, i)" :disabled="running">
-              <img style="width: 30px;" src="/assets/anticlockwise-2-line.svg" alt="">
-            </button>
-          </div>
-          <div :id="`camera-box${i}`">
-            <video 
-              style="width: 100%;"
-              :id="`cameraFeed${i}`" 
-              autoplay
-              playsinline
-            >
-            </video>
+      <div class="cameras">
+        <div class="brand">
+          Camera Config:
+        </div>
+        <div style="width: 100%;" v-for="(d, i) in selectedDevices">
+          <div
+            class="camera-list"
+            :style="{
+              width: '100%',
+              boxShadow: sceneCameras[i] ? `inset 4px 0 0 ${sceneCameras[i].color}` : 'none',
+              paddingLeft: sceneCameras[i] ? '8px' : '0',
+            }"
+          >
+            <div class="camera-text">
+              {{ d.label }}
+              <button class="button btn" style="padding: 3px 5px;" v-on:click="rotateCamera(d, i)" :disabled="running">
+                <img style="width: 30px;" src="/assets/anticlockwise-2-line.svg" alt="">
+              </button>
+            </div>
+            <div :id="`camera-box${i}`">
+              <video 
+                style="width: 100%;"
+                :id="`cameraFeed${i}`" 
+                autoplay
+                playsinline
+              >
+              </video>
+            </div>
           </div>
         </div>
       </div>
-
       <div class="iris-controls" v-if="selectedDevices">
         <button v-on:click="startIris" class="button btn" :disabled="running">
           Start IRIS
@@ -455,7 +456,6 @@ function selectDevice(d: MediaDeviceInfo, i: number){
   selectCamera(d);
 
   const isSelected = selectedDevices.value?.some(sd => sd.deviceId === d.deviceId);
-
   if (isSelected) {
     startCameraStream(d, i);
     // Initialize rotation angle for this device if not already set
@@ -465,21 +465,7 @@ function selectDevice(d: MediaDeviceInfo, i: number){
   } else {
     stopCameraStream(i);
   }
-  
-  // Send camera info to IRIS mock bridge (including rotation)
-  const info = {
-    type: 'camera-info',
-    payload: {
-      deviceId: d.deviceId,
-      label: d.label,
-      kind: d.kind,
-      ts: Date.now(),
-      rotation: cameraRotation.value[d.deviceId] || 0
-    }
-  };
-  console.log('[IRIS send] camera-info', info);
-  lastSentMsg.value = JSON.stringify(info, null, 2);
-  (window as any).electronAPI?.irisSend?.(info);
+
 
   refresh();
   if (isSelected) {
@@ -509,14 +495,19 @@ async function startCameraStream(camera: MediaDeviceInfo, index: number) {
 }
 
 function stopCameraStream(index: number) {
-  const video = document.getElementById(`cameraFeed${index}`) as HTMLVideoElement;
-  const stream = video.srcObject as MediaStream;
-  const tracks = stream.getTracks();
-
-  tracks.forEach(track => {
+  try {
+    const video = document.getElementById(`cameraFeed${index}`) as HTMLVideoElement;
+    const stream = video.srcObject as MediaStream;
+    const tracks = stream.getTracks();
+    
+    tracks.forEach(track => {
     track.stop();
-  });
-  video.srcObject = null;
+    });
+    video.srcObject = null;
+  }
+  catch {
+    console.log("Cameras are gone")
+  }
 }
 
 function refresh() {
@@ -529,21 +520,6 @@ function rotateCamera(d: MediaDeviceInfo, index: number) {
   const currentAngle = cameraRotation.value[d.deviceId] || 0;
   const newAngle = (currentAngle + 90) % 360;
   cameraRotation.value[d.deviceId] = newAngle;
-
-  // Notify IRIS backend about the rotation change
-  const info = {
-    type: 'camera-info',
-    payload: {
-      deviceId: d.deviceId,
-      label: d.label,
-      kind: d.kind,
-      ts: Date.now(),
-      rotation: newAngle
-    }
-  };
-  console.log('[IRIS send] camera-info (rotate)', info);
-  lastSentMsg.value = JSON.stringify(info, null, 2);
-  (window as any).electronAPI?.irisSend?.(info);
 
   // Update the 3D scene camera gizmo rotation
   setGizmoRotation(index, newAngle);
@@ -1292,6 +1268,13 @@ function renderIRISdata(poseInfo: IrisData) {
 
 .iris-controls button {
   margin: 10px 0;
+}
+
+.cameras {
+  height: 75%;
+  width: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 </style>

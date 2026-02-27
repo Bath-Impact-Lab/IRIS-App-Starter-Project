@@ -37,12 +37,6 @@ export function useCameras(options: UseCamerasOptions = {}) {
       .map(d => ({ deviceId: d.deviceId, label: d.label, kind: d.kind }));
   }
 
-  function send(msg: any) {
-    try {
-      (window as any).electronAPI?.irisSend?.(msg);
-      options.onSend?.(msg);
-    } catch {}
-  }
 
   async function enumerateCameras() {
     await ensurePermission();
@@ -51,52 +45,26 @@ export function useCameras(options: UseCamerasOptions = {}) {
       devices.value = list.filter(d => d.kind === 'videoinput');
       // Send camera-list every time we enumerate
       const payload = toListPayload(devices.value);
-      const msg = { type: 'camera-list', payload, ts: Date.now() };
-      send(msg);
-      // Auto reselect if desired
-      if (autoReselect && selectedDeviceId.value) {
-        const stillThere = devices.value.some(d => (selectedDeviceId.value ? selectedDeviceId.value : []).includes(d.deviceId));
-        if (!stillThere) {
-          // previously selected removed
-          const removedMsg = { type: 'camera-removed', payload: { deviceId: selectedDeviceId.value, ts: Date.now() } };
-          send(removedMsg);
-          // Try to reselect same id from persisted storage if different? Not available; fall back to no selection.
-          selectedDeviceId.value = null;
-          selectedDevices.value = null;
-        }
-      }
-      // If no current selection and we have a persisted one, reapply
-      if (autoReselect && !selectedDeviceId.value) {
-        const persistedId = localStorage.getItem(persistKey);
-        if (persistedId) {
-          const found = devices.value.find(d => d.deviceId === persistedId);
-          if (found) {
-            // Reselect silently (no side-effects beyond local state)
-            selectedDeviceId.value = [found.deviceId];
-            selectedDevices.value = [found];
-          }
-        }
-      }
     } catch (err) {
       // Fallback mock device when enumeration fails
       devices.value = [{ deviceId: 'mock-0', groupId: 'mock', kind: 'videoinput', label: 'Mock IRIS Camera', toJSON(){return this as any;} } as any];
       const payload = toListPayload(devices.value);
-      const msg = { type: 'camera-list', payload, ts: Date.now() };
-      send(msg);
     }
   }
 
   function selectDevice(d: MediaDeviceInfo) {
     if (selectedDeviceId.value && selectedDeviceId.value.includes(d.deviceId) && selectedDevices.value) {
       let idx = selectedDevices.value.indexOf(d);
-      selectedDeviceId.value.splice(idx, 1);
-      selectedDevices.value.splice(idx, 1);
+      let idx2 = selectedDeviceId.value.indexOf(d.deviceId)
+      const remove = idx < 0 ? idx2 : idx
+      selectedDeviceId.value.splice(remove, 1);
+      selectedDevices.value.splice(remove, 1);
       console.log(selectedDevices.value)
       if (selectedDeviceId.value.length <= 0 || selectedDevices.value.length <= 0) {
         selectedDeviceId.value = null;
         selectedDevices.value = null;
       }
-
+      
     }
     else if (selectedDevices.value && selectedDeviceId.value) {
       selectedDeviceId.value = selectedDeviceId.value.concat([d.deviceId]);
@@ -106,7 +74,7 @@ export function useCameras(options: UseCamerasOptions = {}) {
       selectedDeviceId.value = [d.deviceId];
       selectedDevices.value = [d];
     }
-
+    
     try { localStorage.setItem(persistKey, d.deviceId); } catch {}
   }
 
