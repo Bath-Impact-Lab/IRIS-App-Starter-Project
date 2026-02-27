@@ -115,48 +115,8 @@
       </div>
     </nav>
 
-    <div class="sidenav">
-      <div class="cameras">
-        <div class="brand">
-          Camera Config:
-        </div>
-        <div style="width: 100%;" v-for="(d, i) in selectedDevices">
-          <div
-            class="camera-list"
-            :style="{
-              width: '100%',
-              boxShadow: sceneCameras[i] ? `inset 4px 0 0 ${sceneCameras[i].color}` : 'none',
-              paddingLeft: sceneCameras[i] ? '8px' : '0',
-            }"
-          >
-            <div class="camera-text">
-              {{ d.label }}
-              <button class="button btn" style="padding: 3px 5px;" v-on:click="rotateCamera(d, i)" :disabled="running">
-                <img style="width: 30px;" src="/assets/anticlockwise-2-line.svg" alt="">
-              </button>
-            </div>
-            <div :id="`camera-box${i}`">
-              <video 
-                style="width: 100%;"
-                :id="`cameraFeed${i}`" 
-                autoplay
-                playsinline
-              >
-              </video>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="iris-controls" v-if="selectedDevices">
-        <button v-on:click="startIris" class="button btn" :disabled="running">
-          Start IRIS
-        </button>
-        <button v-on:click="stopIris" class="button btn" :disabled="!running">
-          Stop IRIS
-        </button>
-      </div>
-    </div>
-        <!-- <sidebar 
+
+    <sidebar 
       :spheres-mesh="spheresMesh" 
       :skeleton-line="skeletonLine" 
       :person-count="personCount" 
@@ -167,10 +127,21 @@
       @sphere-update="sphereMeshUpdate"
       @skeleton-update="skeletonMeshUpdate"
       @iris-data-update="irisDataUpdate"
-      @is-running="runningUpdate" -->
-      />
+      @is-running="runningUpdate"
+    />
 
-    <section class="scene" ref="sceneRef"></section>
+    <ThreeWindow
+      :selected-camera-count="selectedCameraCount"
+      :iris-data="irisData"
+      :spheres-mesh="spheresMesh"
+      :skeleton-line="skeletonLine"
+      :rebuild-play-space="rebuildPlaySpace"
+      :create-play-space="createPlaySpace"
+      :add-scene-cameras="addSceneCameras"
+      :test="test"
+      @give-scene="asignScene"
+    />
+
     <div class="hud">
       <label class="hud-item">
         <input type="checkbox" v-model="showPlaySpace" />
@@ -269,9 +240,9 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { useCameras } from './lib/useCameras';
 import { useSceneCameras } from './lib/useSceneCameras';
 import { useLicense } from './lib/useLicense';
-import { FBXLoader } from 'three/examples/jsm/Addons.js';
 import { usePlaySpace } from './lib/usePlaySpace';
 import sidebar from './components/sidebar.vue';
+import ThreeWindow from './components/threeWindow.vue';
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 const isDev = import.meta.env.DEV;
@@ -305,6 +276,8 @@ const isPaidLicense = computed(() => {
   const plan = planType.value?.toLowerCase();
   return plan === 'creator' || plan === 'studio';
 });
+
+const test = ref<boolean>(false)
 
 // Sync local input with stored key on mount
 watch(storedLicenseKey, (newKey) => {
@@ -352,37 +325,10 @@ const running = ref(false)
 
 // Skeleton always visible by default
 
-let renderer: THREE.WebGLRenderer | null = null;
-let scene: THREE.Scene;
-let camera: THREE.PerspectiveCamera;
-let frameId: number | null = null;
-let resizeObserver: ResizeObserver | null = null;
-let controls: OrbitControls | null = null;
-let jointSpheres: THREE.Mesh[] = [];
-let boneLines: THREE.LineSegments | null = null;
-let modelsRoot: THREE.Object3D[] | null = null;
-
-let spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null = null;
-let skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null  = null;
-const position = new THREE.Object3D()
-
-const halpe26_pairs = [
-  [0,1], [0,2], [1,3], [2,4],
-  [17,18], [18,5], [18,6],
-  [5,7], [7,9],
-  [6,8], [8,10],
-  [5,6],
-  [11,12],
-  [11,13], [13,15],
-  [12,14], [14,16],
-  [18,19], [19,11], [19,12],
-  [15,20], [15,22], [15,24],
-  [16,21], [16,23], [16,25]
-]
-
-const linePositions = new Float32Array(halpe26_pairs.length * 3 * 2)
-
-let irisData: IrisData[] | IrisData | null;
+let scene =  ref<THREE.Scene | null>(null);
+let spheresMesh = ref<THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null>(null);
+let skeletonLine = ref<THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null>(null);
+let irisData = ref<IrisData[] | IrisData | null>(null);
 
 const manager = new THREE.LoadingManager();
 let mixer: THREE.AnimationMixer[] | null;
@@ -466,8 +412,6 @@ function onClickOutside(e: MouseEvent) {
   if (!dd) { openCamera.value = false; openPersonCount.value = false; openTrack.value = false; openOutput.value = false; }
 }
 
-
-
 function selectDevice(d: MediaDeviceInfo, i: number){
   selectCamera(d);
 
@@ -532,194 +476,6 @@ function refresh() {
   })
 }
 
-function rotateCamera(d: MediaDeviceInfo, index: number) {
-  const currentAngle = cameraRotation.value[d.deviceId] || 0;
-  const newAngle = (currentAngle + 90) % 360;
-  cameraRotation.value[d.deviceId] = newAngle;
-
-  // Update the 3D scene camera gizmo rotation
-  setGizmoRotation(index, newAngle);
-
-  rotation(d, newAngle, index);
-  cameraRotation.value[d.deviceId] = newAngle;
-  rotation(d, newAngle, index);
-}
-
-async function rotation(d: MediaDeviceInfo, rotateAngle: number, i: number) {
-  let isOdd: boolean
-  let offsetX: number
-  let offsetY: number = 0
-  let origin: string
-  
-  const camera = await navigator.mediaDevices.getUserMedia({video: {deviceId: {exact: d.deviceId}}})
-  let aspectRatio = camera.getVideoTracks()[0].getSettings().aspectRatio
-  if (!aspectRatio) {
-    aspectRatio = 1.777778
-  }
-
-  if (rotateAngle % 180 === 0) {
-    isOdd = false
-  }
-  else {
-    aspectRatio = 1/aspectRatio
-    isOdd = true
-  }
-
-  const parent = document.getElementById(`camera-box${i}`) as HTMLDivElement
-  parent.style.width = "100%"
-
-  parent.style.aspectRatio = `${aspectRatio}`
-  const video = document.getElementById(`cameraFeed${i}`) as HTMLVideoElement
-  await new Promise(resolve => setTimeout(resolve, 50))
-  if (isOdd) {
-    const temp = parent.offsetWidth / aspectRatio
-    parent.style.height = temp + "px"
-    video.style.width = temp + "px"
-    video.style.maxWidth = temp + "px"
-    video.style.height = parent.offsetWidth + "px"
-    video.style.maxHeight = parent.offsetWidth + "px"
-
-    offsetX = video.offsetHeight
-    origin = "top left"
-    if (rotateAngle == 270) {
-      offsetY = video.offsetWidth;
-      offsetX = 0;
-    }
-  }
-  else {
-    video.style.width = parent.offsetWidth + "px"
-    video.style.height = "auto"
-    video.style.maxWidth = "100%"
-    parent.style.height = "auto"
-
-    offsetX = 0
-    origin = "center"
-  }
-  video.style.transform = `translate(${offsetX}px, ${offsetY}px) rotate(${rotateAngle}deg)`
-  video.style.transformOrigin = origin
-}
-
-async function loadModel(scene: THREE.Scene, type: string) {
-  const loader = new FBXLoader( manager );
-  const file = `assets/${type}`
-
-  try {
-    loader.load(file, function (group) {
-      if (modelsRoot) {
-        modelsRoot.push(group)
-      }
-      else {
-        modelsRoot = [group]
-      }
-      const modelRoot = modelsRoot[modelsRoot.length-1]
-      modelRoot.castShadow = true
-      modelRoot.receiveShadow = true
-      modelRoot.scale.set(0.01, 0.01, 0.01)
-      if (type === "Idle.fbx") {
-        modelRoot.position.set(-1.5, 0, -1.5)
-        modelRoot.setRotationFromAxisAngle(new THREE.Vector3(0, 1, 0), 45*(Math.PI/180))
-      }
-      if (modelRoot.animations && modelRoot.animations.length) {
-        if (mixer){
-          mixer.push(new THREE.AnimationMixer(modelRoot))
-        }
-        else{
-          mixer = [new THREE.AnimationMixer(modelRoot)]
-        }
-        const mix = mixer[mixer.length-1] 
-        const action = mix.clipAction(modelRoot.animations[0])
-        action.play()
-      }
-      else {
-        mixer = null
-      }
-      scene.add(modelRoot)
-
-    })
-  }
-  catch (err) {
-    console.log("error loading file")
-    console.log(err)
-  }
-}
-
-async function initThree(container: HTMLElement){
-  const width = container.clientWidth;
-  const height = container.clientHeight;
-  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(width, height);
-  renderer.setClearColor('#0b0f14');
-  container.appendChild(renderer.domElement);
-
-  scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(50, width/height, 0.01, 1000);
-  camera.position.set(5, 5, 5);
-
-  const hemi = new THREE.HemisphereLight(0xffffff, 0x223344, 0.9);
-  scene.add(hemi);
-  const dir = new THREE.DirectionalLight(0xffffff, 0.9); dir.position.set(2, 3, 2); dir.castShadow = true; scene.add(dir);
-
-  const grid = new THREE.GridHelper(10, 20, 0x2a3340, 0x1b2430); scene.add(grid);
-
-  watch(selectedCameraCount, () => { nextTick(() => rebuildPlaySpace()); });
-
-  controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.dampingFactor = 0.05;
-  controls.screenSpacePanning = false;
-  controls.minDistance = 0.1;
-  controls.maxDistance = 100;
-
-
-  // Add scene cameras from extrinsics
-  await addSceneCameras(scene);
-
-  // Build play space from loaded camera frustums
-  createPlaySpace(scene);
-
-  const clock = new THREE.Clock();
-
-  //if using a positions json
-  const fps = 30
-  const frameDuration = 1000/fps
-
-  let lastTime = 0
-  let currentFrame = 0
-  const animate = (time: number) => {
-    requestAnimationFrame(animate)
-    const delta = clock.getDelta()
-    if (mixer) mixer.forEach((mix) => mix.update(delta))
-
-    if (irisData) {
-      //used for data from position json file
-      if (time - lastTime >= frameDuration && Array.isArray(irisData)) {
-        renderIRISdata(irisData[currentFrame])
-
-        currentFrame = (currentFrame + 1) % irisData.length
-        lastTime = time
-      }
-      //used for live data
-      else if (!Array.isArray(irisData)) {
-        renderIRISdata(irisData)
-      }
-    }
-    controls?.update()
-    renderer?.render(scene, camera)
-  };
-  animate(lastTime)
-
-  resizeObserver = new ResizeObserver(entries => {
-    for (const entry of entries){
-      const w = entry.contentRect.width; const h = entry.contentRect.height;
-      renderer!.setSize(w, h);
-      camera.aspect = w/h; camera.updateProjectionMatrix();
-    }
-  });
-  resizeObserver.observe(container);
-}
-
-
 onMounted(() => {
   document.addEventListener('click', onClickOutside);
   // Dev-only keyboard toggle for debug overlay
@@ -729,7 +485,6 @@ onMounted(() => {
   // Trigger split animation
   requestAnimationFrame(() => { splitRef.value?.classList.add('ready'); });
 
-  if (sceneRef.value) initThree(sceneRef.value);
   initCameras();
   watch(openCamera, (isOpen) => {
     if (isOpen) { setInitialCameraActiveIndex('current-or-first'); focusCameraListSoon(); }
@@ -737,7 +492,7 @@ onMounted(() => {
   });
 
   window.ipc?.onIrisData((data) => {
-    irisData = data
+    irisData.value = data
   })
 });
 
@@ -749,9 +504,6 @@ onBeforeUnmount(() => {
   disposeCameras();
   disposeSceneCameras();
   disposePlaySpace();
-  if (frameId) cancelAnimationFrame(frameId);
-  if (resizeObserver && sceneRef.value) resizeObserver.unobserve(sceneRef.value);
-  if (renderer) { renderer.dispose(); renderer = null; }
 });
 
 function onKeyDown(e: KeyboardEvent) {
@@ -804,128 +556,27 @@ async function buyLicense() {
   }
 }
 
-async function startIris() {
-  spheresMesh = null
-  skeletonLine = null
-  //Sends the camera information to IRIS
-  if (selectedDevices.value) {
-    const cameras = Array.from(selectedDevices.value, (d, i) => ({
-      uri: String(i),
-      width: 1920,
-      height: 1080,
-      fps: 100,
-      rotation: cameraRotation.value[d.deviceId] ? cameraRotation.value[d.deviceId] : 0
-    }))
-    const options = {
-      kp_format: "halpe26",
-      subjects: personCount.value,
-      cameras: cameras,
-      camera_width: 1920,
-      camera_height: 1080,
-      video_fps: 100,
-      output_dir: "",
-      stream: true,
-    }
-
-    selectedDevices.value?.forEach((_, i) => {
-      stopCameraStream(i)
-    });
-    await new Promise( resolve => setTimeout(resolve, 1000))
-
-    running.value = true
-    // iris start command goes here:
-    await window.ipc?.startIRIS(options)
-  }
-}
-
-async function stopIris() {
-  running.value = false
-
-  //stop iris command to ipc here
-  const Id = "example"
-  await window.ipc?.stopIRIS(Id)
-
-  selectedDevices.value?.forEach((d, i) => {
-    startCameraStream(d, i)
-  })
-
-  if (spheresMesh) scene.remove(spheresMesh)
-  spheresMesh = null
-  if (skeletonLine) scene.remove(skeletonLine)
-  skeletonLine = null
-  irisData = null
-}
-
-function renderIRISdata(poseInfo: IrisData) {
-  try {
-    poseInfo.entities.forEach((person, i) => {
-      const neck = person.analysis.centers.neck
-      const pelvis = person.analysis.centers.pelvis
-      const spine_mid = person.analysis.centers.spine_mid
-      const keypoints = [[neck.x, neck.y, neck.z], [pelvis.x, pelvis.y, pelvis.z], [spine_mid.x, spine_mid.y, spine_mid.z]]
-      if (!(spheresMesh && skeletonLine)) {
-        const sphereGeometry = new THREE.SphereGeometry(0.025, 8, 8)
-        const material = new THREE.MeshBasicMaterial({color: 0xffffff})
-        spheresMesh = new THREE.InstancedMesh(sphereGeometry, material, (keypoints.length + person.skeleton.keypoints_3d.length))
-        scene.add(spheresMesh)
-
-        const lMaterial = new THREE.LineBasicMaterial({color:0xff0000})
-        const lGeometry = new THREE.BufferGeometry()
-        lGeometry.setAttribute('position', new THREE.BufferAttribute(linePositions, 3))
-
-        skeletonLine = new THREE.LineSegments(lGeometry, lMaterial)
-        scene.add(skeletonLine)
-      }
-      const positionAttr = skeletonLine.geometry.attributes.position
-      let idx = 0
-
-      keypoints.forEach((points, i) => {
-        position.position.set(points[0], points[2], points[1])
-        position.updateMatrix()
-        spheresMesh?.setMatrixAt(i, position.matrix)
-      })
-      person.skeleton.keypoints_3d.forEach((points, i) => {
-        position.position.set(points.x, points.z, points.y)
-        position.updateMatrix()
-        spheresMesh?.setMatrixAt(i+3, position.matrix)
-      })
-
-      halpe26_pairs.forEach(([a, b]) => {
-        const pos1 = person.skeleton.keypoints_3d[a]
-        const pos2 = person.skeleton.keypoints_3d[b]
-
-        positionAttr.array[idx++] = pos1.x
-        positionAttr.array[idx++] = pos1.z
-        positionAttr.array[idx++] = pos1.y
-
-        positionAttr.array[idx++] = pos2.x
-        positionAttr.array[idx++] = pos2.z
-        positionAttr.array[idx++] = pos2.y
-      })
-
-      positionAttr.needsUpdate = true
-      spheresMesh.instanceMatrix.needsUpdate = true
-    })
-  }
-  catch{
-    console.log("unable to pass the IRIS data")
-  }
-}
-
 function sphereMeshUpdate(value: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null) {
-  spheresMesh = value
+  spheresMesh.value = value
 }
 
 function skeletonMeshUpdate(value: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null) {
-  skeletonLine = value
+  skeletonLine.value = value
 } 
 
 function irisDataUpdate(value: IrisData[] | IrisData | null) {
-  irisData = value
+  irisData.value = value
+  // if (!value) {
+  //   test.value = false
+  // }
 }
 
 function runningUpdate(value: boolean) {
   running.value = value
+}
+
+function asignScene(value: THREE.Scene) {
+  scene.value = value
 }
 
 </script>

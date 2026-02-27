@@ -9,8 +9,8 @@
 					class="camera-list"
 					:style="{
 						width: '100%',
-						boxShadow: sceneCameras[i] ? `inset 4px 0 0 ${sceneCameras[i].color}` : 'none',
-						paddingLeft: sceneCameras[i] ? '8px' : '0',
+						boxShadow: props.sceneCameras[i] ? `inset 4px 0 0 ${props.sceneCameras[i].color}` : 'none',
+						paddingLeft: props.sceneCameras[i] ? '8px' : '0',
 					}"
 				>
 					<div class="camera-text">
@@ -52,7 +52,7 @@ interface Props {
 	spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null,
 	skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null,
 	personCount: string | null,
-	scene: THREE.Scene,
+	scene: THREE.Scene | null,
 	irisData: IrisData[] | IrisData | null
 	selectedCameras: MediaDeviceInfo[] | null
 	sceneCameras: SceneCameraEntry[]
@@ -68,7 +68,7 @@ const emit = defineEmits<{
 
 
 const selectedCameraCount = computed(() => props.selectedCameras?.length ?? 0);
-const { sceneCameras, setGizmoRotation } = useSceneCameras(selectedCameraCount);
+const { setGizmoRotation } = useSceneCameras(selectedCameraCount);
 
 const cameraRotation = ref<Record<string, number>>({});
 const running = ref(false)
@@ -174,6 +174,7 @@ async function startIris() {
     // iris start command goes here:
     await window.ipc?.startIRIS(options)
   }
+	console.log(props.scene)
 }
 
 async function stopIris() {
@@ -188,9 +189,12 @@ async function stopIris() {
     startCameraStream(d, i)
   })
 
-  if (props.spheresMesh) props.scene.remove(props.spheresMesh)
+  if (props.spheresMesh && props.scene) {
+    const here = props.scene.remove(props.spheresMesh)
+    console.log("removed", here)
+  }
 	emit('sphereUpdate', null)
-  if (props.skeletonLine) props.scene.remove(props.skeletonLine)
+  if (props.skeletonLine && props.scene) props.scene.remove(props.skeletonLine)
 	emit('skeletonUpdate', null)
 	emit('irisDataUpdate', null)
 }
@@ -295,6 +299,7 @@ async function startCameraStream(camera: MediaDeviceInfo, index: number) {
   height: 75%;
   width: 100%;
   overflow-y: auto;
+	scrollbar-width: none;
   overflow-x: hidden;
 }
 </style>

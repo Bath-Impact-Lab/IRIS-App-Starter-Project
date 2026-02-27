@@ -8,31 +8,31 @@ const os = require('os');
 let mainWindow;
 let mockTimer = null;
 
-function startIrisMockProcess() {
-  const runtimeExists = fs.existsSync(
-    path.join(__dirname, '..', 'iris_runtime_bundle', 'exe file')
-  );
-  if (runtimeExists) return;
+// function startIrisMockProcess() {
+//   const runtimeExists = fs.existsSync(
+//     path.join(__dirname, '..', 'iris_runtime_bundle', 'exe file')
+//   );
+//   if (runtimeExists) return;
 
-  const positionsPath = path.join(__dirname, '..', 'public', 'assets', 'position 2.json');
-  if (!fs.existsSync(positionsPath)) {
-    console.warn('[mock] position 2.json not found, skipping mock process');
-    return;
-  }
+//   const positionsPath = path.join(__dirname, '..', 'public', 'assets', 'position 2.json');
+//   if (!fs.existsSync(positionsPath)) {
+//     console.warn('[mock] position 2.json not found, skipping mock process');
+//     return;
+//   }
 
-  const positions = JSON.parse(fs.readFileSync(positionsPath, 'utf8'));
-  if (!Array.isArray(positions) || positions.length === 0) return;
+//   const positions = JSON.parse(fs.readFileSync(positionsPath, 'utf8'));
+//   if (!Array.isArray(positions) || positions.length === 0) return;
 
-  console.log(`[mock] starting mock pose stream (${positions.length} frames @ 30fps)`);
+//   console.log(`[mock] starting mock pose stream (${positions.length} frames @ 30fps)`);
 
-  let frame = 0;
-  mockTimer = setInterval(() => {
-    const win = mainWindow || BrowserWindow.getFocusedWindow();
-    if (!win || win.isDestroyed()) return;
-    win.webContents.send('iris-data', positions[frame]);
-    frame = (frame + 1) % positions.length;
-  }, 1000 / 30);
-}
+//   let frame = 0;
+//   mockTimer = setInterval(() => {
+//     const win = mainWindow || BrowserWindow.getFocusedWindow();
+//     if (!win || win.isDestroyed()) return;
+//     win.webContents.send('iris-data', positions[frame]);
+//     frame = (frame + 1) % positions.length;
+//   }, 1000 / 30);
+// }
 
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -98,7 +98,7 @@ app.whenReady().then(() => {
     });
 
     createWindow();
-    startIrisMockProcess();
+    // startIrisMockProcess();
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
