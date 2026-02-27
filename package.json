@@ -1,6 +1,6 @@
 {
   "name": "iris-electron-starter",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Electron starter app for IRIS with Three.js and camera selection UI",
   "main": "electron/main.js",
   "author": "",

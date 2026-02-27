@@ -38,7 +38,7 @@
             <div v-if="devices.length === 0" class="device">
               <div>
                 <div>No cameras found</div>
-                <small>We use a safe mock for now.</small>
+                <small>We are showing demo mode for now.</small>
               </div>
             </div>
             <div
@@ -159,8 +159,8 @@
     <section class="scene" ref="sceneRef"></section>
     <div class="hud">
       <label class="hud-item">
-        <input type="checkbox" v-model="showModel" />
-        <span>Show model</span>
+        <input type="checkbox" v-model="showPlaySpace" />
+        <span>Playspace</span>
       </label>
       <div class="hud-sep"></div>
       <div class="hud-item">
@@ -256,6 +256,7 @@ import { useCameras } from './composables/useCameras';
 import { useSceneCameras } from './composables/useSceneCameras';
 import { useLicense } from './composables/useLicense';
 import { FBXLoader } from 'three/examples/jsm/Addons.js';
+import { usePlaySpace } from './composables/usePlaySpace';
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 const isDev = import.meta.env.DEV;
@@ -313,7 +314,7 @@ const {
 
 // Construct scene camera
 const selectedCameraCount = computed(() => selectedDevices.value?.length ?? 0);
-const { sceneCameras, addToScene: addSceneCameras, setGizmoRotation, dispose: disposeSceneCameras } = useSceneCameras(selectedCameraCount);
+const { sceneCameras, addToScene: addSceneCameras, setGizmoRotation, computePlaySpaceBounds, dispose: disposeSceneCameras } = useSceneCameras(selectedCameraCount);
 
 const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt-${cameraHoverIndex.value}` : undefined));
 
@@ -370,7 +371,8 @@ let irisData: IrisData[] | IrisData | null;
 
 const manager = new THREE.LoadingManager();
 let mixer: THREE.AnimationMixer[] | null;
-const showModel = ref(false); // off by default
+const showPlaySpace = ref(true);
+const { create: createPlaySpace, rebuild: rebuildPlaySpace, dispose: disposePlaySpace } = usePlaySpace(showPlaySpace, computePlaySpaceBounds);
 
 function onCameraButtonKeydown(e: KeyboardEvent) {
   if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -651,7 +653,7 @@ async function loadModel(scene: THREE.Scene, type: string) {
   }
 }
 
-function initThree(container: HTMLElement){
+async function initThree(container: HTMLElement){
   const width = container.clientWidth;
   const height = container.clientHeight;
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -670,6 +672,8 @@ function initThree(container: HTMLElement){
 
   const grid = new THREE.GridHelper(10, 20, 0x2a3340, 0x1b2430); scene.add(grid);
 
+  watch(selectedCameraCount, () => { nextTick(() => rebuildPlaySpace()); });
+
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
@@ -677,14 +681,12 @@ function initThree(container: HTMLElement){
   controls.minDistance = 0.1;
   controls.maxDistance = 100;
 
-  loadModel(scene, "Flair.fbx")
-  loadModel(scene, "Idle.fbx")
-  if (modelsRoot) {
-    modelsRoot.forEach((model) => model.visible = true) 
-  }
 
-  // Add scene cameras from JSON config
-  addSceneCameras(scene);
+  // Add scene cameras from extrinsics
+  await addSceneCameras(scene);
+
+  // Build play space from loaded camera frustums
+  createPlaySpace(scene);
 
   const clock = new THREE.Clock();
 
@@ -756,6 +758,7 @@ onBeforeUnmount(() => {
   }
   disposeCameras();
   disposeSceneCameras();
+  disposePlaySpace();
   if (frameId) cancelAnimationFrame(frameId);
   if (resizeObserver && sceneRef.value) resizeObserver.unobserve(sceneRef.value);
   if (renderer) { renderer.dispose(); renderer = null; }
