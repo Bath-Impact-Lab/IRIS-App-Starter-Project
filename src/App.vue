@@ -156,6 +156,19 @@
         </button>
       </div>
     </div>
+        <!-- <sidebar 
+      :spheres-mesh="spheresMesh" 
+      :skeleton-line="skeletonLine" 
+      :person-count="personCount" 
+      :scene="scene" 
+      :iris-data="irisData"
+      :selected-cameras="selectedDevices"
+      :scene-cameras="sceneCameras"
+      @sphere-update="sphereMeshUpdate"
+      @skeleton-update="skeletonMeshUpdate"
+      @iris-data-update="irisDataUpdate"
+      @is-running="runningUpdate" -->
+      />
 
     <section class="scene" ref="sceneRef"></section>
     <div class="hud">
@@ -253,10 +266,11 @@
 import { onMounted, onBeforeUnmount, ref, watch, nextTick, computed } from 'vue';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { useCameras } from './composables/useCameras';
-import { useSceneCameras } from './composables/useSceneCameras';
-import { useLicense } from './composables/useLicense';
+import { useCameras } from './lib/useCameras';
+import { useSceneCameras } from './lib/useSceneCameras';
+import { useLicense } from './lib/useLicense';
 import { FBXLoader } from 'three/examples/jsm/Addons.js';
+import sidebar from './components/sidebar.vue';
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 const isDev = import.meta.env.DEV;
@@ -893,6 +907,22 @@ function renderIRISdata(poseInfo: IrisData) {
   catch{
     console.log("unable to pass the IRIS data")
   }
+}
+
+function sphereMeshUpdate(value: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null) {
+  spheresMesh = value
+}
+
+function skeletonMeshUpdate(value: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null) {
+  skeletonLine = value
+} 
+
+function irisDataUpdate(value: IrisData[] | IrisData | null) {
+  irisData = value
+}
+
+function runningUpdate(value: boolean) {
+  running.value = value
 }
 
 </script>
