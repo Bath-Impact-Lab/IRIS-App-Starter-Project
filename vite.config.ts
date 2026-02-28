@@ -9,12 +9,14 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    sourcemap: false,
+    cssMinify: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-three': ['three'],
-          'vendor-supabase': ['@supabase/supabase-js'],
-          'vendor-vue': ['vue']
+        manualChunks(id) {
+          if (id.includes('node_modules/three')) return 'vendor-three';
+          if (id.includes('node_modules/@supabase')) return 'vendor-supabase';
+          if (id.includes('node_modules/vue') || id.includes('node_modules/@vue')) return 'vendor-vue';
         }
       }
     }
