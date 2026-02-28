@@ -8,7 +8,16 @@ export default defineConfig({
   root: '.',
   build: {
     outDir: 'dist',
-    emptyOutDir: true
+    emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-three': ['three'],
+          'vendor-supabase': ['@supabase/supabase-js'],
+          'vendor-vue': ['vue']
+        }
+      }
+    }
   },
   resolve: {
     alias: {
