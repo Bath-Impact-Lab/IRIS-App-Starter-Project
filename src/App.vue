@@ -18,30 +18,30 @@
         <!-- Camera selection dropdown -->
         <div class="dropdown" :class="{ open: openCamera }">
           <button
-            class="btn"
-            ref="cameraButtonRef"
-            @click="toggleCamera"
-            @keydown="onCameraButtonKeydown"
-            aria-haspopup="listbox"
-            :aria-expanded="openCamera"
-            aria-controls="camera-listbox"
-            :disabled="running"
+              class="btn"
+              ref="cameraButtonRef"
+              @click="toggleCamera"
+              @keydown="onCameraButtonKeydown"
+              aria-haspopup="listbox"
+              :aria-expanded="openCamera"
+              aria-controls="camera-listbox"
+              :disabled="running"
           >
-          <div v-if="!selectedDevices">
-            Camera Selection
-          </div>
-          <div v-else>
-            Add More Cameras
-          </div>
+            <div v-if="!selectedDevices">
+              Camera Selection
+            </div>
+            <div v-else>
+              Add More Cameras
+            </div>
           </button>
           <div
-            class="dropdown-menu"
-            id="camera-listbox"
-            ref="cameraListRef"
-            role="listbox"
-            tabindex="0"
-            :aria-activedescendant="activeCameraOptionId"
-            @keydown="onCameraListKeydown"
+              class="dropdown-menu"
+              id="camera-listbox"
+              ref="cameraListRef"
+              role="listbox"
+              tabindex="0"
+              :aria-activedescendant="activeCameraOptionId"
+              @keydown="onCameraListKeydown"
           >
             <h4>Detected cameras</h4>
             <div v-if="devices.length === 0" class="device">
@@ -51,14 +51,14 @@
               </div>
             </div>
             <div
-              v-for="(d, i) in devices"
-              :key="d.deviceId"
-              class="device"
-              role="option"
-              :id="'cam-opt-' + i"
-              :aria-selected="i === cameraHoverIndex"
-              :class="{ hovered: i === cameraHoverIndex, active: selectedDevices != null && selectedDeviceId?.includes(d.deviceId) }"
-              @click="selectDevice(d, i)"
+                v-for="(d, i) in devices"
+                :key="d.deviceId"
+                class="device"
+                role="option"
+                :id="'cam-opt-' + i"
+                :aria-selected="i === cameraHoverIndex"
+                :class="{ hovered: i === cameraHoverIndex, active: selectedDevices != null && selectedDeviceId?.includes(d.deviceId) }"
+                @click="selectDevice(d, i)"
             >
               <div>
                 <div>{{ d.label || 'Camera ' + d.deviceId.substring(0,6) }}</div>
@@ -127,8 +127,8 @@
     <div class="sidenav">
       <div style="width: 100%;" v-for="(d, i) in selectedDevices">
         <div
-          class="camera-list"
-          :style="{
+            class="camera-list"
+            :style="{
             width: '100%',
             boxShadow: sceneCameras[i] ? `inset 4px 0 0 ${sceneCameras[i].color}` : 'none',
             paddingLeft: sceneCameras[i] ? '8px' : '0',
@@ -141,11 +141,11 @@
             </button>
           </div>
           <div :id="`camera-box${i}`">
-            <video 
-              style="width: 100%;"
-              :id="`cameraFeed${i}`" 
-              autoplay
-              playsinline
+            <video
+                style="width: 100%;"
+                :id="`cameraFeed${i}`"
+                autoplay
+                playsinline
             >
             </video>
           </div>
@@ -239,7 +239,7 @@
       <div v-if="showSettings" class="modal-overlay" @click.self="showSettings = false">
         <div class="modal-content fade-up">
           <button class="modal-close" @click="showSettings = false">×</button>
-          
+
           <div class="modal-header">
             <h2 class="modal-title">Settings</h2>
             <p class="modal-subtitle">Manage your license key</p>
@@ -249,18 +249,18 @@
             <div class="settings-group">
               <label>License Management</label>
               <div class="license-input-wrapper">
-                <input 
-                  v-model="licenseKeyInput" 
-                  type="text" 
-                  placeholder="Enter License Key"
-                  class="license-input"
-                  :disabled="isChecking"
-                  @keyup.enter="handleLicenseSubmit"
+                <input
+                    v-model="licenseKeyInput"
+                    type="text"
+                    placeholder="Enter License Key"
+                    class="license-input"
+                    :disabled="isChecking"
+                    @keyup.enter="handleLicenseSubmit"
                 />
-                <button 
-                  class="btn-activate" 
-                  @click="handleLicenseSubmit"
-                  :disabled="isChecking || !licenseKeyInput"
+                <button
+                    class="btn-activate"
+                    @click="handleLicenseSubmit"
+                    :disabled="isChecking || !licenseKeyInput"
                 >
                   <span v-if="isChecking">Checking...</span>
                   <span v-else>{{ isValidLicense ? 'Update' : 'Activate' }}</span>
@@ -271,7 +271,7 @@
                 <div v-else-if="isValidLicense" class="license-msg success">License active and valid</div>
               </Transition>
             </div>
-            
+
             <div v-if="isValidLicense" class="settings-actions">
               <button class="btn-deactivate" @click="licenseLogout">Deactivate License</button>
             </div>
@@ -289,7 +289,7 @@
       </div>
     </Transition>
   </div>
-  
+
 </template>
 
 <script setup lang="ts">
@@ -320,14 +320,14 @@ const cameraActiveIndex = ref(0);
 // Sign-in state
 const showSettings = ref(false);
 const licenseKeyInput = ref('');
-const { 
+const {
   licenseKey: storedLicenseKey,
-  isValid: isValidLicense, 
-  isChecking, 
-  error: licenseError, 
+  isValid: isValidLicense,
+  isChecking,
+  error: licenseError,
   planType,
-  validateLicense, 
-  logout: licenseLogout 
+  validateLicense,
+  logout: licenseLogout
 } = useLicense();
 
 const isPaidLicense = computed(() => {
@@ -363,13 +363,21 @@ const selectedCameraCount = computed(() => selectedDevices.value?.length ?? 0);
 const showPlaySpace = ref(true);
 const showCameras = ref(true);
 
-const { 
-  sceneCameras, 
-  addToScene: addSceneCameras, 
-  syncVisibility, 
-  setGizmoRotation, 
-  computePlaySpaceBounds, 
-  dispose: disposeSceneCameras 
+const {
+  sceneCameras,
+  addToScene: addSceneCameras,
+  syncVisibility,
+  setGizmoRotation,
+  computePlaySpaceBounds,
+  dispose: disposeSceneCameras
+} = useSceneCameras(selectedCameraCount, showPlaySpace, showCameras);
+const {
+  sceneCameras,
+  addToScene: addSceneCameras,
+  syncVisibility,
+  setGizmoRotation,
+  computePlaySpaceBounds,
+  dispose: disposeSceneCameras
 } = useSceneCameras(selectedCameraCount, showPlaySpace, showCameras);
 
 const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt-${cameraHoverIndex.value}` : undefined));
@@ -394,6 +402,8 @@ let irisFrameCount = 0;
 let irisLastFpsTime = 0;
 
 // Skeleton always visible by default
+
+let browserMockTimer: ReturnType<typeof setInterval> | null = null;
 
 let renderer: THREE.WebGLRenderer | null = null;
 let scene: THREE.Scene;
@@ -524,7 +534,7 @@ function selectDevice(d: MediaDeviceInfo, i: number){
   } else {
     stopCameraStream(i);
   }
-  
+
   // Send camera info to IRIS mock bridge (including rotation)
   const info = {
     type: 'camera-info',
@@ -561,7 +571,7 @@ async function startCameraStream(camera: MediaDeviceInfo, index: number) {
     if (video) {
       video.srcObject = stream;
       // console.log("playing", selectedDevices.value);
-    } 
+    }
   } catch (err) {
     console.error("Camera access failed: ", err);
   }
@@ -617,7 +627,7 @@ async function rotation(d: MediaDeviceInfo, rotateAngle: number, i: number) {
   let offsetX: number
   let offsetY: number = 0
   let origin: string
-  
+
   const camera = await navigator.mediaDevices.getUserMedia({video: {deviceId: {exact: d.deviceId}}})
   let aspectRatio = camera.getVideoTracks()[0].getSettings().aspectRatio
   if (!aspectRatio) {
@@ -693,7 +703,7 @@ async function loadModel(scene: THREE.Scene, type: string) {
         else{
           mixer = [new THREE.AnimationMixer(modelRoot)]
         }
-        const mix = mixer[mixer.length-1] 
+        const mix = mixer[mixer.length-1]
         const action = mix.clipAction(modelRoot.animations[0])
         action.play()
       }
@@ -812,6 +822,21 @@ onMounted(() => {
   window.ipc?.onIrisData((data) => {
     irisData = data
   })
+
+  // Browser fallback: when not in Electron, stream mock pose data directly
+  if (!(window as any).ipc) {
+    fetch('/assets/position 2.json')
+        .then(r => r.json())
+        .then((positions: IrisData[]) => {
+          if (!Array.isArray(positions) || positions.length === 0) return;
+          let frame = 0;
+          browserMockTimer = setInterval(() => {
+            irisData = positions[frame];
+            frame = (frame + 1) % positions.length;
+          }, 1000 / 30);
+        })
+        .catch(err => console.warn('[browser mock] could not load position 2.json', err));
+  }
 });
 
 onBeforeUnmount(() => {
@@ -819,6 +844,7 @@ onBeforeUnmount(() => {
   disposeCameras();
   disposeSceneCameras();
   disposePlaySpace();
+  if (browserMockTimer) { clearInterval(browserMockTimer); browserMockTimer = null; }
   if (frameId) cancelAnimationFrame(frameId);
   if (resizeObserver && sceneRef.value) resizeObserver.unobserve(sceneRef.value);
   if (renderer) { renderer.dispose(); renderer = null; }
@@ -851,7 +877,7 @@ async function handleLicenseSubmit() {
 async function buyLicense() {
   const url = import.meta.env.VITE_LICENSE_URL || 'https://embodi.ecolizard.com/#pricing';
   console.log('Buy License clicked - opening:', url);
-  
+
   if (!(window as any).electronAPI?.openExternal) {
     console.error('CRITICAL: electronAPI.openExternal is missing! Please restart the application.');
     return;
@@ -1326,10 +1352,10 @@ function renderIRISdata(poseInfo: IrisData) {
 }
 
 .sidenav {
-  position: absolute; 
-  right: 0px; 
-  height: calc(100% - 63px); 
-  width: 250px; 
+  position: absolute;
+  right: 0px;
+  height: calc(100% - 63px);
+  width: 250px;
   background-color: var(--sidebar);
   z-index: 10;
   border-left: 1px solid rgba(255, 255, 255, 0.06);
@@ -1344,7 +1370,7 @@ function renderIRISdata(poseInfo: IrisData) {
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 10px;
   margin: 5px 0;
-} 
+}
 
 .camera-text {
   display: flex;
