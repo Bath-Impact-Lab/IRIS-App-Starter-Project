@@ -74,9 +74,6 @@ const { setGizmoRotation } = useSceneCameras(selectedCameraCount);
 const cameraRotation = ref<Record<string, number>>(props.cameraRotation);
 const running = ref(false)
 
-watch(props, (val) => {
-  console.log(val)
-})
 function rotateCamera(d: MediaDeviceInfo, index: number) {
   const currentAngle = cameraRotation.value[d.deviceId] || 0;
   const newAngle = (currentAngle + 90) % 360;
@@ -177,7 +174,6 @@ async function startIris() {
     // iris start command goes here:
     await window.ipc?.startIRIS(options)
   }
-	// console.log(props.scene)
 }
 
 async function stopIris() {

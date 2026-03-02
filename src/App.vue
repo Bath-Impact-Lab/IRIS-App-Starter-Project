@@ -179,59 +179,11 @@
       </div>
     </div>
     <!-- Settings Modal -->
-    <Transition name="fade">
-      <div v-if="showSettings" class="modal-overlay" @click.self="showSettings = false">
-        <div class="modal-content fade-up">
-          <button class="modal-close" @click="showSettings = false">×</button>
-          
-          <div class="modal-header">
-            <h2 class="modal-title">Settings</h2>
-            <p class="modal-subtitle">Manage your license key</p>
-          </div>
-
-          <div class="settings-section">
-            <div class="settings-group">
-              <label>License Management</label>
-              <div class="license-input-wrapper">
-                <input 
-                  v-model="licenseKeyInput" 
-                  type="text" 
-                  placeholder="Enter License Key"
-                  class="license-input"
-                  :disabled="isChecking"
-                  @keyup.enter="handleLicenseSubmit"
-                />
-                <button 
-                  class="btn-activate" 
-                  @click="handleLicenseSubmit"
-                  :disabled="isChecking || !licenseKeyInput"
-                >
-                  <span v-if="isChecking">Checking...</span>
-                  <span v-else>{{ isValidLicense ? 'Update' : 'Activate' }}</span>
-                </button>
-              </div>
-              <Transition name="fade">
-                <div v-if="licenseError" class="license-msg error">{{ licenseError }}</div>
-                <div v-else-if="isValidLicense" class="license-msg success">License active and valid</div>
-              </Transition>
-            </div>
-            
-            <div v-if="isValidLicense" class="settings-actions">
-              <button class="btn-deactivate" @click="licenseLogout">Deactivate License</button>
-            </div>
-
-            <!-- Upgrade Section -->
-            <div v-if="!isPaidLicense" class="settings-footer">
-              <div class="divider"><span>Support Us</span></div>
-              <button class="btn-buy" @click="buyLicense">
-                Get a License
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Transition>
+    <settingsModal
+      :show-settings="showSettings"
+      @settings="updateSettings"
+      @license-key="updateLicenseKey"
+    />
   </div>
   
 </template>
@@ -245,11 +197,11 @@ import { useLicense } from './lib/useLicense';
 import { usePlaySpace } from './lib/usePlaySpace';
 import sidebar from './components/sidebar.vue';
 import ThreeWindow from './components/threeWindow.vue';
+import settingsModal from './components/settingsModal.vue';
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 const isDev = import.meta.env.DEV;
 
-const sceneRef = ref<HTMLElement | null>(null);
 const splitRef = ref<HTMLElement | null>(null);
 // Individual dropdown open flags
 const openCamera = ref(false);
@@ -532,30 +484,6 @@ function toggleSignIn() {
   showSettings.value = !showSettings.value;
 }
 
-async function handleLicenseSubmit() {
-  await validateLicense(licenseKeyInput.value);
-}
-
-async function buyLicense() {
-  const url = import.meta.env.VITE_LICENSE_URL || 'https://embodi.ecolizard.com/#pricing';
-  console.log('Buy License clicked - opening:', url);
-  
-  if (!(window as any).electronAPI?.openExternal) {
-    console.error('CRITICAL: electronAPI.openExternal is missing! Please restart the application.');
-    return;
-  }
-
-  try {
-    const result = await (window as any).electronAPI.openExternal(url);
-    console.log('Open External Result:', result);
-    if (result && !result.ok) {
-      console.error('System failed to open URL:', result.error);
-    }
-  } catch (err) {
-    console.error('IPC invocation failed:', err);
-  }
-}
-
 function sphereMeshUpdate(value: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null) {
   spheresMesh.value = value
 }
@@ -574,6 +502,14 @@ function runningUpdate(value: boolean) {
 
 function asignScene(value: THREE.Scene) {
   scene.value = value
+}
+
+function updateSettings(value: boolean) {
+  showSettings.value = value
+}
+
+function updateLicenseKey(value: string) {
+  licenseKeyInput.value = value
 }
 
 </script>
@@ -642,109 +578,6 @@ function asignScene(value: THREE.Scene) {
 .dropdown-menu:focus { outline: none; }
 .device.active { background: rgba(107, 230, 117, 0.12); border-radius: 8px; }
 .device.active > div > div { color: #e6ffe9; }
-/* Modal Styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(12px);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.modal-content {
-  background: rgba(22, 30, 41, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  width: 100%;
-  max-width: 480px;
-  padding: 32px;
-  position: relative;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-}
-
-.modal-close {
-  position: absolute;
-  top: 20px;
-  right: 20px;
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 24px;
-  cursor: pointer;
-  padding: 4px;
-  line-height: 1;
-}
-
-.modal-close:hover { color: #fff; }
-
-.modal-header { margin-bottom: 32px; text-align: center; }
-.modal-title { font-size: 24px; margin-bottom: 8px; color: #fff; }
-.modal-subtitle { color: rgba(255, 255, 255, 0.5); font-size: 14px; }
-
-.settings-section { display: flex; flex-direction: column; gap: 24px; }
-.settings-group { display: flex; flex-direction: column; gap: 12px; }
-.settings-group label { font-size: 14px; font-weight: 600; color: rgba(255,255,255,0.7); }
-
-.license-input-wrapper { display: flex; gap: 12px; }
-
-.license-input {
-  flex: 1;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  padding: 12px 16px;
-  color: #fff;
-  font-family: monospace;
-  font-size: 16px;
-}
-
-.license-input:focus { border-color: #6be675; outline: none; }
-
-.btn-activate {
-  background: #6be675;
-  color: #0b0f14;
-  border: none;
-  border-radius: 10px;
-  padding: 0 20px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-
-.btn-activate:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.btn-deactivate {
-  background: transparent;
-  border: 1px solid rgba(255, 59, 48, 0.3);
-  color: #ff3b30;
-  border-radius: 10px;
-  padding: 10px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-deactivate:hover { background: rgba(255, 59, 48, 0.1); border-color: #ff3b30; }
-
-.license-msg { font-size: 13px; margin-top: 4px; }
-.license-msg.error { color: #ff9a5c; }
-.license-msg.success { color: #6be675; }
-
-/* Transitions */
-.fade-enter-active, .fade-leave-active { transition: opacity 0.3s ease; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
-
-.fade-up { animation: fadeUp 0.4s ease-out; }
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
-}
 
 /* License Badge Styles */
 .license-badge-container {
@@ -846,116 +679,6 @@ function asignScene(value: THREE.Scene) {
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-.divider {
-  display: flex;
-  align-items: center;
-  text-align: center;
-  color: rgba(255, 255, 255, 0.2);
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-}
-
-.divider::before, .divider::after {
-  content: '';
-  flex: 1;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.divider:not(:empty)::before { margin-right: 12px; }
-.divider:not(:empty)::after { margin-left: 12px; }
-
-.btn-buy {
-  background: rgba(107, 230, 117, 0.1);
-  border: 1px solid rgba(107, 230, 117, 0.2);
-  color: #6be675;
-  border-radius: 12px;
-  padding: 14px;
-  font-size: 14px;
-  font-weight: 700;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  transition: all 0.2s ease;
-}
-
-.btn-buy:hover {
-  background: rgba(107, 230, 117, 0.15);
-  border-color: #6be675;
-  transform: translateY(-1px);
-}
-
-.sidenav {
-  position: absolute; 
-  right: 0px; 
-  height: calc(100% - 63px); 
-  width: 250px; 
-  background-color: var(--sidebar);
-  z-index: 10;
-  border-left: 1px solid rgba(255, 255, 255, 0.06);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 12px;
-}
-
-.camera-list {
-  padding: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 10px;
-  margin: 5px 0;
-} 
-
-.camera-text {
-  display: flex;
-  flex-direction: row;
-  font-size: 14px;
-  align-items: center;
-  padding-bottom: 5px;
-  justify-content: space-between;
-}
-
-.button {
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: var(--sidebar);
-  border-radius: 10px;
-}
-
-.button:hover {
-  background: rgba(18, 27, 36, 0.72);
-}
-
-.button:active {
-  background: rgba(12, 18, 25, 0.808);
-}
-
-.iris-controls {
-  padding: 10px 5px;
-  background-color: var(--sidebar);
-  position: absolute;
-  bottom: 0px;
-  width: 100%;
-  height: 25%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  z-index: 100;
-}
-
-.iris-controls button {
-  margin: 10px 0;
-}
-
-.cameras {
-  height: 75%;
-  width: 100%;
-  overflow-y: auto;
-  overflow-x: hidden;
 }
 
 </style>
