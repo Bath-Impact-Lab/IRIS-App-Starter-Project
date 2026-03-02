@@ -24,38 +24,63 @@ export function usePlaySpace(
     }
 
     const bounds = computePlaySpaceBounds();
-    const { width, depth, height, centerX, centerZ } = bounds;
+    const { polygons } = bounds;
 
     const group = new THREE.Group();
-    group.position.set(centerX, 0, centerZ);
+    group.position.set(0, 0.005, 0); // Tiny offset to prevent grid flickering
 
-    // Floor plane sized to the computed footprint
-    const floorGeo = new THREE.PlaneGeometry(width, depth);
-    const floorMat = new THREE.MeshBasicMaterial({ color: 0x1a2a3a, transparent: true, opacity: 0.45, side: THREE.DoubleSide });
-    const floor = new THREE.Mesh(floorGeo, floorMat);
-    floor.rotation.x = -Math.PI / 2;
-    group.add(floor);
+    if (polygons && polygons.length > 0) {
+      // 1. Floor Infill (Separate mesh per island to avoid triangulation artifacts)
+      const floorMat = new THREE.MeshBasicMaterial({
+        color: 0x00f2ff,
+        transparent: true,
+        opacity: 0.1,
+        side: THREE.DoubleSide,
+        depthWrite: false
+      });
 
-    // Boundary box edges sized to frustum intersection
-    const boxGeo = new THREE.BoxGeometry(width, height, depth);
-    const edges = new THREE.EdgesGeometry(boxGeo);
-    const edgeMat = new THREE.LineBasicMaterial({ color: 0x4a9eff, transparent: true, opacity: 0.6 });
-    const boundaryBox = new THREE.LineSegments(edges, edgeMat);
-    boundaryBox.position.y = height / 2;
-    group.add(boundaryBox);
+      polygons.forEach(poly => {
+        if (poly.length < 3) return;
+        const shape = new THREE.Shape();
+        shape.moveTo(poly[0].x, poly[0].z);
+        for (let i = 1; i < poly.length; i++) {
+          shape.lineTo(poly[i].x, poly[i].z);
+        }
+        shape.closePath();
 
-    // Corner pillars
-    const pillarGeo = new THREE.CylinderGeometry(0.03, 0.03, height, 8);
-    const pillarMat = new THREE.MeshBasicMaterial({ color: 0x4a9eff, transparent: true, opacity: 0.5 });
-    const hw = width / 2;
-    const hd = depth / 2;
-    ([[-hw, -hd], [-hw, hd], [hw, -hd], [hw, hd]] as [number, number][]).forEach(([x, z]) => {
-      const pillar = new THREE.Mesh(pillarGeo, pillarMat);
-      pillar.position.set(x, height / 2, z);
-      group.add(pillar);
-    });
+        const floorGeo = new THREE.ShapeGeometry(shape);
+        const floor = new THREE.Mesh(floorGeo, floorMat);
+        floor.rotation.x = Math.PI / 2;
+        group.add(floor);
+      });
 
-    group.visible = showPlaySpace.value;
+      // 2. Outline boundary
+      const outlinePoints: THREE.Vector3[] = [];
+      polygons.forEach(poly => {
+        if (poly.length < 3) return;
+        for (let i = 0; i < poly.length; i++) {
+          outlinePoints.push(poly[i]);
+          outlinePoints.push(poly[(i + 1) % poly.length]);
+        }
+      });
+
+      if (outlinePoints.length > 0) {
+        const outlineGeo = new THREE.BufferGeometry().setFromPoints(outlinePoints);
+        const outlineMat = new THREE.LineBasicMaterial({
+          color: 0x00ffff,
+          transparent: true,
+          opacity: 0.8,
+          linewidth: 2
+        });
+        const outline = new THREE.LineSegments(outlineGeo, outlineMat);
+        group.add(outline);
+      }
+
+      group.visible = showPlaySpace.value;
+    } else {
+      group.visible = false;
+    }
+
     scene.add(group);
     playSpaceGroup = group;
 
