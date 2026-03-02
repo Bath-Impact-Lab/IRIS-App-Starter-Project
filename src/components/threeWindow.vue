@@ -23,11 +23,12 @@ const props = defineProps<Props>()
 //defining emits for future
 const emit = defineEmits<{
   giveScene: [THREE.Scene]
+  giveSphereMesh: [THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null]
+  giveSkeletonMesh: [THREE.LineSegments<THREE.BufferGeometry <THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null]
 }>()
 
 const selectedCameraCount = computed(() => props.selectedCameraCount)
 const sceneRef = ref<HTMLElement | null>(null);
-
 
 let renderer: THREE.WebGLRenderer | null = null;
 let scene: THREE.Scene;
@@ -59,13 +60,10 @@ const halpe26_pairs = [
 
 const linePositions = new Float32Array(halpe26_pairs.length * 3 * 2)
 
-
 onMounted(() => {
   if (sceneRef.value) initThree(sceneRef.value);
   if (resizeObserver && sceneRef.value) resizeObserver.unobserve(sceneRef.value);
 })
-
-
 
 async function loadModel(scene: THREE.Scene, type: string) {
   const loader = new FBXLoader( manager );
@@ -200,6 +198,8 @@ function renderIRISdata(poseInfo: IrisData) {
         const sphereGeometry = new THREE.SphereGeometry(0.025, 8, 8)
         const material = new THREE.MeshBasicMaterial({color: 0xffffff})
         spheresMesh = new THREE.InstancedMesh(sphereGeometry, material, (keypoints.length + person.skeleton.keypoints_3d.length))
+        //passing mesh to main app so mesh can be removed on stop
+        emit('giveSphereMesh', spheresMesh)
         scene.add(spheresMesh)
 
         const lMaterial = new THREE.LineBasicMaterial({color:0xff0000})
@@ -207,6 +207,8 @@ function renderIRISdata(poseInfo: IrisData) {
         lGeometry.setAttribute('position', new THREE.BufferAttribute(linePositions, 3))
 
         skeletonLine = new THREE.LineSegments(lGeometry, lMaterial)
+        //passing mesh to main app so mesh can be removed on stop
+        emit('giveSkeletonMesh', skeletonLine)
         scene.add(skeletonLine)
       }
       const positionAttr = skeletonLine.geometry.attributes.position

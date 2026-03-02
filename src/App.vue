@@ -124,6 +124,7 @@
       :iris-data="irisData"
       :selected-cameras="selectedDevices"
       :scene-cameras="sceneCameras"
+      :camera-rotation="cameraRotation"
       @sphere-update="sphereMeshUpdate"
       @skeleton-update="skeletonMeshUpdate"
       @iris-data-update="irisDataUpdate"
@@ -140,6 +141,8 @@
       :add-scene-cameras="addSceneCameras"
       :test="test"
       @give-scene="asignScene"
+      @give-sphere-mesh="sphereMeshUpdate"
+      @give-skeleton-mesh="skeletonMeshUpdate"
     />
 
     <div class="hud">
@@ -236,7 +239,6 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, watch, nextTick, computed } from 'vue';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { useCameras } from './lib/useCameras';
 import { useSceneCameras } from './lib/useSceneCameras';
 import { useLicense } from './lib/useLicense';
@@ -330,8 +332,6 @@ let spheresMesh = ref<THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicM
 let skeletonLine = ref<THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null>(null);
 let irisData = ref<IrisData[] | IrisData | null>(null);
 
-const manager = new THREE.LoadingManager();
-let mixer: THREE.AnimationMixer[] | null;
 const showPlaySpace = ref(true);
 const { create: createPlaySpace, rebuild: rebuildPlaySpace, dispose: disposePlaySpace } = usePlaySpace(showPlaySpace, computePlaySpaceBounds);
 
@@ -566,9 +566,6 @@ function skeletonMeshUpdate(value: THREE.LineSegments<THREE.BufferGeometry<THREE
 
 function irisDataUpdate(value: IrisData[] | IrisData | null) {
   irisData.value = value
-  // if (!value) {
-  //   test.value = false
-  // }
 }
 
 function runningUpdate(value: boolean) {

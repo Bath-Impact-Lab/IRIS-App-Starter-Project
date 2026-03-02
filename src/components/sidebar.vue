@@ -53,14 +53,15 @@ interface Props {
 	skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null,
 	personCount: string | null,
 	scene: THREE.Scene | null,
-	irisData: IrisData[] | IrisData | null
-	selectedCameras: MediaDeviceInfo[] | null
-	sceneCameras: SceneCameraEntry[]
+	irisData: IrisData[] | IrisData | null,
+	selectedCameras: MediaDeviceInfo[] | null,
+	sceneCameras: SceneCameraEntry[],
+  cameraRotation: Record<string, number>,
 }
 const props = defineProps<Props>()
 
 const emit = defineEmits<{
-	sphereUpdate: [THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null],
+	sphereUpdate: [THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null]
 	skeletonUpdate: [THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null]
 	irisDataUpdate: [IrisData[] | IrisData | null]
 	isRunning: [boolean]
@@ -70,10 +71,12 @@ const emit = defineEmits<{
 const selectedCameraCount = computed(() => props.selectedCameras?.length ?? 0);
 const { setGizmoRotation } = useSceneCameras(selectedCameraCount);
 
-const cameraRotation = ref<Record<string, number>>({});
+const cameraRotation = ref<Record<string, number>>(props.cameraRotation);
 const running = ref(false)
 
-
+watch(props, (val) => {
+  console.log(val)
+})
 function rotateCamera(d: MediaDeviceInfo, index: number) {
   const currentAngle = cameraRotation.value[d.deviceId] || 0;
   const newAngle = (currentAngle + 90) % 360;
@@ -174,7 +177,7 @@ async function startIris() {
     // iris start command goes here:
     await window.ipc?.startIRIS(options)
   }
-	console.log(props.scene)
+	// console.log(props.scene)
 }
 
 async function stopIris() {
@@ -188,7 +191,7 @@ async function stopIris() {
   props.selectedCameras?.forEach((d, i) => {
     startCameraStream(d, i)
   })
-
+  console.log(props.spheresMesh)
   if (props.spheresMesh && props.scene) {
     const here = props.scene.remove(props.spheresMesh)
     console.log("removed", here)
