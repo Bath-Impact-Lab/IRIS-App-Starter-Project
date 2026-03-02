@@ -294,7 +294,6 @@ let spheresMesh = ref<THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicM
 let skeletonLine = ref<THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null>(null);
 let irisData = ref<IrisData[] | IrisData | null>(null);
 
-const showPlaySpace = ref(true);
 const { create: createPlaySpace, rebuild: rebuildPlaySpace, dispose: disposePlaySpace } = usePlaySpace(showPlaySpace, computePlaySpaceBounds);
 
 function onCameraButtonKeydown(e: KeyboardEvent) {

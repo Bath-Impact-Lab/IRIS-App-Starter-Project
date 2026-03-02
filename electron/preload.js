@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('ipc', {
   startIRIS: (options) => ipcRenderer.invoke('start-iris', options),
+  getExtrinsics: () => ipcRenderer.invoke('get-extrinsics'),
   stopIRIS: (Id) => ipcRenderer.invoke('stop-iris', Id),
   onIrisData: (callback) => {
     ipcRenderer.on('iris-data', (event, data,) => {

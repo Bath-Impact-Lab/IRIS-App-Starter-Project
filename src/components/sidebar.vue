@@ -187,12 +187,10 @@ async function stopIris() {
   props.selectedCameras?.forEach((d, i) => {
     startCameraStream(d, i)
   })
-  console.log(props.spheresMesh)
-  if (props.spheresMesh && props.scene) {
-    const here = props.scene.remove(props.spheresMesh)
-    console.log("removed", here)
-  }
+  
+  if (props.spheresMesh && props.scene) props.scene.remove(props.spheresMesh)
 	emit('sphereUpdate', null)
+
   if (props.skeletonLine && props.scene) props.scene.remove(props.skeletonLine)
 	emit('skeletonUpdate', null)
 	emit('irisDataUpdate', null)
@@ -221,7 +219,6 @@ async function startCameraStream(camera: MediaDeviceInfo, index: number) {
   try {
     if (video) {
       video.srcObject = stream;
-      // console.log("playing", props.selectedCameras);
     } 
   } catch (err) {
     console.error("Camera access failed: ", err);
