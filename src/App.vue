@@ -502,7 +502,7 @@ onMounted(() => {
           if (!Array.isArray(positions) || positions.length === 0) return;
           let frame = 0;
           browserMockTimer = setInterval(() => {
-            irisData = positions[frame];
+            irisData.value = positions[frame];
             frame = (frame + 1) % positions.length;
           }, 1000 / 30);
         })

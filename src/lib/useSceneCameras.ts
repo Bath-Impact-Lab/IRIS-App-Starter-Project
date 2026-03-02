@@ -1,6 +1,6 @@
 import { ref, watch, type Ref } from 'vue';
 import * as THREE from 'three';
-import mockExtrinsicsFallback from '../assets/mockExtrinsics.json';
+import mockExtrinsicsFallback from './../../public/assets/mockExtrinsics.json';
 
 export interface SceneCameraDef {
   name: string;
