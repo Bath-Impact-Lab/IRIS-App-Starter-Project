@@ -580,6 +580,11 @@ function updateLicenseKey(value: string) {
 <style scoped>
 .hud{ position: fixed; left: 16px; bottom: 16px; height: 48px; display:flex; align-items:center; gap:8px; padding:0 10px; background: rgba(12,18,25,.6); border:1px solid rgba(255,255,255,.08); border-radius: 12px; backdrop-filter: blur(10px); }
 .hud-right{ left: auto; right: 266px; /* 250px sidenav + 16px gap */ }
+@media (max-width: 768px) {
+  .hud-right {
+    right: 16px;
+  }
+}
 .hud-center{ left: calc(50% - 125px); transform: translateX(-50%); }
 .activity-blinker{
   width: 8px; height: 8px; border-radius: 50%;

@@ -244,6 +244,12 @@ async function startCameraStream(camera: MediaDeviceInfo, index: number) {
   padding: 12px;
 }
 
+@media (max-width: 768px) {
+  .sidenav {
+    display: none;
+  }
+}
+
 .camera-list {
   padding: 8px;
   border: 1px solid rgba(255, 255, 255, 0.06);
