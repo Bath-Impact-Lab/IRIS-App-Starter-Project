@@ -67,38 +67,8 @@ function createWindow() {
 app.whenReady().then(() => {
     registerIrisIpc();
 
-    // Serve the IRIS extrinsics calibration file.
-    // - If the mock stream is active (no real runtime), return the mock extrinsics.
-    // - If a real runtime exists, read the live extrinsics file.
-    // - The frontend should clear mock camera gizmos when real cameras connect.
-    ipcMain.handle('get-extrinsics', () => {
-        const runtimeExists = fs.existsSync(
-            path.join(__dirname, '..', 'iris_runtime_bundle', 'exe file')
-        );
-
-        // Mock mode — return the bundled mock extrinsics
-        if (!runtimeExists) {
-            console.log('[extrinsics] mock mode — returning mock extrinsics');
-            return MOCK_EXTRINSICS;
-        }
-
-        // Real runtime — read live calibration file
-        const extrinsicsPath = path.join(os.homedir(), 'AppData', 'Local', 'IRIS', 'extrinsics 1.json');
-        try {
-            if (!fs.existsSync(extrinsicsPath)) {
-                console.warn(`[extrinsics] file not found: ${extrinsicsPath}`);
-                return null;
-            }
-            const raw = fs.readFileSync(extrinsicsPath, 'utf8');
-            return JSON.parse(raw);
-        } catch (err) {
-            console.error('[extrinsics] failed to read:', err);
-            return null;
-        }
-    });
-
     createWindow();
-    startIrisMockProcess();
+    // startIrisMockProcess();
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -120,5 +90,35 @@ ipcMain.handle('open-external', async (event, url) => {
     } catch (e) {
         console.error('[Main] shell.openExternal failed:', e);
         return { ok: false, error: e.message };
+    }
+});
+
+// Serve the IRIS extrinsics calibration file.
+// - If the mock stream is active (no real runtime), return the mock extrinsics.
+// - If a real runtime exists, read the live extrinsics file.
+// - The frontend should clear mock camera gizmos when real cameras connect.
+ipcMain.handle('get-extrinsics', (event) => {
+    const runtimeExists = fs.existsSync(
+        path.join(__dirname, '..', 'iris_runtime_bundle', 'exe file')
+    );
+
+    // Mock mode — return the bundled mock extrinsics
+    if (!runtimeExists) {
+        console.log('[extrinsics] mock mode — returning mock extrinsics');
+        return MOCK_EXTRINSICS;
+    }
+
+    // Real runtime — read live calibration file
+    const extrinsicsPath = path.join(os.homedir(), 'AppData', 'Local', 'IRIS', 'extrinsics 1.json');
+    try {
+        if (!fs.existsSync(extrinsicsPath)) {
+            console.warn(`[extrinsics] file not found: ${extrinsicsPath}`);
+            return null;
+        }
+        const raw = fs.readFileSync(extrinsicsPath, 'utf8');
+        return JSON.parse(raw);
+    } catch (err) {
+        console.error('[extrinsics] failed to read:', err);
+        return null;
     }
 });
