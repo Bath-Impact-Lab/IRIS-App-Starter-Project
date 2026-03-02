@@ -32,11 +32,13 @@ export function usePlaySpace(
     if (polygons && polygons.length > 0) {
       // 1. Floor Infill (Separate mesh per island to avoid triangulation artifacts)
       const floorMat = new THREE.MeshBasicMaterial({
-        color: 0x00f2ff,
-        transparent: true,
-        opacity: 0.1,
+        color: 0x446677,
+        transparent: false,
+        opacity: 0.5,
         side: THREE.DoubleSide,
-        depthWrite: false
+        depthWrite: false,
+        depthTest: false,
+        blending: THREE.NormalBlending
       });
 
       polygons.forEach(poly => {
@@ -67,9 +69,9 @@ export function usePlaySpace(
       if (outlinePoints.length > 0) {
         const outlineGeo = new THREE.BufferGeometry().setFromPoints(outlinePoints);
         const outlineMat = new THREE.LineBasicMaterial({
-          color: 0x00ffff,
+          color: 0x446677,
           transparent: true,
-          opacity: 0.8,
+          opacity: 0.5,
           linewidth: 2
         });
         const outline = new THREE.LineSegments(outlineGeo, outlineMat);

@@ -2,37 +2,46 @@
   <div>
     <nav class="navbar">
       <div class="brand">
-        <div class="dot"></div>
-        <div class="split" ref="splitRef">{{ appTitle }}</div>
+        <img
+          v-if="!logoError"
+          :src="`/assets/logo/${appTitle.toLowerCase()}.png`"
+          :alt="appTitle"
+          class="brand-logo"
+          @error="logoError = true"
+        />
+        <template v-else>
+          <div class="dot"></div>
+          <div class="split" ref="splitRef">{{ appTitle }}</div>
+        </template>
       </div>
       <div class="menu">
         <!-- Camera selection dropdown -->
         <div class="dropdown" :class="{ open: openCamera }">
           <button
-            class="btn"
-            ref="cameraButtonRef"
-            @click="toggleCamera"
-            @keydown="onCameraButtonKeydown"
-            aria-haspopup="listbox"
-            :aria-expanded="openCamera"
-            aria-controls="camera-listbox"
-            :disabled="running"
+              class="btn"
+              ref="cameraButtonRef"
+              @click="toggleCamera"
+              @keydown="onCameraButtonKeydown"
+              aria-haspopup="listbox"
+              :aria-expanded="openCamera"
+              aria-controls="camera-listbox"
+              :disabled="running"
           >
-          <div v-if="!selectedDevices">
-            Camera Selection
-          </div>
-          <div v-else>
-            Add More Cameras
-          </div>
+            <div v-if="!selectedDevices">
+              Camera Selection
+            </div>
+            <div v-else>
+              Add More Cameras
+            </div>
           </button>
           <div
-            class="dropdown-menu"
-            id="camera-listbox"
-            ref="cameraListRef"
-            role="listbox"
-            tabindex="0"
-            :aria-activedescendant="activeCameraOptionId"
-            @keydown="onCameraListKeydown"
+              class="dropdown-menu"
+              id="camera-listbox"
+              ref="cameraListRef"
+              role="listbox"
+              tabindex="0"
+              :aria-activedescendant="activeCameraOptionId"
+              @keydown="onCameraListKeydown"
           >
             <h4>Detected cameras</h4>
             <div v-if="devices.length === 0" class="device">
@@ -42,14 +51,14 @@
               </div>
             </div>
             <div
-              v-for="(d, i) in devices"
-              :key="d.deviceId"
-              class="device"
-              role="option"
-              :id="'cam-opt-' + i"
-              :aria-selected="i === cameraHoverIndex"
-              :class="{ hovered: i === cameraHoverIndex, active: selectedDevices != null && selectedDeviceId?.includes(d.deviceId) }"
-              @click="selectDevice(d, i)"
+                v-for="(d, i) in devices"
+                :key="d.deviceId"
+                class="device"
+                role="option"
+                :id="'cam-opt-' + i"
+                :aria-selected="i === cameraHoverIndex"
+                :class="{ hovered: i === cameraHoverIndex, active: selectedDevices != null && selectedDeviceId?.includes(d.deviceId) }"
+                @click="selectDevice(d, i)"
             >
               <div>
                 <div>{{ d.label || 'Camera ' + d.deviceId.substring(0,6) }}</div>
@@ -146,35 +155,62 @@
     />
 
     <div class="hud">
-      <label class="hud-item">
-        <input type="checkbox" v-model="showPlaySpace" />
-        <span>Playspace</span>
-      </label>
-      <div class="hud-sep"></div>
-      <div class="hud-item">
-        <span :class="['dot', running ? 'ok' : 'warn']"></span>
-        <span>{{ running ? 'IRIS running' : 'IRIS inactive' }}</span>
-      </div>
-      <div class="hud-sep" v-if="isDev"></div>
-      <button class="btn btn-mini" v-if="isDev" @click="debugOpen = !debugOpen">{{ debugOpen ? 'Hide' : 'Show' }} debug</button>
+      <button
+        class="hud-icon-btn"
+        :class="{ active: showPlaySpace }"
+        @click="showPlaySpace = !showPlaySpace"
+        title="Toggle Playspace"
+        aria-label="Toggle Playspace"
+      >
+        <!-- floor/grid icon -->
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/>
+          <line x1="3" y1="9" x2="21" y2="9"/>
+          <line x1="3" y1="15" x2="21" y2="15"/>
+          <line x1="9" y1="3" x2="9" y2="21"/>
+          <line x1="15" y1="3" x2="15" y2="21"/>
+        </svg>
+      </button>
+      <button
+        class="hud-icon-btn"
+        :class="{ active: showCameras }"
+        @click="showCameras = !showCameras"
+        title="Toggle Cameras"
+        aria-label="Toggle Cameras"
+      >
+        <!-- camera icon -->
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M23 7l-7 5 7 5V7z"/>
+          <rect x="1" y="5" width="15" height="14" rx="2"/>
+        </svg>
+      </button>
     </div>
-
-    <!-- License Badge -->
-    <div
-      class="license-badge-container"
-      :class="{ 'clickable': !isValidLicense || planType === 'Trial' }"
-      @click="(!isValidLicense || planType === 'Trial') ? showSettings = true : null"
-    >
-      <div v-if="isValidLicense" class="badge glass">
-        <span class="badge-dot" :class="planType?.toLowerCase()"></span>
-        <span class="badge-text">{{ planType || 'Trial' }} License</span>
-      </div>
-      <div v-else class="badge-upgrade glass">
-        <span class="badge-dot invalid"></span>
-        <span class="badge-text">FREE Trial</span>
-        <div class="upgrade-action">
-          Upgrade
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    <div class="hud hud-center" v-if="running">
+      <span class="activity-blinker"></span>
+      <span class="hud-item">IRIS Engine</span>
+      <div class="hud-sep"></div>
+      <span class="hud-item fps-counter">{{ irisDisplayFps }} <span class="fps-unit">FPS</span></span>
+    </div>
+    <!-- License Badge — bottom-centre pill -->
+    <div class="hud hud-right">
+      <div
+        class="license-badge-container"
+        :class="{ 'clickable': !isValidLicense || planType === 'Trial' }"
+        @click="(!isValidLicense || planType === 'Trial') ? showSettings = true : null"
+      >
+        <div v-if="isValidLicense" class="badge glass">
+          <span class="badge-dot" :class="planType?.toLowerCase()"></span>
+          <span class="badge-text">{{ planType || 'Trial' }} License</span>
+        </div>
+        <div v-else class="badge-upgrade glass">
+          <svg class="badge-trial-icon" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+          </svg>
+          <span class="badge-text">FREE Trial</span>
+          <div class="upgrade-action">
+            Upgrade
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </div>
         </div>
       </div>
     </div>
@@ -185,7 +221,7 @@
       @license-key="updateLicenseKey"
     />
   </div>
-  
+
 </template>
 
 <script setup lang="ts">
@@ -201,6 +237,7 @@ import settingsModal from './components/settingsModal.vue';
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 const isDev = import.meta.env.DEV;
+const logoError = ref(false);
 
 const splitRef = ref<HTMLElement | null>(null);
 // Individual dropdown open flags
@@ -215,14 +252,14 @@ const cameraActiveIndex = ref(0);
 // Sign-in state
 const showSettings = ref(false);
 const licenseKeyInput = ref('');
-const { 
+const {
   licenseKey: storedLicenseKey,
-  isValid: isValidLicense, 
-  isChecking, 
-  error: licenseError, 
+  isValid: isValidLicense,
+  isChecking,
+  error: licenseError,
   planType,
-  validateLicense, 
-  logout: licenseLogout 
+  validateLicense,
+  logout: licenseLogout
 } = useLicense();
 
 const isPaidLicense = computed(() => {
@@ -258,15 +295,16 @@ const {
 const selectedCameraCount = computed(() => selectedDevices.value?.length ?? 0);
 
 const showPlaySpace = ref(true);
+const showCameras = ref(true);
 
-const { 
-  sceneCameras, 
-  addToScene: addSceneCameras, 
-  syncVisibility, 
-  setGizmoRotation, 
-  computePlaySpaceBounds, 
-  dispose: disposeSceneCameras 
-} = useSceneCameras(selectedCameraCount, showPlaySpace);
+const {
+  sceneCameras,
+  addToScene: addSceneCameras,
+  syncVisibility,
+  setGizmoRotation,
+  computePlaySpaceBounds,
+  dispose: disposeSceneCameras
+} = useSceneCameras(selectedCameraCount, showPlaySpace, showCameras);
 
 const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt-${cameraHoverIndex.value}` : undefined));
 
@@ -282,12 +320,16 @@ const personCount = ref<string | null>('Single Person');
 const outputOptions = ['SteamVR', 'Unity', 'Unreal', 'Gadot'];
 const outputOption = ref<string | null>(null);
 
-const debugOpen = ref(false);
 const lastSentMsg = ref('');
 
-const running = ref(false)
+const running = ref(false);
+const irisDisplayFps = ref(0);
+let irisFrameCount = 0;
+let irisLastFpsTime = 0;
 
 // Skeleton always visible by default
+
+let browserMockTimer: ReturnType<typeof setInterval> | null = null;
 
 let scene =  ref<THREE.Scene | null>(null);
 let spheresMesh = ref<THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null>(null);
@@ -409,7 +451,7 @@ async function startCameraStream(camera: MediaDeviceInfo, index: number) {
     if (video) {
       video.srcObject = stream;
       // console.log("playing", selectedDevices.value);
-    } 
+    }
   } catch (err) {
     console.error("Camera access failed: ", err);
   }
@@ -439,10 +481,6 @@ function refresh() {
 
 onMounted(() => {
   document.addEventListener('click', onClickOutside);
-  // Dev-only keyboard toggle for debug overlay
-  if (isDev) {
-    window.addEventListener('keydown', onKeyDown);
-  }
   // Trigger split animation
   requestAnimationFrame(() => { splitRef.value?.classList.add('ready'); });
 
@@ -455,24 +493,31 @@ onMounted(() => {
   window.ipc?.onIrisData((data) => {
     irisData.value = data
   })
+
+  // Browser fallback: when not in Electron, stream mock pose data directly
+  if (!(window as any).ipc) {
+    fetch('/assets/position 2.json')
+        .then(r => r.json())
+        .then((positions: IrisData[]) => {
+          if (!Array.isArray(positions) || positions.length === 0) return;
+          let frame = 0;
+          browserMockTimer = setInterval(() => {
+            irisData = positions[frame];
+            frame = (frame + 1) % positions.length;
+          }, 1000 / 30);
+        })
+        .catch(err => console.warn('[browser mock] could not load position 2.json', err));
+  }
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onClickOutside);
-  if (isDev) {
-    window.removeEventListener('keydown', onKeyDown);
-  }
   disposeCameras();
   disposeSceneCameras();
   disposePlaySpace();
+  if (browserMockTimer) { clearInterval(browserMockTimer); browserMockTimer = null; }
 });
 
-function onKeyDown(e: KeyboardEvent) {
-  if (!isDev) return;
-  if (e.key === 'F2') {
-    debugOpen.value = !debugOpen.value;
-  }
-}
 
 function selectTracking(t: string) {
   trackingType.value = t;
@@ -524,10 +569,51 @@ function updateLicenseKey(value: string) {
 </script>
 
 <style scoped>
-.hud{ position: fixed; left: 16px; bottom: 16px; display:flex; gap:8px; padding:8px 10px; background: rgba(12,18,25,.6); border:1px solid rgba(255,255,255,.08); border-radius: 12px; backdrop-filter: blur(10px); }
+.hud{ position: fixed; left: 16px; bottom: 16px; height: 48px; display:flex; align-items:center; gap:8px; padding:0 10px; background: rgba(12,18,25,.6); border:1px solid rgba(255,255,255,.08); border-radius: 12px; backdrop-filter: blur(10px); }
+.hud-right{ left: auto; right: 266px; /* 250px sidenav + 16px gap */ }
+.hud-center{ left: calc(50% - 125px); transform: translateX(-50%); }
+.activity-blinker{
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #6be675;
+  box-shadow: 0 0 6px rgba(107,230,117,0.8);
+  animation: blink 1.2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes blink{
+  0%, 100%{ opacity: 1; box-shadow: 0 0 6px rgba(107,230,117,0.8); }
+  50%{ opacity: 0.25; box-shadow: none; }
+}
+.fps-counter{ font-variant-numeric: tabular-nums; font-size: .85rem; color: #e6edf3; font-weight: 700; }
+.fps-unit{ font-size: .7rem; font-weight: 600; color: rgba(255,255,255,.45); margin-left: 2px; }
+.demo-banner{
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: rgba(12,18,25,.65);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 20px;
+  backdrop-filter: blur(10px);
+  color: rgba(255,255,255,.55);
+  font-size: .8rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 1;
+}
+.demo-icon{ display:flex; align-items:center; color: rgba(255,180,50,.7); }
+.demo-fade-enter-active, .demo-fade-leave-active{ transition: opacity .4s ease, transform .4s ease; }
+.demo-fade-enter-from, .demo-fade-leave-to{ opacity: 0; transform: translateX(-50%) translateY(-6px); }
 .hud-item{ display:flex; align-items:center; gap:8px; color:#e6edf3; font-weight:600; }
-.hud-item input{ accent-color:#6be675; width:16px; height:16px; }
 .hud-sep{ width:1px; background:rgba(255,255,255,.1); margin:0 6px; }
+.hud-icon-btn{ display:flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:8px; border:1px solid rgba(255,255,255,.1); background:transparent; color:rgba(255,255,255,.35); cursor:pointer; transition:color .2s, background .2s, border-color .2s; padding:0; }
+.hud-icon-btn:hover{ background:rgba(255,255,255,.08); color:rgba(255,255,255,.7); }
+.hud-icon-btn.active{ color:#6be675; border-color:rgba(107,230,117,.4); background:rgba(107,230,117,.08); }
 .dot{ width:8px; height:8px; border-radius:50%; display:inline-block; box-shadow:0 0 10px rgba(0,0,0,.5) }
 .dot.ok{ background:#6be675 }
 .dot.warn{ background:#ff9a5c }
@@ -548,6 +634,7 @@ function updateLicenseKey(value: string) {
   padding:12px 18px;
 }
 .brand{ display:flex; align-items:center; gap:10px; color:#e6edf3; font-weight:700; z-index:2; }
+.brand-logo{ height: 28px; width: auto; object-fit: contain; display: block; }
 .menu{
   position: absolute;
   left: 50%;
@@ -590,10 +677,8 @@ function updateLicenseKey(value: string) {
 
 /* License Badge Styles */
 .license-badge-container {
-  position: fixed;
-  left: 16px;
-  bottom: 75px;
-  z-index: 900;
+  display: flex;
+  align-items: center;
   transition: transform 0.2s ease;
 }
 
@@ -605,21 +690,19 @@ function updateLicenseKey(value: string) {
   transform: translateY(-2px);
 }
 
-.badge {
+.license-badge-container .badge,
+.license-badge-container .badge-upgrade {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  border-radius: 12px;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
+  backdrop-filter: none;
   font-size: 13px;
   font-weight: 600;
   color: #e6edf3;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.badge.glass {
-  background: rgba(12, 18, 25, 0.6);
-  backdrop-filter: blur(10px);
 }
 
 .badge.error {
@@ -644,22 +727,16 @@ function updateLicenseKey(value: string) {
   box-shadow: 0 0 8px rgba(255, 59, 48, 0.4);
 }
 
+.badge-trial-icon {
+  color: #ff9a5c;
+  filter: drop-shadow(0 0 4px rgba(255, 154, 92, 0.6));
+  flex-shrink: 0;
+}
+
 .badge-text {
   letter-spacing: 0.5px;
 }
 
-.badge-upgrade {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 6px 6px 14px;
-  border-radius: 16px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #e6edf3;
-  background-color: var(--bg);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
 
 .upgrade-action {
   background: linear-gradient(135deg, #6be675, #4ecb58);
