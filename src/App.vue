@@ -61,8 +61,8 @@
                 @click="selectDevice(d, i)"
             >
               <div>
-                <div>{{ d.label || 'Camera ' + d.deviceId.substring(0,6) }}</div>
-                <small>{{ d.kind }}</small>
+                <small>{{ deviceShortCode(d.deviceId) }}</small>
+                <div>{{ d.label || ('Camera ' + (i + 1)) }}</div>
               </div>
             </div>
           </div>
@@ -556,6 +556,15 @@ function runningUpdate(value: boolean) {
 
 function asignScene(value: THREE.Scene) {
   scene.value = value
+}
+
+function deviceShortCode(deviceId: string): string {
+  // Produce a stable 4-char hex code from the deviceId (e.g. "Port #A3F2")
+  let hash = 0;
+  for (let i = 0; i < deviceId.length; i++) {
+    hash = (hash * 31 + deviceId.charCodeAt(i)) >>> 0;
+  }
+  return 'ID #' + (hash & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
 }
 
 function updateSettings(value: boolean) {
