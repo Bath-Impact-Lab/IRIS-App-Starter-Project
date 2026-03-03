@@ -1,0 +1,13 @@
+[workspace]
+authors = ["Max Ashton <92784885+kestrel84@users.noreply.github.com>"]
+channels = ["conda-forge", "opensim-org"]
+name = "recapture-graph-thingy"
+platforms = ["win-64"]
+version = "0.1.0"
+
+[tasks]
+main = "python ./main.py"
+
+[dependencies]
+opensim = ">=4.5.2,<5"
+jsonschema = ">=4.26.0,<5"

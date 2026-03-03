@@ -1,0 +1,129 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "title":"Graph Spec",
+    "description": "A specification for describing two kinds of basic biomechanics graphs.",
+    "type": "object",
+    "properties":{
+        "title": {
+            "title": "The title of the graph.",
+            "type": "string"
+        },
+        "type":{
+            "title": "The type of graph being displayed.",
+            "type": "string",
+            "pattern": "line|box"
+        },
+        "linearData":{
+            "title": "The data to be shown in a line graph.",
+            "description": "Format - 3D array in which linearData[2].data[3][0] gets you series 3, datapoint 4, x coord. linearData[2].colour would get you that series' color.",
+            "type": "array",
+            "items":{
+                "title": "series",
+                "type": "object",
+                "properties":{
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "title": "datapoint",
+                            "type":"array",
+                            "items": {
+                                "type":"number"
+                            },
+                            "maxItems": 2
+                        }
+                    },
+                    "colour": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "linearAxes":{
+            "title": "Information about the axes of a linear graph.",
+            "type": "object",
+            "properties": {
+                "x": {
+                    "type": "object",
+                    "properties": {
+                        "unit": {
+                            "type": "string"
+                        },
+                        "title": {
+                            "type": "string"
+                        },
+                        "min": {
+                            "type": "number"
+                        },
+                        "max": {
+                            "type": "number"
+                        }
+                    }
+                },
+                "y": {
+                    "type": "object",
+                    "properties": {
+                        "unit": {
+                            "type": "string"
+                        },
+                        "title": {
+                            "type": "string"
+                        },
+                        "min": {
+                            "type": "number"
+                        },
+                        "max": {
+                            "type": "number"
+                        }
+                    }
+                }
+            }
+        },
+        "boxData":{
+            "title": "The data to be shown in a box plot.",
+            "description": "Format - 2D array in which boxData[0].data[3] gets you series 1, datapoint 4. boxData[0].color gets you the series color.",
+            "type": "array",
+            "items":{
+                "title": "series",
+                "type": "object",
+                "properties":{
+                    "data": {
+                        "type": "array",
+                        "items": {
+                            "title": "datapoint",
+                            "type":"number"
+                        }
+                    },
+                    "colour": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "boxAxes":{
+            "title": "The axes of the data to be show in a box plot.",
+            "description": "Only one axis needs to be specified, since each series is displayed next to each other. (for instance, https://commons.wikimedia.org/wiki/File:Michelsonmorley-boxplot.svg#/media/File:Michelsonmorley-boxplot.svg)",
+            "type": "object",
+            "properties": {
+                "unit": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string"
+                },
+                "min": {
+                    "type": "number"
+                },
+                "max": {
+                    "type": "number"
+                }
+            }
+        }
+    },
+    "required": ["title", "type"],
+    "dependentRequired": {
+        "linearData": ["linearAxes"],
+        "linearAxes": ["linearData"],
+        "boxData": ["boxAxes"],
+        "boxAxes": ["boxData"]
+    }
+}
