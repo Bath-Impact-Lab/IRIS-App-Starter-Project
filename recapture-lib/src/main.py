@@ -13,7 +13,7 @@ def load_mot(path):
         table = opensim.TimeSeriesTable(path)
         print(table)
         return table
-    except Exception(e):
+    except Exception as e:
         print(f"failed to open file as an opensim TimeSeriesTable. error: {e}")
 
 def save_metric_data(metric_name, metric_data: dict):
@@ -27,8 +27,8 @@ def save_metric_data(metric_name, metric_data: dict):
 
 
     try:
-        jsonschema.validate(metric_data, schema)
-    except Exception(e):
+        valid = jsonschema.validate(metric_data, schema)
+    except Exception as e:
         print(f"error validating json schema: {e}")    
         return
 

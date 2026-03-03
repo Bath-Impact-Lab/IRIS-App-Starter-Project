@@ -1,5 +1,5 @@
 import { ref, onMounted } from 'vue'
-import { supabase } from '../lib/supabase'
+// import { supabase } from '../lib/supabase'
 
 const LICENSE_STORAGE_KEY = 'iris_license_key'
 
@@ -23,43 +23,43 @@ export function useLicense() {
             const cleanKey = key.trim()
 
             // Join with customers and subscriptions to get plan_type
-            const { data, error: sbError } = await supabase
-                .from('licenses')
-                .select(`
-                    is_active,
-                    customers (
-                        subscriptions (
-                            plan_type
-                        )
-                    )
-                `)
-                .eq('license_key', cleanKey)
-                .maybeSingle()
+            // const { data, error: sbError } = await supabase
+            //     .from('licenses')
+            //     .select(`
+            //         is_active,
+            //         customers (
+            //             subscriptions (
+            //                 plan_type
+            //             )
+            //         )
+            //     `)
+            //     .eq('license_key', cleanKey)
+            //     .maybeSingle()
 
-            if (sbError) throw sbError
+            // if (sbError) throw sbError
 
-            if (!data) {
-                error.value = 'Invalid license key'
-                isValid.value = false
-                planType.value = null
-                return false
-            }
+            // if (!data) {
+            //     error.value = 'Invalid license key'
+            //     isValid.value = false
+            //     planType.value = null
+            //     return false
+            // }
 
-            if (!data.is_active) {
-                error.value = 'License is inactive'
-                isValid.value = false
-                planType.value = null
-                return false
-            }
+            // if (!data.is_active) {
+            //     error.value = 'License is inactive'
+            //     isValid.value = false
+            //     planType.value = null
+            //     return false
+            // }
 
             // Success
             licenseKey.value = cleanKey
             isValid.value = true
 
             // Extract plan type safely
-            const customer = data.customers as any
-            const subscription = customer?.subscriptions?.[0]
-            planType.value = subscription?.plan_type || 'Trial'
+            // const customer = data.customers as any
+            // const subscription = customer?.subscriptions?.[0]
+            // planType.value = subscription?.plan_type || 'Trial'
 
             localStorage.setItem(LICENSE_STORAGE_KEY, cleanKey)
             return true

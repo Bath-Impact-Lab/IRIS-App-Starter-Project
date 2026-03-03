@@ -163,8 +163,8 @@
       <div class="session-sidenav-bottom">
         <button class="session-sidenav-action" type="button">Calibrate Rig</button>
         <button class="session-sidenav-action" type="button">Calibrate Patient</button>
-        <button class="session-sidenav-action" type="button">Capture Session</button>
-        <button class="session-sidenav-action" type="button">Biomechanics analysis</button>
+        <button class="session-sidenav-action" :class="{ active: activeView === 'capture' }" type="button" @click="openCaptureView">Capture Session</button>
+        <button class="session-sidenav-action" :class="{ active: activeView === 'analysis' }" type="button" @click="openAnalysisView">Biomechanics analysis</button>
       </div>
     </aside>
 
@@ -186,6 +186,7 @@
     />
 
     <ThreeWindow
+      v-if="activeView === 'capture'"
       :selected-camera-count="selectedCameraCount"
       :iris-data="irisData"
       :spheres-mesh="spheresMesh"
@@ -198,6 +199,7 @@
       @give-sphere-mesh="sphereMeshUpdate"
       @give-skeleton-mesh="skeletonMeshUpdate"
     />
+    <AnalysisWindow v-else />
 
     <div class="hud">
       <button
@@ -256,6 +258,7 @@ import { useLicense } from './lib/useLicense';
 import { usePlaySpace } from './lib/usePlaySpace';
 import sidebar from './components/sidebar.vue';
 import ThreeWindow from './components/threeWindow.vue';
+import AnalysisWindow from './components/analysisWindow.vue';
 import settingsModal from './components/settingsModal.vue';
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
@@ -301,6 +304,7 @@ const isPaidLicense = computed(() => {
 });
 
 const test = ref<boolean>(false)
+const activeView = ref<'capture' | 'analysis'>('capture');
 
 // Sync local input with stored key on mount
 watch(storedLicenseKey, (newKey) => {
@@ -612,6 +616,14 @@ function updateLicenseKey(value: string) {
   licenseKeyInput.value = value
 }
 
+function openCaptureView() {
+  activeView.value = 'capture';
+}
+
+function openAnalysisView() {
+  activeView.value = 'analysis';
+}
+
 </script>
 
 <style scoped>
@@ -810,6 +822,9 @@ function updateLicenseKey(value: string) {
 }
 .session-sidenav-action:hover{
   color: rgba(255, 255, 255, 0.85);
+}
+.session-sidenav-action.active{
+  color: #6be675;
 }
 
 /* License Badge Styles */
