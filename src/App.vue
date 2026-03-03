@@ -147,6 +147,27 @@
       </div>
     </nav>
 
+    <aside class="session-sidenav">
+      <div class="session-sidenav-top">
+        <h2 class="session-sidenav-title">Sessions</h2>
+        <div class="session-sidenav-list">
+          <button class="session-sidenav-link" type="button">16/4/2026</button>
+          <button class="session-sidenav-link" type="button">16/4/2026</button>
+          <button class="session-sidenav-link" type="button">16/4/2026</button>
+          <button class="session-sidenav-link" type="button">16/4/2026</button>
+        </div>
+      </div>
+
+      <div class="session-sidenav-divider"></div>
+
+      <div class="session-sidenav-bottom">
+        <button class="session-sidenav-action" type="button">Calibrate Rig</button>
+        <button class="session-sidenav-action" type="button">Calibrate Patient</button>
+        <button class="session-sidenav-action" type="button">Capture Session</button>
+        <button class="session-sidenav-action" type="button">Biomechanics analysis</button>
+      </div>
+    </aside>
+
 
     <sidebar 
       :spheres-mesh="spheresMesh" 
@@ -215,29 +236,7 @@
       <div class="hud-sep"></div>
       <span class="hud-item fps-counter">{{ irisDisplayFps }} <span class="fps-unit">FPS</span></span>
     </div>
-    <!-- License Badge — bottom-centre pill -->
-    <div class="hud hud-right">
-      <div
-        class="license-badge-container"
-        :class="{ 'clickable': !isValidLicense || planType === 'Trial' }"
-        @click="(!isValidLicense || planType === 'Trial') ? showSettings = true : null"
-      >
-        <div v-if="isValidLicense" class="badge glass">
-          <span class="badge-dot" :class="planType?.toLowerCase()"></span>
-          <span class="badge-text">{{ planType || 'Trial' }} License</span>
-        </div>
-        <div v-else class="badge-upgrade glass">
-          <svg class="badge-trial-icon" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-          </svg>
-          <span class="badge-text">FREE Trial</span>
-          <div class="upgrade-action">
-            Upgrade
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-          </div>
-        </div>
-      </div>
-    </div>
+     
     <!-- Settings Modal -->
     <settingsModal
       :show-settings="showSettings"
@@ -616,7 +615,7 @@ function updateLicenseKey(value: string) {
 </script>
 
 <style scoped>
-.hud{ position: fixed; left: 16px; bottom: 16px; height: 48px; display:flex; align-items:center; gap:8px; padding:0 10px; background: rgba(12,18,25,.6); border:1px solid rgba(255,255,255,.08); border-radius: 12px; backdrop-filter: blur(10px); }
+.hud{ position: fixed; left: 236px; bottom: 16px; height: 48px; display:flex; align-items:center; gap:8px; padding:0 10px; background: rgba(12,18,25,.6); border:1px solid rgba(255,255,255,.08); border-radius: 12px; backdrop-filter: blur(10px); }
 .hud-right{ left: auto; right: 266px; /* 250px sidenav + 16px gap */ }
 @media (max-width: 768px) {
   .hud-right {
@@ -726,6 +725,92 @@ function updateLicenseKey(value: string) {
 .dropdown-menu:focus { outline: none; }
 .device.active { background: rgba(107, 230, 117, 0.12); border-radius: 8px; }
 .device.active > div > div { color: #e6ffe9; }
+.session-sidenav{
+  position: absolute;
+  top: 63px;
+  left: 0;
+  width: 220px;
+  height: calc(100% - 63px);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  scrollbar-width: none;
+  background: var(--sidebar);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  z-index: 10;
+}
+.session-sidenav::-webkit-scrollbar{
+  display: none;
+}
+.session-sidenav-top{
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.session-sidenav-title{
+  margin: 0;
+  font-size: 1.45rem;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+}
+.session-sidenav-list{
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 10px;
+}
+.session-sidenav-link{
+  display: block;
+  width: 100%;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1.06rem;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.session-sidenav-link:hover{
+  color: #ffffff;
+}
+.session-sidenav-divider{
+  width: 100%;
+  height: 1px;
+  margin: 10px 0 12px;
+  background: rgba(255, 255, 255, 0.28);
+}
+.session-sidenav-bottom{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: auto;
+}
+.session-sidenav-action{
+  display: block;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: #ffffff;
+  font-size: 1.06rem;
+  font-weight: 500;
+  line-height: 1.2;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.session-sidenav-action:hover{
+  color: rgba(255, 255, 255, 0.85);
+}
 
 /* License Badge Styles */
 .license-badge-container {
@@ -847,6 +932,12 @@ function updateLicenseKey(value: string) {
 }
 
 @media (max-width: 768px) {
+  .hud {
+    left: 16px;
+  }
+  .session-sidenav {
+    display: none;
+  }
   .navbar {
     padding: 8px 12px;
   }
