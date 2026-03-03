@@ -72,6 +72,7 @@ function createCameraGizmo(
 
   const lineMat = new THREE.LineBasicMaterial({
     color: new THREE.Color(color),
+    transparent: true,
     depthTest: true,
   });
 
@@ -98,6 +99,7 @@ function createCameraGizmo(
 
   const triMat = new THREE.MeshBasicMaterial({
     color: new THREE.Color(color),
+    transparent: true,
     side: THREE.DoubleSide,
     depthTest: true,
   });
