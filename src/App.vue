@@ -27,11 +27,14 @@
               aria-controls="camera-listbox"
               :disabled="running"
           >
-            <div v-if="!selectedDevices">
-              Camera Selection
-            </div>
-            <div v-else>
-              Add More Cameras
+            <div class="btn-content">
+              <svg class="btn-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/>
+              </svg>
+              <span class="btn-text">
+                <template v-if="!selectedDevices">Camera Selection</template>
+                <template v-else>Add More Cameras</template>
+              </span>
             </div>
           </button>
           <div
@@ -71,7 +74,12 @@
         <!-- Person count dropdown -->
         <div class="dropdown" :class="{ open: openPersonCount }" style="margin-left: 12px;">
           <button class="btn" @click="togglePersonCount" :disabled="running">
-            {{ personCount || 'Person Count' }}
+            <div class="btn-content">
+              <svg class="btn-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
+              </svg>
+              <span class="btn-text">{{ personCount || 'Person Count' }}</span>
+            </div>
           </button>
           <div class="dropdown-menu">
             <h4>Subjects</h4>
@@ -86,7 +94,12 @@
         <!-- Tracking type dropdown -->
         <div class="dropdown" :class="{ open: openTrack }" style="margin-left: 12px;">
           <button class="btn" @click="toggleTrack" :disabled="running">
-            {{ trackingType || 'Tracking Type' }}
+            <div class="btn-content">
+              <svg class="btn-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="8" y1="12" x2="16" y2="12"/>
+              </svg>
+              <span class="btn-text">{{ trackingType || 'Tracking Type' }}</span>
+            </div>
           </button>
           <div class="dropdown-menu">
             <h4>Tracking</h4>
@@ -101,7 +114,12 @@
         <!-- Output option dropdown -->
         <div class="dropdown" :class="{ open: openOutput }" style="margin-left: 12px;">
           <button class="btn" @click="toggleOutput" :disabled="running">
-            {{ outputOption || 'Output' }}
+            <div class="btn-content">
+              <svg class="btn-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+              <span class="btn-text">{{ outputOption || 'Output' }}</span>
+            </div>
           </button>
           <div class="dropdown-menu">
             <h4>Output</h4>
@@ -779,6 +797,44 @@ function updateLicenseKey(value: string) {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.btn-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-icon-svg {
+  display: none;
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .navbar {
+    padding: 8px 12px;
+  }
+  .brand {
+    gap: 6px;
+  }
+  .brand-logo {
+    height: 24px;
+  }
+  .menu {
+    gap: 6px;
+  }
+  .btn {
+    padding: 8px;
+  }
+  .btn-text {
+    display: none;
+  }
+  .btn-icon-svg {
+    display: block;
+  }
+  .dropdown {
+    margin-left: 4px !important;
+  }
 }
 
 </style>
