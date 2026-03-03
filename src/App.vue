@@ -242,8 +242,10 @@
     <!-- Settings Modal -->
     <settingsModal
       :show-settings="showSettings"
+      :current-theme="currentTheme"
       @settings="updateSettings"
       @license-key="updateLicenseKey"
+      @set-theme="applyTheme"
     />
   </div>
 
@@ -264,6 +266,14 @@ import settingsModal from './components/settingsModal.vue';
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 const isDev = import.meta.env.DEV;
 const logoError = ref(false);
+
+// ── Theme ──
+const currentTheme = ref<'dark' | 'light'>('dark');
+function applyTheme(theme: 'dark' | 'light') {
+  currentTheme.value = theme;
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('app-theme', theme);
+}
 
 const splitRef = ref<HTMLElement | null>(null);
 // Individual dropdown open flags
@@ -521,6 +531,10 @@ function refresh() {
 }
 
 onMounted(() => {
+  // Restore saved theme
+  const savedTheme = (localStorage.getItem('app-theme') as 'dark' | 'light') || 'dark';
+  applyTheme(savedTheme);
+
   document.addEventListener('click', onClickOutside);
   // Trigger split animation
   requestAnimationFrame(() => { splitRef.value?.classList.add('ready'); });
@@ -627,7 +641,7 @@ function openAnalysisView() {
 </script>
 
 <style scoped>
-.hud{ position: fixed; left: 236px; bottom: 16px; height: 48px; display:flex; align-items:center; gap:8px; padding:0 10px; background: rgba(12,18,25,.6); border:1px solid rgba(255,255,255,.08); border-radius: 12px; backdrop-filter: blur(10px); }
+.hud{ position: fixed; left: 236px; bottom: 16px; height: 48px; display:flex; align-items:center; gap:8px; padding:0 10px; background: var(--hud-bg); border:1px solid var(--hud-border); border-radius: 12px; backdrop-filter: blur(10px); }
 .hud-right{ left: auto; right: 266px; /* 250px sidenav + 16px gap */ }
 @media (max-width: 768px) {
   .hud-right {
@@ -646,8 +660,8 @@ function openAnalysisView() {
   0%, 100%{ opacity: 1; box-shadow: 0 0 6px rgba(107,230,117,0.8); }
   50%{ opacity: 0.25; box-shadow: none; }
 }
-.fps-counter{ font-variant-numeric: tabular-nums; font-size: .85rem; color: #e6edf3; font-weight: 700; }
-.fps-unit{ font-size: .7rem; font-weight: 600; color: rgba(255,255,255,.45); margin-left: 2px; }
+.fps-counter{ font-variant-numeric: tabular-nums; font-size: .85rem; color: var(--fg); font-weight: 700; }
+.fps-unit{ font-size: .7rem; font-weight: 600; color: var(--muted); margin-left: 2px; }
 .demo-banner{
   position: absolute;
   top: 18px;
@@ -657,11 +671,11 @@ function openAnalysisView() {
   align-items: center;
   gap: 8px;
   padding: 8px 16px;
-  background: rgba(12,18,25,.65);
-  border: 1px solid rgba(255,255,255,.1);
+  background: var(--hud-bg);
+  border: 1px solid var(--hud-border);
   border-radius: 20px;
   backdrop-filter: blur(10px);
-  color: rgba(255,255,255,.55);
+  color: var(--muted);
   font-size: .8rem;
   font-weight: 600;
   letter-spacing: .02em;
@@ -672,10 +686,10 @@ function openAnalysisView() {
 .demo-icon{ display:flex; align-items:center; color: rgba(255,180,50,.7); }
 .demo-fade-enter-active, .demo-fade-leave-active{ transition: opacity .4s ease, transform .4s ease; }
 .demo-fade-enter-from, .demo-fade-leave-to{ opacity: 0; transform: translateX(-50%) translateY(-6px); }
-.hud-item{ display:flex; align-items:center; gap:8px; color:#e6edf3; font-weight:600; }
-.hud-sep{ width:1px; background:rgba(255,255,255,.1); margin:0 6px; }
-.hud-icon-btn{ display:flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:8px; border:1px solid rgba(255,255,255,.1); background:transparent; color:rgba(255,255,255,.35); cursor:pointer; transition:color .2s, background .2s, border-color .2s; padding:0; }
-.hud-icon-btn:hover{ background:rgba(255,255,255,.08); color:rgba(255,255,255,.7); }
+.hud-item{ display:flex; align-items:center; gap:8px; color:var(--fg); font-weight:600; }
+.hud-sep{ width:1px; background:var(--hud-border); margin:0 6px; }
+.hud-icon-btn{ display:flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:8px; border:1px solid var(--hud-border); background:transparent; color:var(--muted); cursor:pointer; transition:color .2s, background .2s, border-color .2s; padding:0; }
+.hud-icon-btn:hover{ background:var(--device-hover); color:var(--fg); }
 .hud-icon-btn.active{ color:#6be675; border-color:rgba(107,230,117,.4); background:rgba(107,230,117,.08); }
 .dot{ width:8px; height:8px; border-radius:50%; display:inline-block; box-shadow:0 0 10px rgba(0,0,0,.5) }
 .dot.ok{ background:#6be675 }
@@ -717,26 +731,31 @@ function openAnalysisView() {
   justify-content: center;
   padding: 8px;
   border-radius: 9px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(26,35,48,0.9);
-  color: #e6edf3;
+  border: 1px solid var(--btn-border);
+  background: var(--btn-bg);
+  color: #ffffff;
   cursor: pointer;
   transition: background 0.2s ease;
 }
 .btn-icon:hover{
-  background: rgba(40,50,65,0.9);
+  opacity: 0.85;
 }
 .btn-icon svg{
   display: block;
 }
+.btn-icon img {
+  filter: none;
+}
 /* Accessibility focus styles */
 .btn:focus-visible, .btn.btn-mini:focus-visible {
-  outline: 2px solid #6be675;
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 .dropdown-menu:focus { outline: none; }
 .device.active { background: rgba(107, 230, 117, 0.12); border-radius: 8px; }
 .device.active > div > div { color: #e6ffe9; }
+[data-theme="light"] .device.active { background: rgba(46, 134, 193, 0.12); }
+[data-theme="light"] .device.active > div > div { color: #1F4E79; }
 .session-sidenav{
   position: absolute;
   top: 63px;
@@ -749,8 +768,9 @@ function openAnalysisView() {
   overflow-y: auto;
   scrollbar-width: none;
   background: var(--sidebar);
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid var(--sidenav-border);
   z-index: 10;
+  transition: background 0.3s ease, border-color 0.3s ease;
 }
 .session-sidenav::-webkit-scrollbar{
   display: none;
@@ -764,7 +784,7 @@ function openAnalysisView() {
   margin: 0;
   font-size: 1.45rem;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--sidenav-title);
   white-space: nowrap;
 }
 .session-sidenav-list{
@@ -779,7 +799,7 @@ function openAnalysisView() {
   padding: 3px 0;
   border: 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--sidenav-link);
   font-size: 1.06rem;
   font-weight: 500;
   line-height: 1.2;
@@ -790,13 +810,13 @@ function openAnalysisView() {
   text-overflow: ellipsis;
 }
 .session-sidenav-link:hover{
-  color: #ffffff;
+  color: var(--sidenav-title);
 }
 .session-sidenav-divider{
   width: 100%;
   height: 1px;
   margin: 10px 0 12px;
-  background: rgba(255, 255, 255, 0.28);
+  background: var(--sidenav-divider);
 }
 .session-sidenav-bottom{
   display: flex;
@@ -810,7 +830,7 @@ function openAnalysisView() {
   padding: 2px 0;
   border: 0;
   background: transparent;
-  color: #ffffff;
+  color: var(--sidenav-action);
   font-size: 1.06rem;
   font-weight: 500;
   line-height: 1.2;
@@ -821,10 +841,10 @@ function openAnalysisView() {
   text-overflow: ellipsis;
 }
 .session-sidenav-action:hover{
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--muted);
 }
 .session-sidenav-action.active{
-  color: #6be675;
+  color: var(--accent);
 }
 
 /* License Badge Styles */
@@ -924,7 +944,7 @@ function openAnalysisView() {
 .dropdown-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--overlay-bg);
   z-index: 150;
 }
 

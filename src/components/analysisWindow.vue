@@ -112,10 +112,16 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import * as echarts from 'echarts';
 import { METRIC_CATEGORIES, buildMetricChartOption, getMetricTemplates } from '@/temp/analysisDefaults.js';
 import type { MetricTemplate } from '@/temp/analysisDefaults.js';
+
+// ...existing code...
+
+const currentTheme = ref<'dark' | 'light'>(
+  (document.documentElement.getAttribute('data-theme') as 'dark' | 'light') ?? 'dark'
+);
 
 interface ChartCard extends MetricTemplate {
   id: string;
@@ -242,7 +248,7 @@ function renderChart(card: ChartCard) {
   } else {
     chart.resize();
   }
-  chart.setOption(buildMetricChartOption(card, echarts), { notMerge: true });
+  chart.setOption(buildMetricChartOption(card, echarts, currentTheme.value), { notMerge: true });
 }
 
 function renderAllCharts() {
@@ -330,12 +336,26 @@ function handleResize() {
   chartInstances.forEach((chart) => chart.resize());
 }
 
+let themeObserver: MutationObserver | null = null;
+
 onMounted(() => {
   ensureHostResizeObserver();
   seedCategory();
   window.addEventListener('resize', handleResize);
   window.addEventListener('pointerdown', handleDocumentPointerDown);
   window.addEventListener('keydown', handleDocumentKeydown);
+
+  // Watch for data-theme changes on <html> and re-render charts
+  themeObserver = new MutationObserver(() => {
+    const newTheme = (document.documentElement.getAttribute('data-theme') as 'dark' | 'light') ?? 'dark';
+    if (newTheme !== currentTheme.value) {
+      currentTheme.value = newTheme;
+      // Dispose all instances so they reinit with the new background colour
+      disposeAllCharts();
+      nextTick(() => renderAllCharts());
+    }
+  });
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 });
 
 onBeforeUnmount(() => {
@@ -344,18 +364,32 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleDocumentKeydown);
   hostResizeObserver?.disconnect();
   hostResizeObserver = null;
+  themeObserver?.disconnect();
+  themeObserver = null;
   disposeAllCharts();
   chartHosts.clear();
 });
 </script>
 
 <style scoped>
+/* ── Analysis Window — theme-aware ── */
 .analysis-window {
   position: absolute;
   inset: 63px 250px 0 220px;
-  padding: 16px 16px 86px;
+  padding: 20px 20px 86px;
   overflow: auto;
   background: radial-gradient(120% 120% at 15% 0%, rgba(45, 87, 138, 0.15) 0%, rgba(8, 13, 20, 0.95) 62%);
+}
+
+:global([data-theme="light"] .analysis-window) {
+  background: #ffffff !important;
+}
+
+:global([data-theme="light"] .analysis-card) {
+  background: #ffffff !important;
+  border-color: rgba(31, 78, 121, 0.12) !important;
+  box-shadow: 0 2px 10px rgba(31, 78, 121, 0.07) !important;
+  backdrop-filter: none !important;
 }
 
 .analysis-header {
@@ -363,19 +397,34 @@ onBeforeUnmount(() => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 12px;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+:global([data-theme="light"]) .analysis-header {
+  border-bottom-color: rgba(31, 78, 121, 0.12);
 }
 
 .analysis-title-block h2 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.15rem;
+  font-weight: 700;
   color: #f2f6fa;
+}
+
+:global([data-theme="light"]) .analysis-title-block h2 {
+  color: #1F4E79;
 }
 
 .analysis-title-block p {
   margin: 2px 0 10px;
   font-size: 0.82rem;
   color: rgba(255, 255, 255, 0.55);
+}
+
+:global([data-theme="light"]) .analysis-title-block p {
+  color: #2E86C1;
 }
 
 .metric-categories {
@@ -388,17 +437,40 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: rgba(12, 20, 30, 0.6);
   color: rgba(230, 237, 243, 0.82);
-  padding: 5px 10px;
+  padding: 5px 12px;
   border-radius: 999px;
   font-size: 0.76rem;
   font-weight: 600;
   cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.metric-category-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.3);
 }
 
 .metric-category-btn.active {
   color: #0d1722;
   border-color: rgba(128, 215, 255, 0.8);
   background: rgba(128, 215, 255, 0.9);
+}
+
+:global([data-theme="light"]) .metric-category-btn {
+  border-color: rgba(31, 78, 121, 0.2);
+  background: #ffffff;
+  color: #2E86C1;
+}
+
+:global([data-theme="light"]) .metric-category-btn:hover {
+  background: #cce4f6;
+  border-color: #2E86C1;
+}
+
+:global([data-theme="light"]) .metric-category-btn.active {
+  color: #ffffff;
+  background: #1D4ED8;
+  border-color: #1D4ED8;
 }
 
 .analysis-actions {
@@ -408,7 +480,7 @@ onBeforeUnmount(() => {
 }
 
 .analysis-chip {
-  padding: 5px 10px;
+  padding: 5px 12px;
   border-radius: 999px;
   font-size: 0.7rem;
   letter-spacing: 0.04em;
@@ -416,6 +488,13 @@ onBeforeUnmount(() => {
   color: #a2ffd8;
   border: 1px solid rgba(97, 232, 170, 0.4);
   background: rgba(69, 212, 163, 0.12);
+  font-weight: 700;
+}
+
+:global([data-theme="light"]) .analysis-chip {
+  color: #1F4E79;
+  border-color: rgba(31, 78, 121, 0.25);
+  background: rgba(204, 228, 246, 0.6);
 }
 
 .add-chart-dock {
@@ -445,6 +524,13 @@ onBeforeUnmount(() => {
   gap: 10px;
 }
 
+:global([data-theme="light"]) .add-chart-modal {
+  border-color: rgba(31, 78, 121, 0.15);
+  background: #ffffff;
+  box-shadow: 0 16px 34px rgba(31, 78, 121, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  backdrop-filter: none;
+}
+
 .chart-option-btn {
   display: flex;
   flex-direction: column;
@@ -471,6 +557,21 @@ onBeforeUnmount(() => {
   outline-offset: 2px;
 }
 
+:global([data-theme="light"]) .chart-option-btn {
+  border-color: rgba(31, 78, 121, 0.15);
+  background: #f0f6fc;
+  color: #1F4E79;
+}
+
+:global([data-theme="light"]) .chart-option-btn:hover {
+  border-color: #2E86C1;
+  background: #cce4f6;
+}
+
+:global([data-theme="light"]) .chart-option-btn:focus-visible {
+  outline-color: #2E86C1;
+}
+
 .chart-option-graphic {
   height: 56px;
   border-radius: 8px;
@@ -480,6 +581,11 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+}
+
+:global([data-theme="light"]) .chart-option-graphic {
+  border-color: rgba(46, 134, 193, 0.2);
+  background: linear-gradient(180deg, #e8f4fc, #daeaf6);
 }
 
 .chart-preview {
@@ -527,6 +633,31 @@ onBeforeUnmount(() => {
   stroke-width: 2.2;
 }
 
+:global([data-theme="light"]) .chart-preview-line .area {
+  fill: rgba(46, 134, 193, 0.15);
+}
+
+:global([data-theme="light"]) .chart-option-graphic.type-line .chart-preview-line .trend {
+  stroke: #2E86C1;
+}
+
+:global([data-theme="light"]) .chart-option-graphic.type-line .chart-preview-line .point {
+  fill: #ffffff;
+  stroke: #2E86C1;
+  stroke-width: 1.5;
+}
+
+:global([data-theme="light"]) .chart-option-graphic.type-boxplot .chart-preview-box .whisker,
+:global([data-theme="light"]) .chart-option-graphic.type-boxplot .chart-preview-box .cap,
+:global([data-theme="light"]) .chart-option-graphic.type-boxplot .chart-preview-box .median {
+  stroke: #1D4ED8;
+}
+
+:global([data-theme="light"]) .chart-option-graphic.type-boxplot .chart-preview-box .box {
+  fill: rgba(29, 78, 216, 0.12);
+  stroke: #1D4ED8;
+}
+
 .chart-option-text {
   display: flex;
   flex-direction: column;
@@ -544,6 +675,14 @@ onBeforeUnmount(() => {
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: rgba(204, 228, 214, 0.73);
+}
+
+:global([data-theme="light"]) .chart-option-title {
+  color: #1F4E79;
+}
+
+:global([data-theme="light"]) .chart-option-subtitle {
+  color: #2E86C1;
 }
 
 .add-chart-modal-enter-active,
@@ -567,17 +706,17 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid rgba(103, 233, 148, 0.55);
-  background: linear-gradient(135deg, rgba(74, 184, 120, 0.28), rgba(58, 140, 95, 0.2));
-  color: #d6ffe6;
-  padding: 7px 13px;
+  border: 1px solid rgba(29, 78, 216, 0.4);
+  background: linear-gradient(135deg, #1D4ED8, #1F4E79);
+  color: #ffffff;
+  padding: 8px 16px;
   border-radius: 10px;
   font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 0.02em;
   cursor: pointer;
-  box-shadow: 0 8px 22px rgba(50, 138, 89, 0.28), inset 0 1px 0 rgba(210, 255, 228, 0.15);
-  transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease, border-color 0.2s ease;
+  box-shadow: 0 4px 14px rgba(29, 78, 216, 0.25);
+  transition: transform 0.15s ease, box-shadow 0.2s ease, filter 0.2s ease;
 }
 
 .add-chart-icon {
@@ -589,41 +728,47 @@ onBeforeUnmount(() => {
   border-radius: 999px;
   font-size: 0.92rem;
   line-height: 1;
-  background: rgba(215, 255, 230, 0.16);
-  border: 1px solid rgba(215, 255, 230, 0.36);
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.35);
 }
 
 .add-chart-btn:hover {
   transform: translateY(-1px);
-  filter: brightness(1.05);
-  border-color: rgba(130, 241, 173, 0.75);
-  box-shadow: 0 12px 24px rgba(52, 155, 101, 0.32), inset 0 1px 0 rgba(220, 255, 235, 0.25);
+  filter: brightness(1.08);
+  box-shadow: 0 8px 20px rgba(29, 78, 216, 0.35);
 }
 
 .add-chart-btn:active {
   transform: translateY(0);
-  filter: brightness(0.98);
+  filter: brightness(0.97);
 }
 
 .add-chart-btn:focus-visible {
-  outline: 2px solid rgba(130, 241, 173, 0.85);
+  outline: 2px solid #38BDF8;
   outline-offset: 2px;
 }
 
 .analysis-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: 12px;
+  gap: 14px;
   align-items: start;
 }
 
 .analysis-card {
   grid-column: span 6;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
+  border-radius: 14px;
   background: rgba(14, 24, 36, 0.7);
   backdrop-filter: blur(6px);
-  padding: 12px;
+  padding: 14px;
+}
+
+:global([data-theme="light"]) .analysis-card {
+  border-color: rgba(31, 78, 121, 0.12);
+  background: #ffffff;
+  backdrop-filter: none;
+  box-shadow: 0 2px 10px rgba(31, 78, 121, 0.07);
 }
 
 .analysis-card.size-wide {
@@ -638,7 +783,13 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+:global([data-theme="light"]) .card-head {
+  border-bottom-color: rgba(31, 78, 121, 0.08);
 }
 
 .card-head-actions {
@@ -650,12 +801,21 @@ onBeforeUnmount(() => {
 .card-head h3 {
   margin: 0;
   font-size: 0.95rem;
-  font-weight: 600;
+  font-weight: 700;
+  color: #e6edf3;
+}
+
+:global([data-theme="light"]) .card-head h3 {
+  color: #1F4E79;
 }
 
 .card-head span {
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.45);
+}
+
+:global([data-theme="light"]) .card-head span {
+  color: #2E86C1;
 }
 
 .remove-chart-btn {
@@ -672,10 +832,22 @@ onBeforeUnmount(() => {
   transition: border-color 0.15s ease, background-color 0.15s ease, transform 0.15s ease;
 }
 
+:global([data-theme="light"]) .remove-chart-btn {
+  border-color: rgba(31, 78, 121, 0.2);
+  background: #f0f6fc;
+  color: #2E86C1;
+}
+
 .remove-chart-btn:hover {
   border-color: rgba(255, 128, 128, 0.55);
   background: rgba(65, 24, 24, 0.7);
   transform: translateY(-1px);
+}
+
+:global([data-theme="light"]) .remove-chart-btn:hover {
+  border-color: rgba(220, 50, 50, 0.5);
+  background: rgba(220, 50, 50, 0.07);
+  color: #dc3232;
 }
 
 .remove-chart-btn:active {
@@ -683,7 +855,7 @@ onBeforeUnmount(() => {
 }
 
 .remove-chart-btn:focus-visible {
-  outline: 2px solid rgba(255, 128, 128, 0.75);
+  outline: 2px solid rgba(220, 50, 50, 0.6);
   outline-offset: 2px;
 }
 
