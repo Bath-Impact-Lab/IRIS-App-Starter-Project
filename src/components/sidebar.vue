@@ -4,17 +4,30 @@
 			<div class="brand">
 				Camera Config:
 			</div>
-			<div style="width: 100%;" v-for="(d, i) in props.selectedCameras">
+			<div
+				style="width: 100%;"
+				v-for="(d, i) in props.selectedCameras"
+				:key="d.deviceId"
+				draggable="true"
+				:class="['drag-item', { 'drag-over': dragOverIndex === i, 'dragging': dragSourceIndex === i }]"
+				@dragstart="onDragStart(i)"
+				@dragenter.prevent="onDragEnter(i)"
+				@dragover.prevent
+				@dragleave="onDragLeave(i)"
+				@drop.prevent="onDrop(i)"
+				@dragend="onDragEnd"
+			>
 				<div
 					class="camera-list"
 					:style="{
 						width: '100%',
-						boxShadow: props.sceneCameras[i] ? `inset 4px 0 0 ${props.sceneCameras[i].color}` : 'none',
-						paddingLeft: props.sceneCameras[i] ? '8px' : '0',
+						boxShadow: deviceColour[d.deviceId] ? `inset 4px 0 0 ${deviceColour[d.deviceId]}` : 'none',
+						paddingLeft: deviceColour[d.deviceId] ? '8px' : '0',
 					}"
 				>
 					<div class="camera-text">
-						{{ d.label }}
+						<span class="drag-handle" title="Drag to reorder">⠿</span>
+						{{ d.label ? d.label.split(' ')[0] + ' ' : '' }}{{ deviceShortCode(d.deviceId) }}
 						<button class="button btn" style="padding: 3px 5px;" v-on:click="rotateCamera(d, i)" :disabled="running">
 							<img style="width: 30px;" src="/assets/anticlockwise-2-line.svg" alt="">
 						</button>
@@ -65,14 +78,78 @@ const emit = defineEmits<{
 	skeletonUpdate: [THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null]
 	irisDataUpdate: [IrisData[] | IrisData | null]
 	isRunning: [boolean]
+	reorderCameras: [MediaDeviceInfo[]]
 }>()
+
+// Drag-and-drop reorder state
+const dragSourceIndex = ref<number | null>(null);
+const dragOverIndex = ref<number | null>(null);
+const dragEnterCounters = ref<Record<number, number>>({});
+
+function onDragStart(index: number) {
+  dragSourceIndex.value = index;
+}
+function onDragEnter(index: number) {
+  if (dragSourceIndex.value === null || dragSourceIndex.value === index) return;
+  dragEnterCounters.value[index] = (dragEnterCounters.value[index] ?? 0) + 1;
+  dragOverIndex.value = index;
+}
+function onDragLeave(index: number) {
+  dragEnterCounters.value[index] = (dragEnterCounters.value[index] ?? 1) - 1;
+  if (dragEnterCounters.value[index] <= 0) {
+    dragEnterCounters.value[index] = 0;
+    if (dragOverIndex.value === index) dragOverIndex.value = null;
+  }
+}
+function onDrop(targetIndex: number) {
+  const from = dragSourceIndex.value;
+  dragEnterCounters.value = {};
+  if (from === null || from === targetIndex || !props.selectedCameras) return;
+  const reordered = [...props.selectedCameras];
+  const [moved] = reordered.splice(from, 1);
+  reordered.splice(targetIndex, 0, moved);
+  emit('reorderCameras', reordered);
+  dragSourceIndex.value = null;
+  dragOverIndex.value = null;
+}
+function onDragEnd() {
+  dragSourceIndex.value = null;
+  dragOverIndex.value = null;
+  dragEnterCounters.value = {};
+}
 
 
 const selectedCameraCount = computed(() => props.selectedCameras?.length ?? 0);
 const { setGizmoRotation } = useSceneCameras(selectedCameraCount);
 
+// Map deviceId → colour so the accent follows the camera identity, not its slot position
+const deviceColour = ref<Record<string, string>>({});
+
+function syncDeviceColours() {
+  const cameras = props.selectedCameras;
+  if (!cameras) return;
+  cameras.forEach((d, i) => {
+    const colour = props.sceneCameras[i]?.color ?? '';
+    // Only lock in once we have a real colour; don't overwrite an already-set one
+    if (colour && !deviceColour.value[d.deviceId]) {
+      deviceColour.value[d.deviceId] = colour;
+    }
+  });
+}
+
+watch(() => props.selectedCameras, syncDeviceColours, { immediate: true, deep: true });
+watch(() => props.sceneCameras, syncDeviceColours, { immediate: true, deep: true });
+
 const cameraRotation = ref<Record<string, number>>(props.cameraRotation);
 const running = ref(false)
+
+function deviceShortCode(deviceId: string): string {
+  let hash = 0;
+  for (let i = 0; i < deviceId.length; i++) {
+    hash = (hash * 31 + deviceId.charCodeAt(i)) >>> 0;
+  }
+  return '#' + (hash & 0xFFFF).toString(16).toUpperCase().padStart(4, '0');
+}
 
 function rotateCamera(d: MediaDeviceInfo, index: number) {
   const currentAngle = cameraRotation.value[d.deviceId] || 0;
@@ -228,7 +305,26 @@ async function startCameraStream(camera: MediaDeviceInfo, index: number) {
 </script>
 
 <style scoped>
-.brand{ display:flex; justify-content:center; gap:10px; color:#e6edf3; font-weight:700; z-index:2; }
+.drag-handle {
+  cursor: grab;
+  font-size: 18px;
+  color: rgba(255,255,255,0.25);
+  line-height: 1;
+  user-select: none;
+  margin-right: 4px;
+  transition: color 0.15s;
+}
+.drag-handle:hover {
+  color: rgba(255,255,255,0.6);
+}
+.drag-item {
+  border-radius: 10px;
+}
+.drag-item.drag-over {
+  outline: 2px solid rgba(100, 180, 255, 0.6);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
 
 .sidenav {
   position: absolute; 

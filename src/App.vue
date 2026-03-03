@@ -69,8 +69,8 @@
                 @click="selectDevice(d, i)"
             >
               <div>
-                <small>{{ deviceShortCode(d.deviceId) }}</small>
-                <div>{{ d.label || ('Camera ' + (i + 1)) }}</div>
+                <div>{{ deviceShortCode(d.deviceId) }}</div>
+                <small v-if="d.label">{{ d.label }}</small>
               </div>
             </div>
           </div>
@@ -161,6 +161,7 @@
       @skeleton-update="skeletonMeshUpdate"
       @iris-data-update="irisDataUpdate"
       @is-running="runningUpdate"
+      @reorder-cameras="reorderCameras"
     />
 
     <ThreeWindow
@@ -445,6 +446,11 @@ function onClickOutside(e: MouseEvent) {
   if (!openCamera.value && !openPersonCount.value && !openTrack.value && !openOutput.value) return;
   const dd = (e.target as HTMLElement)?.closest('.dropdown');
   if (!dd) { openCamera.value = false; openPersonCount.value = false; openTrack.value = false; openOutput.value = false; }
+}
+
+function reorderCameras(newOrder: MediaDeviceInfo[]) {
+  selectedDevices.value = newOrder;
+  selectedDeviceId.value = newOrder.map(d => d.deviceId);
 }
 
 function selectDevice(d: MediaDeviceInfo, i: number){
