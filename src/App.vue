@@ -1,5 +1,10 @@
 <template>
-  <div>
+  <div id="app-container">
+    <!-- Global Overlay for Dropdowns -->
+    <Transition name="fade">
+      <div v-if="anyDropdownOpen" class="dropdown-overlay" @click="closeAllDropdowns"></div>
+    </Transition>
+
     <nav class="navbar">
       <div class="brand">
         <img
@@ -267,6 +272,15 @@ const openOutput = ref(false);
 const cameraButtonRef = ref<HTMLButtonElement | null>(null);
 const cameraListRef = ref<HTMLElement | null>(null);
 const cameraActiveIndex = ref(0);
+// Dropdown management
+const anyDropdownOpen = computed(() => openCamera.value || openPersonCount.value || openTrack.value || openOutput.value);
+function closeAllDropdowns() {
+  openCamera.value = false;
+  openPersonCount.value = false;
+  openTrack.value = false;
+  openOutput.value = false;
+}
+
 // Sign-in state
 const showSettings = ref(false);
 const licenseKeyInput = ref('');
@@ -793,10 +807,26 @@ function updateLicenseKey(value: string) {
 }
 
 .settings-footer {
-  margin-top: 8px;
-  display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+.navbar {
+  z-index: 200 !important;
+}
+
+.dropdown-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 150;
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
 }
 
 .btn-content {
@@ -831,6 +861,19 @@ function updateLicenseKey(value: string) {
   }
   .btn-icon-svg {
     display: block;
+  }
+  .dropdown-menu {
+    position: fixed !important;
+    top: 70px !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translateX(-50%) !important;
+    width: 90% !important;
+    max-width: 340px !important;
+    margin: 0 !important;
+    z-index: 200 !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6) !important;
   }
   .dropdown {
     margin-left: 4px !important;
