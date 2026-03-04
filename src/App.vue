@@ -665,7 +665,7 @@ function updateLicenseKey(value: string) {
 .hud-sep{ width:1px; background:rgba(255,255,255,.1); margin:0 6px; }
 .hud-icon-btn{ display:flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:8px; border:1px solid rgba(255,255,255,.1); background:transparent; color:rgba(255,255,255,.35); cursor:pointer; transition:color .2s, background .2s, border-color .2s; padding:0; }
 .hud-icon-btn:hover{ background:rgba(255,255,255,.08); color:rgba(255,255,255,.7); }
-.hud-icon-btn.active{ color:#6be675; border-color:rgba(107,230,117,.4); background:rgba(107,230,117,.08); }
+.hud-icon-btn.active{ color:#ffffff; border-color:rgba(255,255,255,.4); background:rgba(255,255,255,.1); }
 .dot{ width:8px; height:8px; border-radius:50%; display:inline-block; box-shadow:0 0 10px rgba(0,0,0,.5) }
 .dot.ok{ background:#6be675 }
 .dot.warn{ background:#ff9a5c }
