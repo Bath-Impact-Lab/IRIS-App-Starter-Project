@@ -1,9 +1,6 @@
 <template>
 	<div class="sidenav">
 		<div class="cameras">
-			<div class="brand">
-				Camera Config:
-			</div>
 			<div
 				style="width: 100%;"
 				v-for="(d, i) in props.selectedCameras"
