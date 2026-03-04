@@ -15,7 +15,6 @@
           @error="logoError = true"
         />
         <template v-else>
-          <div class="dot"></div>
           <div class="split" ref="splitRef">{{ appTitle }}</div>
         </template>
       </div>
