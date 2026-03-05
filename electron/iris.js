@@ -189,7 +189,7 @@ function registerIrisIpc() {
       }
     }
     else {
-      const positions = require("./../public/assets/position 2.json")
+      const positions = require("./../public/assets/mock-halpe26-stream.json")
       const targetWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow()
       if (targetWindow && !targetWindow.isDestroyed()) {
         targetWindow.webContents.send('iris-data', positions)

@@ -533,7 +533,7 @@ onMounted(() => {
 
   // Browser fallback: when not in Electron, stream mock pose data directly
   if (!(window as any).ipc) {
-    fetch('/assets/position 2.json')
+    fetch('/assets/mock-halpe26-stream.json')
         .then(r => r.json())
         .then((positions: IrisData[]) => {
           if (!Array.isArray(positions) || positions.length === 0) return;
@@ -543,7 +543,7 @@ onMounted(() => {
             frame = (frame + 1) % positions.length;
           }, 1000 / 30);
         })
-        .catch(err => console.warn('[browser mock] could not load position 2.json', err));
+        .catch(err => console.warn('[browser mock] could not load mock-halpe26-stream.json', err));
   }
 });
 

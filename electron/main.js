@@ -14,9 +14,9 @@ function startIrisMockProcess() {
   );
   if (runtimeExists) return;
 
-  const positionsPath = path.join(__dirname, '..', 'public', 'assets', 'position 2.json');
+  const positionsPath = path.join(__dirname, '..', 'public', 'assets', 'mock-halpe26-stream.json');
   if (!fs.existsSync(positionsPath)) {
-    console.warn('[mock] position 2.json not found, skipping mock process');
+    console.warn('[mock] mock-halpe26-stream.json not found, skipping mock process');
     return;
   }
 
