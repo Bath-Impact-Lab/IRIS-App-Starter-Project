@@ -1,6 +1,6 @@
 <template>
 	<div class="sidenav">
-		<div class="cameras">
+		<div class="cameras" v-if="props.selectedCameras && props.selectedCameras.length > 0">
 			<div
 				style="width: 100%;"
 				v-for="(d, i) in props.selectedCameras"
