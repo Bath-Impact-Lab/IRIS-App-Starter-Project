@@ -8,7 +8,8 @@ contextBridge.exposeInMainWorld('ipc', {
     ipcRenderer.on('iris-data', (event, data,) => {
       callback(data)
     })
-  }
+  },
+  calculateIntrinsics: (device_id, rotation) => ipcRenderer.invoke('calculate-intrinsics', device_id, rotation),
 })
 
 contextBridge.exposeInMainWorld('electronAPI', {

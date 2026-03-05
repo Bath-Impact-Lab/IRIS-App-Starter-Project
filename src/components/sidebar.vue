@@ -38,6 +38,11 @@
 						>
 						</video>
 					</div>
+          <div>
+            <button v-on:click="cameraIntrinsics(d)" class="button btn" style="margin-top: 5px;">
+              calibrate intrinsics
+            </button>
+          </div>
 				</div>
 			</div>
 		</div>
@@ -54,7 +59,6 @@
 
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, watch, nextTick, computed, Ref } from 'vue';
-import { useCameras } from './../lib/useCameras';
 import { useSceneCameras, SceneCameraEntry } from './../lib/useSceneCameras';
 import * as THREE from 'three';
 
@@ -297,6 +301,11 @@ async function startCameraStream(camera: MediaDeviceInfo, index: number) {
   } catch (err) {
     console.error("Camera access failed: ", err);
   }
+}
+
+async function cameraIntrinsics(d: MediaDeviceInfo) {
+  console.log(d.groupId)
+  await window.ipc?.calculateIntrinsics(d.deviceId, cameraRotation.value[d.deviceId])
 }
 
 </script>

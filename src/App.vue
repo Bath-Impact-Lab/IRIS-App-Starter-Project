@@ -259,7 +259,6 @@ import ThreeWindow from './components/threeWindow.vue';
 import settingsModal from './components/settingsModal.vue';
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
-const isDev = import.meta.env.DEV;
 const logoError = ref(false);
 
 const splitRef = ref<HTMLElement | null>(null);
@@ -356,8 +355,6 @@ const lastSentMsg = ref('');
 
 const running = ref(false);
 const irisDisplayFps = ref(0);
-let irisFrameCount = 0;
-let irisLastFpsTime = 0;
 
 // Skeleton always visible by default
 
