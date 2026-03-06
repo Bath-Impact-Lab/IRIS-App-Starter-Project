@@ -244,7 +244,7 @@
 
         <!-- Playback side -->
         <div class="fs-group">
-          <button class="hud-icon-btn" @click="skipBackward" title="Skip Backward" :disabled="playbackDisabled">
+          <button class="hud-icon-btn fs-btn" @click="skipBackward" title="Skip Backward" :disabled="playbackDisabled">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <polygon points="19,20 9,12 19,4"/><rect x="5" y="4" width="3" height="16"/>
             </svg>
@@ -263,7 +263,7 @@
               <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
             </svg>
           </button>
-          <button class="hud-icon-btn" @click="skipForward" title="Skip Forward" :disabled="playbackDisabled">
+          <button class="hud-icon-btn fs-btn" @click="skipForward" title="Skip Forward" :disabled="playbackDisabled">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <polygon points="5,4 15,12 5,20"/><rect x="16" y="4" width="3" height="16"/>
             </svg>
