@@ -134,6 +134,19 @@
             </div>
           </div>
         </div>
+
+        <!-- Filesystem recordings dropdown — shown right of Output when Filesystem is selected -->
+        <select
+          v-if="outputOption === 'Filesystem'"
+          class="btn fs-recordings-select"
+          style="margin-left: 12px;"
+          :disabled="running"
+          :value="fsSelectedRecording?.path ?? ''"
+          @change="onRecordingSelectChange"
+        >
+          <option v-if="!fsRecordings.length" value="" disabled>No recordings yet</option>
+          <option v-for="r in fsRecordings" :key="r.path" :value="r.path">{{ r.name }}</option>
+        </select>
       </div>
 
       <!-- Right side: sign-in area -->
@@ -181,6 +194,8 @@
     <!-- Filesystem Record / Playback bar -->
     <Transition name="fs-bar">
       <div class="hud hud-fs" v-if="outputOption === 'Filesystem'">
+
+
         <!-- Record side -->
         <div class="fs-group">
           <button
@@ -425,6 +440,40 @@ const personCount = ref<string | null>('Single Person');
 const outputOptions = ['SteamVR', 'Quest', 'Unity', 'Unreal', 'Gadot', 'Filesystem'];
 const outputOption = ref<string | null>(null);
 
+
+// Filesystem recordings dropdown
+const fsRecordingsDir = ref<string | null>(null);
+const fsRecordings = ref<{ name: string; path: string }[]>([]);
+const fsSelectedRecording = ref<{ name: string; path: string } | null>(null);
+
+async function refreshRecordings() {
+  if (!fsRecordingsDir.value) return;
+  const ipc = (window as any).ipc;
+  if (ipc?.fsListRecordings) {
+    fsRecordings.value = await ipc.fsListRecordings(fsRecordingsDir.value);
+    if (fsRecordings.value.length && !fsSelectedRecording.value) {
+      fsSelectedRecording.value = fsRecordings.value[0]; // list is already sorted newest first
+    }
+  }
+}
+
+function onRecordingSelectChange(e: Event) {
+  const path = (e.target as HTMLSelectElement).value;
+  fsSelectedRecording.value = fsRecordings.value.find(r => r.path === path) ?? null;
+}
+
+// When Filesystem is selected, auto-load the default recordings directory
+watch(outputOption, async (val) => {
+  if (val === 'Filesystem' && !fsRecordingsDir.value) {
+    const ipc = (window as any).ipc;
+    if (ipc?.fsGetDefaultRecordingsDir) {
+      fsRecordingsDir.value = await ipc.fsGetDefaultRecordingsDir();
+      await refreshRecordings();
+    }
+  }
+});
+
+
 // Filesystem record / playback state
 const isRecording = ref(false);
 const isPlaying = ref(false);
@@ -433,6 +482,15 @@ const fsDuration = ref(0);
 const timelineHoverX = ref<number | null>(null);
 let fsPlaybackTimer: ReturnType<typeof setInterval> | null = null;
 let fsRecordTimer: ReturnType<typeof setInterval> | null = null;
+
+// Refresh the recordings list whenever a recording finishes
+watch(isRecording, async (val) => {
+  if (!val) {
+    await refreshRecordings();
+    // Always jump to the newest recording when one finishes
+    if (fsRecordings.value.length) fsSelectedRecording.value = fsRecordings.value[0];
+  }
+});
 
 const timelinePercent = computed(() => {
   if (fsDuration.value === 0) return 0;
@@ -784,6 +842,46 @@ function updateLicenseKey(value: string) {
 .fs-label { font-size: .78rem; font-weight: 700; color: rgba(255,255,255,.5); letter-spacing: .04em; min-width: 40px; }
 .fs-rec-label { width: 52px; min-width: 52px; }
 .fs-time { font-variant-numeric: tabular-nums; color: #e6edf3; min-width: 38px; }
+/* Recordings dropdown */
+.fs-recordings-dropdown { position: relative; }
+.fs-recordings-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 10px; height: 32px; width: auto;
+  font-size: .78rem; font-weight: 600; color: rgba(255,255,255,.6);
+  white-space: nowrap;
+}
+.fs-recordings-label { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fs-chevron { transition: transform 0.2s ease; flex-shrink: 0; }
+.fs-recordings-dropdown.open .fs-chevron { transform: rotate(180deg); }
+.fs-recordings-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 240px;
+  max-width: 320px;
+  background: var(--bg-elev);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: 0 -8px 24px rgba(0,0,0,.5);
+  z-index: 300;
+  max-height: 280px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.fs-recordings-select {
+  appearance: auto;
+  cursor: pointer;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--fg);
+  background: linear-gradient(180deg, #1a2330, #121922);
+  max-width: 160px;
+}
+.fs-recordings-select option {
+  background: #11161d;
+  color: var(--fg);
+}
 .fs-timeline {
   width: 160px;
   height: 28px;

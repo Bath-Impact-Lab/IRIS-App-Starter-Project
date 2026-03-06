@@ -8,7 +8,11 @@ contextBridge.exposeInMainWorld('ipc', {
     ipcRenderer.on('iris-data', (event, data,) => {
       callback(data)
     })
-  }
+  },
+  fsGetDefaultRecordingsDir: () => ipcRenderer.invoke('fs-get-default-recordings-dir'),
+  fsPickRecordingsDir: () => ipcRenderer.invoke('fs-pick-recordings-dir'),
+  fsListRecordings: (rootDir) => ipcRenderer.invoke('fs-list-recordings', rootDir),
+  fsOpenRecording: (folderPath) => ipcRenderer.invoke('fs-open-recording', folderPath),
 })
 
 contextBridge.exposeInMainWorld('electronAPI', {
