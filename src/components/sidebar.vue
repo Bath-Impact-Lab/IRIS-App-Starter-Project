@@ -38,6 +38,11 @@
 						>
 						</video>
 					</div>
+          <div>
+            <button v-on:click="cameraIntrinsics(d)" class="button btn" style="margin-top: 5px;">
+              calibrate intrinsics
+            </button>
+          </div>
 				</div>
 			</div>
 		</div>
@@ -54,7 +59,6 @@
 
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, watch, nextTick, computed, Ref } from 'vue';
-import { useCameras } from './../lib/useCameras';
 import { useSceneCameras, SceneCameraEntry } from './../lib/useSceneCameras';
 import * as THREE from 'three';
 
@@ -65,8 +69,10 @@ interface Props {
 	scene: THREE.Scene | null,
 	irisData: IrisData[] | IrisData | null,
 	selectedCameras: MediaDeviceInfo[] | null,
+  selectedCameraIds: string[] | null,
 	sceneCameras: SceneCameraEntry[],
   cameraRotation: Record<string, number>,
+  devices: MediaDeviceInfo[]
 }
 const props = defineProps<Props>()
 
@@ -241,7 +247,6 @@ async function startIris() {
     props.selectedCameras?.forEach((_, i) => {
       stopCameraStream(i)
     });
-    await new Promise( resolve => setTimeout(resolve, 1000))
 
     running.value = true
 		emit('isRunning', running.value)
@@ -270,16 +275,20 @@ async function stopIris() {
 	emit('irisDataUpdate', null)
 }
 
-function stopCameraStream(index: number) {
+async function stopCameraStream(index: number) {
   try {
     const video = document.getElementById(`cameraFeed${index}`) as HTMLVideoElement;
-    const stream = video.srcObject as MediaStream;
-    const tracks = stream.getTracks();
-    
-    tracks.forEach(track => {
-    track.stop();
-    });
-    video.srcObject = null;
+    let stream = video.srcObject as MediaStream | null;
+    if (stream) {
+      const tracks = stream.getTracks();
+      
+      tracks.forEach(track => {
+        track.stop();
+      });
+      video.srcObject = null;
+      stream = null
+    }
+    await new Promise( resolve => setTimeout(resolve, 1000))
   }
   catch {
     console.log("Cameras are gone")
@@ -298,6 +307,36 @@ async function startCameraStream(camera: MediaDeviceInfo, index: number) {
     console.error("Camera access failed: ", err);
   }
 }
+
+async function cameraIntrinsics(d: MediaDeviceInfo) {
+  const idx = (await listCameras()).indexOf(d.deviceId)
+  console.log(d, idx)
+  if (props.selectedCameras) stopCameraStream(props.selectedCameras?.indexOf(d))
+  const data = await window.ipc?.calculateIntrinsics(idx, cameraRotation.value[d.deviceId])
+
+}
+
+async function listCameras() {
+  const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput')
+  const ids: string[] = []
+  cams.forEach(cam => {
+    ids.push(cam.deviceId)
+  })
+  return ids
+
+}
+
+onMounted(() => {
+  window.ipc?.intrinsicsComplete((data) => {
+    const device = props.devices[data.idx]
+    const index = props.selectedCameraIds?.indexOf(device.deviceId)
+    if (index !== undefined) {
+      if (index >= 0) {
+        startCameraStream(device, index)
+      }
+    }
+  })
+})
 
 </script>
 

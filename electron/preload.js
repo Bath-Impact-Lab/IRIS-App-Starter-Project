@@ -9,6 +9,12 @@ contextBridge.exposeInMainWorld('ipc', {
       callback(data)
     })
   },
+  calculateIntrinsics: (index, rotation) => ipcRenderer.invoke('calculate-intrinsics', index, rotation),
+  intrinsicsComplete: (callback) => {
+    ipcRenderer.on('intrinsics-complete', (event, data) => {
+      callback(data)
+    })
+  },
   fsGetDefaultRecordingsDir: () => ipcRenderer.invoke('fs-get-default-recordings-dir'),
   fsPickRecordingsDir: () => ipcRenderer.invoke('fs-pick-recordings-dir'),
   fsListRecordings: (rootDir) => ipcRenderer.invoke('fs-list-recordings', rootDir),
