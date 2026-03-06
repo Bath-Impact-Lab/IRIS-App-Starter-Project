@@ -69,8 +69,10 @@ interface Props {
 	scene: THREE.Scene | null,
 	irisData: IrisData[] | IrisData | null,
 	selectedCameras: MediaDeviceInfo[] | null,
+  selectedCameraIds: string[] | null,
 	sceneCameras: SceneCameraEntry[],
   cameraRotation: Record<string, number>,
+  devices: MediaDeviceInfo[]
 }
 const props = defineProps<Props>()
 
@@ -304,9 +306,35 @@ async function startCameraStream(camera: MediaDeviceInfo, index: number) {
 }
 
 async function cameraIntrinsics(d: MediaDeviceInfo) {
-  console.log(d.groupId)
-  await window.ipc?.calculateIntrinsics(d.deviceId, cameraRotation.value[d.deviceId])
+  const idx = (await listCameras()).indexOf(d.deviceId)
+  console.log(d, idx)
+  if (props.selectedCameras) stopCameraStream(props.selectedCameras?.indexOf(d))
+  await new Promise( resolve => setTimeout(resolve, 1000))
+  const data = await window.ipc?.calculateIntrinsics(idx, cameraRotation.value[d.deviceId])
+
 }
+
+async function listCameras() {
+  const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput')
+  const ids: string[] = []
+  cams.forEach(cam => {
+    ids.push(cam.deviceId)
+  })
+  return ids
+
+}
+
+onMounted(() => {
+  window.ipc?.intrinsicsComplete((data) => {
+    const device = props.devices[data.idx]
+    const index = props.selectedCameraIds?.indexOf(device.deviceId)
+    if (index !== undefined) {
+      if (index >= 0) {
+        startCameraStream(device, index)
+      }
+    }
+  })
+})
 
 </script>
 

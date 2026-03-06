@@ -156,6 +156,8 @@
       :selected-cameras="selectedDevices"
       :scene-cameras="sceneCameras"
       :camera-rotation="cameraRotation"
+      :devices="devices"
+      :selected-camera-ids="selectedDeviceId"
       @sphere-update="sphereMeshUpdate"
       @skeleton-update="skeletonMeshUpdate"
       @iris-data-update="irisDataUpdate"

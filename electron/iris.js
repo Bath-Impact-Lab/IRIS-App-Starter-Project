@@ -4,7 +4,7 @@ const readline = require('readline');
 const { app, ipcMain } = require('electron')
 const crypto = require('crypto')
 const path = require('path')
-const { spawn, execFile } = require('child_process')
+const { spawn, execFile, exec } = require('child_process')
 const { BrowserWindow } = require('electron')
 const fs = require('fs')
 const os = require('os')
@@ -331,7 +331,56 @@ function registerIrisIpc() {
   })
 }
 
-ipcMain.handle('calculate-intrinsics', (event, device_id, rotation) => {
+ipcMain.handle('calculate-intrinsics', async (event, index, rotation) => {
+  let inactivityTimer
+  let ok = false
+  
+  let exePath = path.join(__dirname, "..", "IRIS", "bin", "iris_cli.exe")
+  let args = ["calculate-intrinsics", `--camera ${index}`, "--preview", `--rotate ${rotation}`]
+  const child = spawn(exePath, args, {
+    stdio: ['pipe', 'pipe', 'pipe'],
+  })
+
+  function resetTimer() {
+    clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(() => {
+      console.log("No new data for 10s. Killing process...");
+      child.kill();
+      const targetWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow();
+      if (targetWindow && !targetWindow.isDestroyed()) {
+        targetWindow.webContents.send('intrinsics-complete', {idx: index, path: "None"});
+      }
+    }, 10000);
+  }
+
+  // irisCameras(index)
+
+  resetTimer()
+
+  child.stdout.on('data', (d) => {
+    const data = d.toString().trim()
+    console.log(data)
+    if (data.includes("Intrinsics saved to:")) {
+      const targetWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow();
+      if (targetWindow && !targetWindow.isDestroyed()) {
+        targetWindow.webContents.send('intrinsics-complete', {idx: index, path: data.replace("Intrinsics saved to: ", "")});
+      }
+    }
+    else {
+      resetTimer()
+    }
+  })
+
+  child.stderr.on('data', (d) => {
+    const data = d.toString().trim()
+    console.log(data)
+  })
+
+  return {ok} 
+})
+
+
+function irisCameras(index) {
   let exePath = path.join(__dirname, "..", "IRIS", "bin", "iris_cli.exe")
   let args = ["show-cameras", "-v"]
   const child = spawn(exePath, args, {
@@ -341,18 +390,9 @@ ipcMain.handle('calculate-intrinsics', (event, device_id, rotation) => {
   child.stdout.on('data', (d) => {
     const data = d.toString().trim()
     
-    const ids = [...data.matchAll(/\{([^}]+)\}/g)].map(m => m[1]);
-
-    const devices_detected = []
-
-    ids.forEach(id => {
-      devices_detected.push(id.replaceAll("-", ""))
-    })
-    console.log(devices_detected.includes(device_id), device_id)
-
+    const ids = [...data.matchAll(/device_path: ([^}]+})\\global/gm)].map(m => m[1]);
+    console.log(data)
+    console.log(ids, index)
   })
-  const ok = true
-  return {ok} 
-})
-
+}
 module.exports = { registerIrisIpc }

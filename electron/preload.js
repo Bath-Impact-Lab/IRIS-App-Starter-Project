@@ -9,7 +9,12 @@ contextBridge.exposeInMainWorld('ipc', {
       callback(data)
     })
   },
-  calculateIntrinsics: (device_id, rotation) => ipcRenderer.invoke('calculate-intrinsics', device_id, rotation),
+  calculateIntrinsics: (index, rotation) => ipcRenderer.invoke('calculate-intrinsics', index, rotation),
+  intrinsicsComplete: (callback) => {
+    ipcRenderer.on('intrinsics-complete', (event, data) => {
+      callback(data)
+    })
+  }
 })
 
 contextBridge.exposeInMainWorld('electronAPI', {
