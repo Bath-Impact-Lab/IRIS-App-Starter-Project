@@ -4,7 +4,7 @@ const readline = require('readline');
 const { app, ipcMain } = require('electron')
 const crypto = require('crypto')
 const path = require('path')
-const { spawn, execFile } = require('child_process')
+const { spawn, execFile, exec } = require('child_process')
 const { BrowserWindow } = require('electron')
 const fs = require('fs')
 const os = require('os')
@@ -44,6 +44,86 @@ function buildConfigFromOptions(opts = {}) {
     }
   }));
 
+  const detection = {
+    name: "det0",
+    params: {
+      device_id: 0,
+      batch_size: 4,
+      rtmdet_engine_path: "models/rtmdet_t_bs4_fp16.trt",
+      rtmdet_input_width: 640,
+      rtmdet_input_height: 640,
+      rtmdet_conf_threshold: 0.7,
+      rtmdet_iou_threshold: 0.45,
+      detection_skip_enabled: true,
+      detection_skip_frames: 20,
+      reid_enabled: true,
+      osnet_engine_path: "models/osnet_x05_fp16.trt",
+      reid_min_detection_conf: 0.55
+    }
+  }
+
+  const global_reid_tracking = {
+    name: "global_track",
+    params: {
+      single_person_mode: false,
+      max_age: 200,
+      min_hits: 1,
+      min_detection_confidence: 0.5,
+      appearance_threshold: 0.45,
+      cross_camera_unconfirmed_threshold: 0.55,
+      use_motion_prediction: false
+    }
+  }
+
+  const pose_estimation =  {
+    name: "pose0",
+    params: {
+      device_id: 0,
+      batch: 16,
+      engine: "models/rtmpose_bs16_fp16.trt",
+      input_w: 192,
+      input_h: 256,
+      split_ratio: 2.0
+    }
+  }
+
+  const triangulation = {
+    name: "tri0",
+    params: {
+      pose_sources: "pose0",
+      calibration_dir: "calibration_output",
+      extrinsics_file: "calibration_output/extrinsics.json",
+      camera_ids: [0, 1, 2, 3],
+      compute_reprojection: true,
+      store_reprojection_error: true,
+      gate_by_reprojection_error: true,
+      max_reprojection_error_px: 50.0,
+      smoothing: {
+        enabled: true,
+        freq: 100.0,
+        min_cutoff: 1.0,
+        beta: 0.5,
+        d_cutoff: 1.0,
+        cleanup_interval: 300
+      }
+    }
+  }
+  
+  const online_calibration = {
+    name: "online_calib",
+    type: "OnlineCalibration",
+    inputs: {
+      PoseBatch: "triangulation.PoseBatch"
+    },
+    params: {
+      window_size: 300,
+      min_joint_conf: 0.6,
+      learning_rate: 0.01,
+      num_epochs: 100,
+      huber_delta: 10.0
+    }
+  }
+
   const output = {
     name: 'output',
     params: {
@@ -51,11 +131,22 @@ function buildConfigFromOptions(opts = {}) {
       capacity: 120,
       frame_width: opts.camera_width ?? 1920,
       frame_height: opts.camera_height ?? 1080,
-      num_cameras: opts.cameras.length,
+      num_cameras: opts.cameras.length,  
     }
   };
 
-  return { run_id, devices, buffers, capture, output }
+  return { 
+    run_id, 
+    devices, 
+    buffers, 
+    capture, 
+    detection, 
+    global_reid_tracking, 
+    pose_estimation, 
+    triangulation, 
+    online_calibration, 
+    output 
+  }
 }
 
 function writeTempConfigFile(configObj) {
@@ -104,11 +195,12 @@ function registerIrisIpc() {
     const paths = writeTempConfigFile(cfgObj)
     const cfgPath = paths.cfgPath
     const tmpDir = paths.tmpDir
-    if (fs.existsSync(path.join(__dirname, "..", "iris_runtime_bundle", "exe file"))) {
+    if (fs.existsSync(path.join(__dirname, "..", "IRIS", "bin", "iris_cli.exe"))) {
       try {
-        const args = ['--config', cfgPath]
+        const args = ["run", cfgPath]
         //waiting for iris stuff to be done to implement
-        let exePath = path.join(__dirname, "..", "iris_runtime_bundle", "exe file")
+        let exePath = path.join(__dirname, "..", "IRIS", "bin", "iris_cli.exe")
+
         if (app.isPackaged) {
           exePath = path.join(process.resourcesPath, "app.asar.unpacked", "iris_runtime_bundle", "exe file")
         }
@@ -197,7 +289,7 @@ function registerIrisIpc() {
     }
   })
   
-  ipcMain.handle('stop-iris', (event, Id) =>{
+  ipcMain.handle('stop-iris', (event, Id) => {
     const sessionId = String(Id);
     const entry = workers.get(sessionId);
     if (!entry) return { ok: false, error: 'not_found' };
@@ -239,4 +331,68 @@ function registerIrisIpc() {
   })
 }
 
+ipcMain.handle('calculate-intrinsics', async (event, index, rotation) => {
+  let inactivityTimer
+  let ok = false
+  
+  let exePath = path.join(__dirname, "..", "IRIS", "bin", "iris_cli.exe")
+  let args = ["calculate-intrinsics", `--camera ${index}`, "--preview", `--rotate ${rotation}`]
+  const child = spawn(exePath, args, {
+    stdio: ['pipe', 'pipe', 'pipe'],
+  })
+
+  function resetTimer() {
+    clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(() => {
+      console.log("No new data for 10s. Killing process...");
+      child.kill();
+      const targetWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow();
+      if (targetWindow && !targetWindow.isDestroyed()) {
+        targetWindow.webContents.send('intrinsics-complete', {idx: index, path: "None"});
+      }
+    }, 10000);
+  }
+
+  // irisCameras(index)
+
+  resetTimer()
+
+  child.stdout.on('data', (d) => {
+    const data = d.toString().trim()
+    console.log("[Intrinsics] " + data)
+    if (data.includes("Intrinsics saved to:")) {
+      const targetWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow();
+      if (targetWindow && !targetWindow.isDestroyed()) {
+        targetWindow.webContents.send('intrinsics-complete', {idx: index, path: data.replace("Intrinsics saved to: ", "")});
+      }
+    }
+    else {
+      resetTimer()
+    }
+  })
+
+  child.stderr.on('data', (d) => {
+    const data = d.toString().trim()
+    console.log("[Intrinsics Error] " + data)
+  })
+
+  return {ok} 
+})
+
+
+function irisCameras(index) {
+  let exePath = path.join(__dirname, "..", "IRIS", "bin", "iris_cli.exe")
+  let args = ["show-cameras", "-v"]
+  const child = spawn(exePath, args, {
+    stdio: ['pipe', 'pipe', 'pipe'],
+  })
+  
+  child.stdout.on('data', (d) => {
+    const data = d.toString().trim()
+    
+    const ids = [...data.matchAll(/device_path: ([^}]+})\\global/gm)].map(m => m[1]);
+    console.log(data)
+    console.log(ids, index)
+  })
+}
 module.exports = { registerIrisIpc }

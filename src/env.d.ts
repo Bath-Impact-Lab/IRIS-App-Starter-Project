@@ -65,5 +65,7 @@ interface Window {
     stopIRIS: (Id: any) => Promise<any>;
     getExtrinsics: () => Promise<any>;
     onIrisData: (callback: (data: IrisData[] | IrisData) => void) => void;
+    calculateIntrinsics:(index: number, rotation: number) => Promise<{ok: boolean, path?:string}>;
+    intrinsicsComplete: (callback: (data: {idx: number, path: string}) => void) => void;
   }
 } 
