@@ -144,7 +144,7 @@
           :value="fsSelectedRecording?.path ?? ''"
           @change="onRecordingSelectChange"
         >
-          <option v-if="!fsRecordings.length" value="" disabled>No recordings yet</option>
+          <option v-if="!fsRecordings.length" value="" disabled>No recordings</option>
           <option v-for="r in fsRecordings" :key="r.path" :value="r.path">{{ r.name }}</option>
         </select>
         <button
@@ -240,7 +240,7 @@
 
         <!-- Playback side -->
         <div class="fs-group">
-          <button class="hud-icon-btn" @click="skipBackward" title="Skip Backward" :disabled="isRecording">
+          <button class="hud-icon-btn" @click="skipBackward" title="Skip Backward" :disabled="playbackDisabled">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <polygon points="19,20 9,12 19,4"/><rect x="5" y="4" width="3" height="16"/>
             </svg>
@@ -250,7 +250,7 @@
             :class="{ active: isPlaying }"
             @click="togglePlayback"
             :title="isPlaying ? 'Pause' : 'Play'"
-            :disabled="isRecording"
+            :disabled="playbackDisabled"
           >
             <svg v-if="!isPlaying" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <polygon points="5,3 19,12 5,21"/>
@@ -259,20 +259,20 @@
               <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
             </svg>
           </button>
-          <button class="hud-icon-btn" @click="skipForward" title="Skip Forward" :disabled="isRecording">
+          <button class="hud-icon-btn" @click="skipForward" title="Skip Forward" :disabled="playbackDisabled">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
               <polygon points="5,4 15,12 5,20"/><rect x="16" y="4" width="3" height="16"/>
             </svg>
           </button>
           <!-- Timeline scrubber -->
-          <div class="fs-timeline" @click="scrubTimeline" @mousemove="onTimelineHover" @mouseleave="timelineHoverX = null">
+          <div class="fs-timeline" :class="{ 'fs-timeline-disabled': playbackDisabled }" @click="scrubTimeline" @mousemove="onTimelineHover" @mouseleave="timelineHoverX = null">
             <div class="fs-timeline-track">
               <div class="fs-timeline-fill" :style="{ width: timelinePercent + '%' }"></div>
               <div class="fs-timeline-thumb" :style="{ left: timelinePercent + '%' }"></div>
               <div v-if="timelineHoverX !== null" class="fs-timeline-hover" :style="{ left: timelineHoverX + '%' }"></div>
             </div>
           </div>
-          <span class="fs-label fs-time">{{ fsTimeDisplay }}</span>
+          <span class="fs-label fs-time" :class="{ 'fs-time-disabled': playbackDisabled }">{{ fsTimeDisplay }}</span>
         </div>
       </div>
     </Transition>
@@ -557,6 +557,9 @@ watch(outputOption, async (val) => {
 // Filesystem record / playback state
 const isRecording = ref(false);
 const isPlaying = ref(false);
+
+// Playback controls are disabled when no recording is selected (no recordings available yet)
+const playbackDisabled = computed(() => isRecording.value || !fsSelectedRecording.value);
 const fsPlaybackSeconds = ref(0);
 const fsDuration = ref(0);
 const timelineHoverX = ref<number | null>(null);
@@ -625,7 +628,7 @@ function skipForward() {
 }
 
 function scrubTimeline(e: MouseEvent) {
-  if (isRecording.value || fsDuration.value === 0) return;
+  if (playbackDisabled.value || fsDuration.value === 0) return;
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
   const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
   fsPlaybackSeconds.value = Math.round(pct * fsDuration.value);
@@ -920,6 +923,7 @@ function updateLicenseKey(value: string) {
 .fs-group { display: flex; align-items: center; gap: 8px; }
 .fs-sep { width: 1px; height: 24px; background: rgba(255,255,255,.12); }
 .fs-label { font-size: .78rem; font-weight: 700; color: rgba(255,255,255,.5); letter-spacing: .04em; min-width: 40px; }
+.fs-rec-label { color: #ffffff; }
 .fs-rec-label { width: 52px; min-width: 52px; }
 .fs-time { font-variant-numeric: tabular-nums; color: #e6edf3; min-width: 38px; }
 /* Recordings dropdown */
@@ -1004,8 +1008,13 @@ function updateLicenseKey(value: string) {
   pointer-events: none;
 }
 .fs-timeline:hover .fs-timeline-track { height: 6px; }
-.fs-btn.fs-recording { color: #ff5f5f; border-color: rgba(255,95,95,.5); background: rgba(255,95,95,.12); }
-.fs-btn.fs-recording:hover { background: rgba(255,95,95,.22); }
+.fs-timeline-disabled { cursor: not-allowed; opacity: 0.4; pointer-events: none; }
+.fs-time-disabled { color: rgba(255,255,255,.3) !important; }
+.hud-icon-btn.fs-btn { color: #ffffff; border-color: rgba(255,255,255,.4); background: rgba(255,255,255,.1); }
+.hud-icon-btn.fs-btn:hover { color: #fff; border-color: rgba(255,255,255,.5); background: rgba(255,255,255,.18); }
+.hud-icon-btn.fs-btn.fs-recording { color: #ff5f5f; border-color: rgba(255,95,95,.5); background: rgba(255,95,95,.12); }
+.hud-icon-btn.fs-btn.fs-recording:hover { background: rgba(255,95,95,.22); }
+.hud-icon-btn:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
 .fs-rec-indicator {
   display: flex;
   align-items: center;
