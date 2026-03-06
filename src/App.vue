@@ -197,7 +197,15 @@
               <rect x="4" y="4" width="16" height="16" rx="2"/>
             </svg>
           </button>
-          <span class="fs-label">{{ isRecording ? 'REC' : 'Record' }}</span>
+          <div v-if="isRecording" class="fs-rec-indicator">
+            <span class="fs-rec-dot"></span>
+            <span class="fs-rec-bar" style="--d:0ms; --h:10px"></span>
+            <span class="fs-rec-bar" style="--d:120ms; --h:18px"></span>
+            <span class="fs-rec-bar" style="--d:60ms; --h:14px"></span>
+            <span class="fs-rec-bar" style="--d:180ms; --h:20px"></span>
+            <span class="fs-rec-bar" style="--d:30ms; --h:12px"></span>
+          </div>
+          <span v-else class="fs-label fs-rec-label">Record</span>
         </div>
 
         <div class="fs-sep"></div>
@@ -774,6 +782,7 @@ function updateLicenseKey(value: string) {
 .fs-group { display: flex; align-items: center; gap: 8px; }
 .fs-sep { width: 1px; height: 24px; background: rgba(255,255,255,.12); }
 .fs-label { font-size: .78rem; font-weight: 700; color: rgba(255,255,255,.5); letter-spacing: .04em; min-width: 40px; }
+.fs-rec-label { width: 52px; min-width: 52px; }
 .fs-time { font-variant-numeric: tabular-nums; color: #e6edf3; min-width: 38px; }
 .fs-timeline {
   width: 160px;
@@ -819,6 +828,44 @@ function updateLicenseKey(value: string) {
 .fs-timeline:hover .fs-timeline-track { height: 6px; }
 .fs-btn.fs-recording { color: #ff5f5f; border-color: rgba(255,95,95,.5); background: rgba(255,95,95,.12); }
 .fs-btn.fs-recording:hover { background: rgba(255,95,95,.22); }
+.fs-rec-indicator {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 28px;
+  width: 52px;
+}
+.fs-rec-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff5f5f;
+  box-shadow: 0 0 6px rgba(255,95,95,.8);
+  animation: fs-dot-pulse 1s ease-in-out infinite;
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+.fs-rec-bar {
+  display: inline-block;
+  width: 3px;
+  height: var(--h, 12px);
+  background: #ff5f5f;
+  border-radius: 2px;
+  animation-name: fs-wave;
+  animation-duration: 0.7s;
+  animation-delay: var(--d, 0ms);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+@keyframes fs-dot-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(255,95,95,.8); }
+  50%       { opacity: 0.3; box-shadow: none; }
+}
+@keyframes fs-wave {
+  from { transform: scaleY(0.3); }
+  to   { transform: scaleY(1); }
+}
 .fs-bar-enter-active, .fs-bar-leave-active { transition: opacity 0.25s ease, transform 0.25s ease; }
 .fs-bar-enter-from, .fs-bar-leave-to { opacity: 0; transform: translateX(-50%) translateY(10px); }
 .hud-right{ left: auto; right: 16px; }
