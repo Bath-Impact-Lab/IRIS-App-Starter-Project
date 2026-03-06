@@ -247,7 +247,6 @@ async function startIris() {
     props.selectedCameras?.forEach((_, i) => {
       stopCameraStream(i)
     });
-    await new Promise( resolve => setTimeout(resolve, 1000))
 
     running.value = true
 		emit('isRunning', running.value)
@@ -276,16 +275,20 @@ async function stopIris() {
 	emit('irisDataUpdate', null)
 }
 
-function stopCameraStream(index: number) {
+async function stopCameraStream(index: number) {
   try {
     const video = document.getElementById(`cameraFeed${index}`) as HTMLVideoElement;
-    const stream = video.srcObject as MediaStream;
-    const tracks = stream.getTracks();
-    
-    tracks.forEach(track => {
-    track.stop();
-    });
-    video.srcObject = null;
+    let stream = video.srcObject as MediaStream | null;
+    if (stream) {
+      const tracks = stream.getTracks();
+      
+      tracks.forEach(track => {
+        track.stop();
+      });
+      video.srcObject = null;
+      stream = null
+    }
+    await new Promise( resolve => setTimeout(resolve, 1000))
   }
   catch {
     console.log("Cameras are gone")
@@ -309,7 +312,6 @@ async function cameraIntrinsics(d: MediaDeviceInfo) {
   const idx = (await listCameras()).indexOf(d.deviceId)
   console.log(d, idx)
   if (props.selectedCameras) stopCameraStream(props.selectedCameras?.indexOf(d))
-  await new Promise( resolve => setTimeout(resolve, 1000))
   const data = await window.ipc?.calculateIntrinsics(idx, cameraRotation.value[d.deviceId])
 
 }

@@ -359,7 +359,7 @@ ipcMain.handle('calculate-intrinsics', async (event, index, rotation) => {
 
   child.stdout.on('data', (d) => {
     const data = d.toString().trim()
-    console.log(data)
+    console.log("[Intrinsics] " + data)
     if (data.includes("Intrinsics saved to:")) {
       const targetWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow();
       if (targetWindow && !targetWindow.isDestroyed()) {
@@ -373,7 +373,7 @@ ipcMain.handle('calculate-intrinsics', async (event, index, rotation) => {
 
   child.stderr.on('data', (d) => {
     const data = d.toString().trim()
-    console.log(data)
+    console.log("[Intrinsics Error] " + data)
   })
 
   return {ok} 
