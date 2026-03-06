@@ -147,6 +147,19 @@
           <option v-if="!fsRecordings.length" value="" disabled>No recordings yet</option>
           <option v-for="r in fsRecordings" :key="r.path" :value="r.path">{{ r.name }}</option>
         </select>
+        <button
+          v-if="outputOption === 'Filesystem' && fsSelectedRecording"
+          class="hud-icon-btn"
+          style="margin-left: 6px; flex-shrink: 0;"
+          @click="openRenameModal"
+          title="Rename recording"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </button>
+
       </div>
 
       <!-- Right side: sign-in area -->
@@ -330,6 +343,37 @@
       @settings="updateSettings"
       @license-key="updateLicenseKey"
     />
+
+    <!-- Rename Recording Modal -->
+    <Transition name="fade">
+      <div v-if="showRenameModal" class="rename-overlay" @click.self="closeRenameModal">
+        <div class="rename-dialog">
+          <button class="rename-dialog-close" @click="closeRenameModal">×</button>
+          <div class="rename-dialog-header">
+            <h2 class="rename-dialog-title">Rename Recording</h2>
+            <p class="rename-dialog-subtitle">Update the folder name for this recording</p>
+          </div>
+          <div class="rename-modal-body">
+            <label class="rename-label">Folder name</label>
+            <input
+              ref="renameInputRef"
+              v-model="renameValue"
+              class="rename-input"
+              type="text"
+              placeholder="Recording name"
+              @keyup.enter="submitRename"
+              @keyup.esc="closeRenameModal"
+            />
+            <p v-if="renameError" class="rename-error">{{ renameError }}</p>
+          </div>
+          <div class="rename-modal-footer">
+            <button class="btn rename-cancel" @click="closeRenameModal">Cancel</button>
+            <button class="btn rename-confirm" @click="submitRename" :disabled="!renameValue.trim() || renameValue === fsSelectedRecording?.name">Save</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
   </div>
 
 </template>
@@ -460,6 +504,42 @@ async function refreshRecordings() {
 function onRecordingSelectChange(e: Event) {
   const path = (e.target as HTMLSelectElement).value;
   fsSelectedRecording.value = fsRecordings.value.find(r => r.path === path) ?? null;
+}
+
+// Rename recording modal
+const showRenameModal = ref(false);
+const renameValue = ref('');
+const renameError = ref('');
+const renameInputRef = ref<HTMLInputElement | null>(null);
+
+function openRenameModal() {
+  renameValue.value = fsSelectedRecording.value?.name ?? '';
+  renameError.value = '';
+  showRenameModal.value = true;
+  nextTick(() => { renameInputRef.value?.select(); });
+}
+
+function closeRenameModal() {
+  showRenameModal.value = false;
+  renameError.value = '';
+}
+
+async function submitRename() {
+  const trimmed = renameValue.value.trim();
+  if (!trimmed || !fsSelectedRecording.value) return;
+  if (trimmed === fsSelectedRecording.value.name) { closeRenameModal(); return; }
+
+  const ipc = (window as any).ipc;
+  if (ipc?.fsRenameRecording) {
+    const result = await ipc.fsRenameRecording(fsSelectedRecording.value.path, trimmed);
+    if (!result.ok) { renameError.value = result.error; return; }
+    // Update local state to reflect the rename
+    fsSelectedRecording.value = { name: trimmed, path: result.newPath };
+    await refreshRecordings();
+    // Re-select the renamed entry
+    fsSelectedRecording.value = fsRecordings.value.find(r => r.path === result.newPath) ?? null;
+  }
+  closeRenameModal();
 }
 
 // When Filesystem is selected, auto-load the default recordings directory
@@ -1237,6 +1317,67 @@ function updateLicenseKey(value: string) {
   .dropdown {
     margin-left: 4px !important;
   }
+}
+/* Rename Recording Modal */
+.rename-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(12px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rename-dialog {
+  background: rgba(22, 30, 41, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  width: 90%;
+  max-width: 420px;
+  padding: 32px;
+  position: relative;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  animation: fadeUp 0.25s ease-out;
+}
+.rename-dialog-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 22px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px 8px;
+}
+.rename-dialog-close:hover { color: #fff; }
+.rename-dialog-header { margin-bottom: 24px; }
+.rename-dialog-title { font-size: 20px; margin: 0 0 6px; color: #fff; }
+.rename-dialog-subtitle { color: rgba(255, 255, 255, 0.45); font-size: 13px; margin: 0; }
+.rename-modal-body { display: flex; flex-direction: column; gap: 8px; padding-bottom: 20px; }
+.rename-label { font-size: .78rem; font-weight: 700; color: rgba(255,255,255,.45); letter-spacing: .04em; }
+.rename-input {
+  width: 100%;
+  padding: 10px 12px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  color: var(--fg);
+  font-size: .9rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.rename-input:focus { border-color: var(--accent); }
+.rename-error { font-size: .78rem; color: #ff5f5f; margin: 0; }
+.rename-modal-footer { display: flex; justify-content: flex-end; gap: 8px; }
+.rename-cancel { background: transparent; border-color: rgba(255,255,255,.12); color: rgba(255,255,255,.5); }
+.rename-confirm { background: linear-gradient(180deg, #1e3a22, #142a18); border-color: rgba(107,230,117,.3); color: var(--accent); }
+.rename-confirm:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 </style>

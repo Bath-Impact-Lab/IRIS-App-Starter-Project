@@ -139,6 +139,19 @@ ipcMain.handle('fs-open-recording', async (event, folderPath) => {
     await shell.openPath(folderPath);
 });
 
+// Rename a recording folder
+ipcMain.handle('fs-rename-recording', async (event, oldPath, newName) => {
+    try {
+        const parent = path.dirname(oldPath);
+        const newPath = path.join(parent, newName);
+        if (fs.existsSync(newPath)) return { ok: false, error: 'A recording with that name already exists.' };
+        fs.renameSync(oldPath, newPath);
+        return { ok: true, newPath };
+    } catch (err) {
+        return { ok: false, error: err.message };
+    }
+});
+
 // - If the mock stream is active (no real runtime), return the mock extrinsics.
 // - If a real runtime exists, read the live extrinsics file.
 // - The frontend should clear mock camera gizmos when real cameras connect.
