@@ -1,5 +1,5 @@
 <template>
-  <div id="app-container">
+  <div id="app-container" :class="{ 'sidebar-open': hasCameraSelected }">
     <!-- Global Overlay for Dropdowns -->
     <Transition name="fade">
       <div v-if="anyDropdownOpen" class="dropdown-overlay" @click="closeAllDropdowns"></div>
@@ -134,6 +134,32 @@
             </div>
           </div>
         </div>
+
+        <!-- Filesystem recordings dropdown — shown right of Output when Filesystem is selected -->
+        <select
+          v-if="outputOption === 'Filesystem'"
+          class="btn fs-recordings-select"
+          style="margin-left: 12px;"
+          :disabled="running"
+          :value="fsSelectedRecording?.path ?? ''"
+          @change="onRecordingSelectChange"
+        >
+          <option v-if="!fsRecordings.length" value="" disabled>No recordings yet</option>
+          <option v-for="r in fsRecordings" :key="r.path" :value="r.path">{{ r.name }}</option>
+        </select>
+        <button
+          v-if="outputOption === 'Filesystem' && fsSelectedRecording"
+          class="hud-icon-btn"
+          style="margin-left: 6px; flex-shrink: 0;"
+          @click="openRenameModal"
+          title="Rename recording"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+        </button>
+
       </div>
 
       <!-- Right side: sign-in area -->
@@ -147,8 +173,9 @@
     </nav>
 
 
-    <sidebar 
-      :spheres-mesh="spheresMesh" 
+    <sidebar
+      v-if="hasCameraSelected"
+      :spheres-mesh="spheresMesh"
       :skeleton-line="skeletonLine" 
       :person-count="personCount" 
       :scene="scene" 
@@ -178,6 +205,79 @@
       @give-sphere-mesh="sphereMeshUpdate"
       @give-skeleton-mesh="skeletonMeshUpdate"
     />
+
+    <!-- Filesystem Record / Playback bar -->
+    <Transition name="fs-bar">
+      <div class="hud hud-fs" v-if="outputOption === 'Filesystem'">
+
+
+        <!-- Record side -->
+        <div class="fs-group">
+          <button
+            class="hud-icon-btn fs-btn"
+            :class="{ 'fs-recording': isRecording }"
+            @click="toggleRecording"
+            :title="isRecording ? 'Stop Recording' : 'Start Recording'"
+          >
+            <!-- Record dot / stop square -->
+            <svg v-if="!isRecording" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="12" r="8"/>
+            </svg>
+            <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="4" y="4" width="16" height="16" rx="2"/>
+            </svg>
+          </button>
+          <div v-if="isRecording" class="fs-rec-indicator">
+            <span class="fs-rec-dot"></span>
+            <span class="fs-rec-bar" style="--d:0ms; --h:10px"></span>
+            <span class="fs-rec-bar" style="--d:120ms; --h:18px"></span>
+            <span class="fs-rec-bar" style="--d:60ms; --h:14px"></span>
+            <span class="fs-rec-bar" style="--d:180ms; --h:20px"></span>
+            <span class="fs-rec-bar" style="--d:30ms; --h:12px"></span>
+          </div>
+          <span v-else class="fs-label fs-rec-label">Record</span>
+        </div>
+
+        <div class="fs-sep"></div>
+
+        <!-- Playback side -->
+        <div class="fs-group">
+          <button class="hud-icon-btn" @click="skipBackward" title="Skip Backward" :disabled="isRecording">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="19,20 9,12 19,4"/><rect x="5" y="4" width="3" height="16"/>
+            </svg>
+          </button>
+          <button
+            class="hud-icon-btn fs-btn"
+            :class="{ active: isPlaying }"
+            @click="togglePlayback"
+            :title="isPlaying ? 'Pause' : 'Play'"
+            :disabled="isRecording"
+          >
+            <svg v-if="!isPlaying" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5,3 19,12 5,21"/>
+            </svg>
+            <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+            </svg>
+          </button>
+          <button class="hud-icon-btn" @click="skipForward" title="Skip Forward" :disabled="isRecording">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5,4 15,12 5,20"/><rect x="16" y="4" width="3" height="16"/>
+            </svg>
+          </button>
+          <!-- Timeline scrubber -->
+          <div class="fs-timeline" @click="scrubTimeline" @mousemove="onTimelineHover" @mouseleave="timelineHoverX = null">
+            <div class="fs-timeline-track">
+              <div class="fs-timeline-fill" :style="{ width: timelinePercent + '%' }"></div>
+              <div class="fs-timeline-thumb" :style="{ left: timelinePercent + '%' }"></div>
+              <div v-if="timelineHoverX !== null" class="fs-timeline-hover" :style="{ left: timelineHoverX + '%' }"></div>
+            </div>
+          </div>
+          <span class="fs-label fs-time">{{ fsTimeDisplay }}</span>
+        </div>
+      </div>
+    </Transition>
 
     <div class="hud">
       <button
@@ -245,6 +345,37 @@
       @settings="updateSettings"
       @license-key="updateLicenseKey"
     />
+
+    <!-- Rename Recording Modal -->
+    <Transition name="fade">
+      <div v-if="showRenameModal" class="rename-overlay" @click.self="closeRenameModal">
+        <div class="rename-dialog">
+          <button class="rename-dialog-close" @click="closeRenameModal">×</button>
+          <div class="rename-dialog-header">
+            <h2 class="rename-dialog-title">Rename Recording</h2>
+            <p class="rename-dialog-subtitle">Update the folder name for this recording</p>
+          </div>
+          <div class="rename-modal-body">
+            <label class="rename-label">Folder name</label>
+            <input
+              ref="renameInputRef"
+              v-model="renameValue"
+              class="rename-input"
+              type="text"
+              placeholder="Recording name"
+              @keyup.enter="submitRename"
+              @keyup.esc="closeRenameModal"
+            />
+            <p v-if="renameError" class="rename-error">{{ renameError }}</p>
+          </div>
+          <div class="rename-modal-footer">
+            <button class="btn rename-cancel" @click="closeRenameModal">Cancel</button>
+            <button class="btn rename-confirm" @click="submitRename" :disabled="!renameValue.trim() || renameValue === fsSelectedRecording?.name">Save</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+
   </div>
 
 </template>
@@ -326,6 +457,7 @@ const {
 
 // Construct scene camera
 const selectedCameraCount = computed(() => selectedDevices.value?.length ?? 0);
+const hasCameraSelected = computed(() => !!selectedDevices.value && selectedDevices.value.length > 0);
 
 const showPlaySpace = ref(true);
 const showCameras = ref(true);
@@ -337,7 +469,7 @@ const {
   setGizmoRotation,
   computePlaySpaceBounds,
   dispose: disposeSceneCameras
-} = useSceneCameras(selectedCameraCount, showPlaySpace, showCameras);
+} = useSceneCameras(selectedCameraCount, showCameras, showCameras);
 
 const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt-${cameraHoverIndex.value}` : undefined));
 
@@ -350,8 +482,165 @@ const personCountOptions = ['Single Person', 'Multi-Person'];
 const personCount = ref<string | null>('Single Person');
 
 // Output options
-const outputOptions = ['SteamVR', 'Unity', 'Unreal', 'Gadot'];
+const outputOptions = ['SteamVR', 'Quest', 'Unity', 'Unreal', 'Gadot', 'Filesystem'];
 const outputOption = ref<string | null>(null);
+
+
+// Filesystem recordings dropdown
+const fsRecordingsDir = ref<string | null>(null);
+const fsRecordings = ref<{ name: string; path: string }[]>([]);
+const fsSelectedRecording = ref<{ name: string; path: string } | null>(null);
+
+async function refreshRecordings() {
+  if (!fsRecordingsDir.value) return;
+  const ipc = (window as any).ipc;
+  if (ipc?.fsListRecordings) {
+    fsRecordings.value = await ipc.fsListRecordings(fsRecordingsDir.value);
+    if (fsRecordings.value.length && !fsSelectedRecording.value) {
+      fsSelectedRecording.value = fsRecordings.value[0]; // list is already sorted newest first
+    }
+  }
+}
+
+function onRecordingSelectChange(e: Event) {
+  const path = (e.target as HTMLSelectElement).value;
+  fsSelectedRecording.value = fsRecordings.value.find(r => r.path === path) ?? null;
+}
+
+// Rename recording modal
+const showRenameModal = ref(false);
+const renameValue = ref('');
+const renameError = ref('');
+const renameInputRef = ref<HTMLInputElement | null>(null);
+
+function openRenameModal() {
+  renameValue.value = fsSelectedRecording.value?.name ?? '';
+  renameError.value = '';
+  showRenameModal.value = true;
+  nextTick(() => { renameInputRef.value?.select(); });
+}
+
+function closeRenameModal() {
+  showRenameModal.value = false;
+  renameError.value = '';
+}
+
+async function submitRename() {
+  const trimmed = renameValue.value.trim();
+  if (!trimmed || !fsSelectedRecording.value) return;
+  if (trimmed === fsSelectedRecording.value.name) { closeRenameModal(); return; }
+
+  const ipc = (window as any).ipc;
+  if (ipc?.fsRenameRecording) {
+    const result = await ipc.fsRenameRecording(fsSelectedRecording.value.path, trimmed);
+    if (!result.ok) { renameError.value = result.error; return; }
+    // Update local state to reflect the rename
+    fsSelectedRecording.value = { name: trimmed, path: result.newPath };
+    await refreshRecordings();
+    // Re-select the renamed entry
+    fsSelectedRecording.value = fsRecordings.value.find(r => r.path === result.newPath) ?? null;
+  }
+  closeRenameModal();
+}
+
+// When Filesystem is selected, auto-load the default recordings directory
+watch(outputOption, async (val) => {
+  if (val === 'Filesystem' && !fsRecordingsDir.value) {
+    const ipc = (window as any).ipc;
+    if (ipc?.fsGetDefaultRecordingsDir) {
+      fsRecordingsDir.value = await ipc.fsGetDefaultRecordingsDir();
+      await refreshRecordings();
+    }
+  }
+});
+
+
+// Filesystem record / playback state
+const isRecording = ref(false);
+const isPlaying = ref(false);
+const fsPlaybackSeconds = ref(0);
+const fsDuration = ref(0);
+const timelineHoverX = ref<number | null>(null);
+let fsPlaybackTimer: ReturnType<typeof setInterval> | null = null;
+let fsRecordTimer: ReturnType<typeof setInterval> | null = null;
+
+// Refresh the recordings list whenever a recording finishes
+watch(isRecording, async (val) => {
+  if (!val) {
+    await refreshRecordings();
+    // Always jump to the newest recording when one finishes
+    if (fsRecordings.value.length) fsSelectedRecording.value = fsRecordings.value[0];
+  }
+});
+
+const timelinePercent = computed(() => {
+  if (fsDuration.value === 0) return 0;
+  return Math.min(100, (fsPlaybackSeconds.value / fsDuration.value) * 100);
+});
+
+const fsTimeDisplay = computed(() => {
+  const t = fsPlaybackSeconds.value;
+  const m = Math.floor(t / 60).toString().padStart(2, '0');
+  const s = (t % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+});
+
+function toggleRecording() {
+  if (isRecording.value) {
+    isRecording.value = false;
+    if (fsRecordTimer) { clearInterval(fsRecordTimer); fsRecordTimer = null; }
+  } else {
+    isPlaying.value = false;
+    stopFsTimer();
+    fsPlaybackSeconds.value = 0;
+    fsDuration.value = 0;
+    isRecording.value = true;
+    fsRecordTimer = setInterval(() => { fsDuration.value++; }, 1000);
+  }
+}
+
+function togglePlayback() {
+  if (isPlaying.value) {
+    isPlaying.value = false;
+    stopFsTimer();
+  } else {
+    if (fsDuration.value === 0) return;
+    isPlaying.value = true;
+    fsPlaybackTimer = setInterval(() => {
+      if (fsPlaybackSeconds.value >= fsDuration.value) {
+        isPlaying.value = false;
+        stopFsTimer();
+      } else {
+        fsPlaybackSeconds.value++;
+      }
+    }, 1000);
+  }
+}
+
+function skipBackward() {
+  fsPlaybackSeconds.value = Math.max(0, fsPlaybackSeconds.value - 10);
+}
+
+function skipForward() {
+  fsPlaybackSeconds.value = Math.min(fsDuration.value, fsPlaybackSeconds.value + 10);
+}
+
+function scrubTimeline(e: MouseEvent) {
+  if (isRecording.value || fsDuration.value === 0) return;
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  fsPlaybackSeconds.value = Math.round(pct * fsDuration.value);
+}
+
+function onTimelineHover(e: MouseEvent) {
+  if (fsDuration.value === 0) return;
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  timelineHoverX.value = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+}
+
+function stopFsTimer() {
+  if (fsPlaybackTimer) { clearInterval(fsPlaybackTimer); fsPlaybackTimer = null; }
+}
 
 const lastSentMsg = ref('');
 
@@ -552,6 +841,8 @@ onBeforeUnmount(() => {
   disposeSceneCameras();
   disposePlaySpace();
   if (browserMockTimer) { clearInterval(browserMockTimer); browserMockTimer = null; }
+  stopFsTimer();
+  if (fsRecordTimer) { clearInterval(fsRecordTimer); fsRecordTimer = null; }
 });
 
 
@@ -615,7 +906,147 @@ function updateLicenseKey(value: string) {
 
 <style scoped>
 .hud{ position: fixed; left: 16px; bottom: 16px; height: 48px; display:flex; align-items:center; gap:8px; padding:0 10px; background: rgba(12,18,25,.6); border:1px solid rgba(255,255,255,.08); border-radius: 12px; backdrop-filter: blur(10px); }
-.hud-right{ left: auto; right: 266px; /* 250px sidenav + 16px gap */ }
+.hud-fs {
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 16px;
+  gap: 12px;
+  padding: 0 16px;
+}
+.sidebar-open .hud-fs {
+  left: calc(50% - 125px);
+}
+.fs-group { display: flex; align-items: center; gap: 8px; }
+.fs-sep { width: 1px; height: 24px; background: rgba(255,255,255,.12); }
+.fs-label { font-size: .78rem; font-weight: 700; color: rgba(255,255,255,.5); letter-spacing: .04em; min-width: 40px; }
+.fs-rec-label { width: 52px; min-width: 52px; }
+.fs-time { font-variant-numeric: tabular-nums; color: #e6edf3; min-width: 38px; }
+/* Recordings dropdown */
+.fs-recordings-dropdown { position: relative; }
+.fs-recordings-btn {
+  display: flex; align-items: center; gap: 6px;
+  padding: 0 10px; height: 32px; width: auto;
+  font-size: .78rem; font-weight: 600; color: rgba(255,255,255,.6);
+  white-space: nowrap;
+}
+.fs-recordings-label { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fs-chevron { transition: transform 0.2s ease; flex-shrink: 0; }
+.fs-recordings-dropdown.open .fs-chevron { transform: rotate(180deg); }
+.fs-recordings-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 240px;
+  max-width: 320px;
+  background: var(--bg-elev);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 12px;
+  padding: 8px;
+  box-shadow: 0 -8px 24px rgba(0,0,0,.5);
+  z-index: 300;
+  max-height: 280px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.fs-recordings-select {
+  appearance: auto;
+  cursor: pointer;
+  font-size: .85rem;
+  font-weight: 600;
+  color: var(--fg);
+  background: linear-gradient(180deg, #1a2330, #121922);
+  max-width: 160px;
+}
+.fs-recordings-select option {
+  background: #11161d;
+  color: var(--fg);
+}
+.fs-timeline {
+  width: 160px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.fs-timeline-track {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  background: rgba(255,255,255,.15);
+  border-radius: 2px;
+}
+.fs-timeline-fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.25s linear;
+}
+.fs-timeline-thumb {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 4px rgba(0,0,0,.5);
+  transition: left 0.25s linear;
+}
+.fs-timeline-hover {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.4);
+  pointer-events: none;
+}
+.fs-timeline:hover .fs-timeline-track { height: 6px; }
+.fs-btn.fs-recording { color: #ff5f5f; border-color: rgba(255,95,95,.5); background: rgba(255,95,95,.12); }
+.fs-btn.fs-recording:hover { background: rgba(255,95,95,.22); }
+.fs-rec-indicator {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 28px;
+  width: 52px;
+}
+.fs-rec-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ff5f5f;
+  box-shadow: 0 0 6px rgba(255,95,95,.8);
+  animation: fs-dot-pulse 1s ease-in-out infinite;
+  flex-shrink: 0;
+  margin-right: 2px;
+}
+.fs-rec-bar {
+  display: inline-block;
+  width: 3px;
+  height: var(--h, 12px);
+  background: #ff5f5f;
+  border-radius: 2px;
+  animation-name: fs-wave;
+  animation-duration: 0.7s;
+  animation-delay: var(--d, 0ms);
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+@keyframes fs-dot-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(255,95,95,.8); }
+  50%       { opacity: 0.3; box-shadow: none; }
+}
+@keyframes fs-wave {
+  from { transform: scaleY(0.3); }
+  to   { transform: scaleY(1); }
+}
+.fs-bar-enter-active, .fs-bar-leave-active { transition: opacity 0.25s ease, transform 0.25s ease; }
+.fs-bar-enter-from, .fs-bar-leave-to { opacity: 0; transform: translateX(-50%) translateY(10px); }
+.hud-right{ left: auto; right: 16px; }
+.sidebar-open .hud-right{ right: 266px; /* 250px sidenav + 16px gap */ }
 @media (max-width: 768px) {
   .hud-right {
     right: 16px;
@@ -686,18 +1117,16 @@ function updateLicenseKey(value: string) {
 .brand{ display:flex; align-items:center; gap:10px; color:#e6edf3; font-weight:700; z-index:2; }
 .brand-logo{ height: 28px; width: auto; object-fit: contain; display: block; }
 .menu{
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  top: 50%;
-  transform-origin: center;
-  transform: translate(-50%, -50%); /* center vertically and horizontally inside navbar */
-  display:flex;
-  align-items:center;
-  gap:12px;
-  z-index:1;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  min-width: 0;
+  justify-content: center;
+  z-index: 1;
 }
-.nav-right{ display:flex; align-items:center; gap:12px; z-index:2; }
+.nav-right{ display:flex; align-items:center; gap:12px; z-index:2; flex-shrink:0; }
 .btn-icon{
   display: flex;
   align-items: center;
@@ -816,12 +1245,17 @@ function updateLicenseKey(value: string) {
 }
 
 .navbar {
-  z-index: 200 !important;
+  z-index: 300 !important;
+  position: relative;
+  isolation: isolate;
 }
 
 .dropdown-overlay {
   position: fixed;
-  inset: 0;
+  top: 63px; /* below navbar */
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: rgba(0, 0, 0, 0.4);
   z-index: 150;
 }
@@ -882,6 +1316,67 @@ function updateLicenseKey(value: string) {
   .dropdown {
     margin-left: 4px !important;
   }
+}
+/* Rename Recording Modal */
+.rename-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(12px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.rename-dialog {
+  background: rgba(22, 30, 41, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  width: 90%;
+  max-width: 420px;
+  padding: 32px;
+  position: relative;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  animation: fadeUp 0.25s ease-out;
+}
+.rename-dialog-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 22px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 4px 8px;
+}
+.rename-dialog-close:hover { color: #fff; }
+.rename-dialog-header { margin-bottom: 24px; }
+.rename-dialog-title { font-size: 20px; margin: 0 0 6px; color: #fff; }
+.rename-dialog-subtitle { color: rgba(255, 255, 255, 0.45); font-size: 13px; margin: 0; }
+.rename-modal-body { display: flex; flex-direction: column; gap: 8px; padding-bottom: 20px; }
+.rename-label { font-size: .78rem; font-weight: 700; color: rgba(255,255,255,.45); letter-spacing: .04em; }
+.rename-input {
+  width: 100%;
+  padding: 10px 12px;
+  background: rgba(255,255,255,.05);
+  border: 1px solid rgba(255,255,255,.1);
+  border-radius: 8px;
+  color: var(--fg);
+  font-size: .9rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.rename-input:focus { border-color: var(--accent); }
+.rename-error { font-size: .78rem; color: #ff5f5f; margin: 0; }
+.rename-modal-footer { display: flex; justify-content: flex-end; gap: 8px; }
+.rename-cancel { background: transparent; border-color: rgba(255,255,255,.12); color: rgba(255,255,255,.5); }
+.rename-confirm { background: linear-gradient(180deg, #1e3a22, #142a18); border-color: rgba(107,230,117,.3); color: var(--accent); }
+.rename-confirm:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 </style>

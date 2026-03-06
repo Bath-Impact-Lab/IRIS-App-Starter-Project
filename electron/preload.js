@@ -14,7 +14,12 @@ contextBridge.exposeInMainWorld('ipc', {
     ipcRenderer.on('intrinsics-complete', (event, data) => {
       callback(data)
     })
-  }
+  },
+  fsGetDefaultRecordingsDir: () => ipcRenderer.invoke('fs-get-default-recordings-dir'),
+  fsPickRecordingsDir: () => ipcRenderer.invoke('fs-pick-recordings-dir'),
+  fsListRecordings: (rootDir) => ipcRenderer.invoke('fs-list-recordings', rootDir),
+  fsOpenRecording: (folderPath) => ipcRenderer.invoke('fs-open-recording', folderPath),
+  fsRenameRecording: (oldPath, newName) => ipcRenderer.invoke('fs-rename-recording', oldPath, newName),
 })
 
 contextBridge.exposeInMainWorld('electronAPI', {
