@@ -39,9 +39,10 @@ body{
 .device{ padding:8px 10px; border-radius:8px; display:flex; align-items:center; gap:10px; cursor:pointer; }
 .device:hover{ background:#16202c; }
 .device small{ color:var(--muted) }
-.scene{ position: absolute; inset: 63px 250px 0 0; }
+.scene{ position: absolute; inset: 63px 0 0 0; transition: inset 0.2s ease; }
+.sidebar-open .scene{ inset: 63px 250px 0 0; }
 @media (max-width: 768px) {
-  .scene {
+  .sidebar-open .scene {
     inset: 63px 0 0 0;
   }
 }

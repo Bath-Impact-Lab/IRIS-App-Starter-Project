@@ -1,5 +1,5 @@
 <template>
-  <div id="app-container">
+  <div id="app-container" :class="{ 'sidebar-open': hasCameraSelected }">
     <!-- Global Overlay for Dropdowns -->
     <Transition name="fade">
       <div v-if="anyDropdownOpen" class="dropdown-overlay" @click="closeAllDropdowns"></div>
@@ -147,8 +147,9 @@
     </nav>
 
 
-    <sidebar 
-      :spheres-mesh="spheresMesh" 
+    <sidebar
+      v-if="hasCameraSelected"
+      :spheres-mesh="spheresMesh"
       :skeleton-line="skeletonLine" 
       :person-count="personCount" 
       :scene="scene" 
@@ -325,6 +326,7 @@ const {
 
 // Construct scene camera
 const selectedCameraCount = computed(() => selectedDevices.value?.length ?? 0);
+const hasCameraSelected = computed(() => !!selectedDevices.value && selectedDevices.value.length > 0);
 
 const showPlaySpace = ref(true);
 const showCameras = ref(true);
@@ -336,7 +338,7 @@ const {
   setGizmoRotation,
   computePlaySpaceBounds,
   dispose: disposeSceneCameras
-} = useSceneCameras(selectedCameraCount, showPlaySpace, showCameras);
+} = useSceneCameras(selectedCameraCount, showCameras, showCameras);
 
 const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt-${cameraHoverIndex.value}` : undefined));
 
@@ -349,7 +351,7 @@ const personCountOptions = ['Single Person', 'Multi-Person'];
 const personCount = ref<string | null>('Single Person');
 
 // Output options
-const outputOptions = ['SteamVR', 'Unity', 'Unreal', 'Gadot'];
+const outputOptions = ['SteamVR', 'Quest', 'Unity', 'Unreal', 'Gadot', 'Filesystem'];
 const outputOption = ref<string | null>(null);
 
 const lastSentMsg = ref('');
@@ -616,7 +618,8 @@ function updateLicenseKey(value: string) {
 
 <style scoped>
 .hud{ position: fixed; left: 16px; bottom: 16px; height: 48px; display:flex; align-items:center; gap:8px; padding:0 10px; background: rgba(12,18,25,.6); border:1px solid rgba(255,255,255,.08); border-radius: 12px; backdrop-filter: blur(10px); }
-.hud-right{ left: auto; right: 266px; /* 250px sidenav + 16px gap */ }
+.hud-right{ left: auto; right: 16px; }
+.sidebar-open .hud-right{ right: 266px; /* 250px sidenav + 16px gap */ }
 @media (max-width: 768px) {
   .hud-right {
     right: 16px;
