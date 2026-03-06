@@ -1038,18 +1038,16 @@ function updateLicenseKey(value: string) {
 .brand{ display:flex; align-items:center; gap:10px; color:#e6edf3; font-weight:700; z-index:2; }
 .brand-logo{ height: 28px; width: auto; object-fit: contain; display: block; }
 .menu{
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  top: 50%;
-  transform-origin: center;
-  transform: translate(-50%, -50%); /* center vertically and horizontally inside navbar */
-  display:flex;
-  align-items:center;
-  gap:12px;
-  z-index:1;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
+  min-width: 0;
+  justify-content: center;
+  z-index: 1;
 }
-.nav-right{ display:flex; align-items:center; gap:12px; z-index:2; }
+.nav-right{ display:flex; align-items:center; gap:12px; z-index:2; flex-shrink:0; }
 .btn-icon{
   display: flex;
   align-items: center;
@@ -1168,12 +1166,17 @@ function updateLicenseKey(value: string) {
 }
 
 .navbar {
-  z-index: 200 !important;
+  z-index: 300 !important;
+  position: relative;
+  isolation: isolate;
 }
 
 .dropdown-overlay {
   position: fixed;
-  inset: 0;
+  top: 63px; /* below navbar */
+  left: 0;
+  right: 0;
+  bottom: 0;
   background: rgba(0, 0, 0, 0.4);
   z-index: 150;
 }
