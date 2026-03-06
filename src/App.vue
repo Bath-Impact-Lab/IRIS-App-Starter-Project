@@ -178,6 +178,69 @@
       @give-skeleton-mesh="skeletonMeshUpdate"
     />
 
+    <!-- Filesystem Record / Playback bar -->
+    <Transition name="fs-bar">
+      <div class="hud hud-fs" v-if="outputOption === 'Filesystem'">
+        <!-- Record side -->
+        <div class="fs-group">
+          <button
+            class="hud-icon-btn fs-btn"
+            :class="{ 'fs-recording': isRecording }"
+            @click="toggleRecording"
+            :title="isRecording ? 'Stop Recording' : 'Start Recording'"
+          >
+            <!-- Record dot / stop square -->
+            <svg v-if="!isRecording" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <circle cx="12" cy="12" r="8"/>
+            </svg>
+            <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="4" y="4" width="16" height="16" rx="2"/>
+            </svg>
+          </button>
+          <span class="fs-label">{{ isRecording ? 'REC' : 'Record' }}</span>
+        </div>
+
+        <div class="fs-sep"></div>
+
+        <!-- Playback side -->
+        <div class="fs-group">
+          <button class="hud-icon-btn" @click="skipBackward" title="Skip Backward" :disabled="isRecording">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="19,20 9,12 19,4"/><rect x="5" y="4" width="3" height="16"/>
+            </svg>
+          </button>
+          <button
+            class="hud-icon-btn fs-btn"
+            :class="{ active: isPlaying }"
+            @click="togglePlayback"
+            :title="isPlaying ? 'Pause' : 'Play'"
+            :disabled="isRecording"
+          >
+            <svg v-if="!isPlaying" width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5,3 19,12 5,21"/>
+            </svg>
+            <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+            </svg>
+          </button>
+          <button class="hud-icon-btn" @click="skipForward" title="Skip Forward" :disabled="isRecording">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5,4 15,12 5,20"/><rect x="16" y="4" width="3" height="16"/>
+            </svg>
+          </button>
+          <!-- Timeline scrubber -->
+          <div class="fs-timeline" @click="scrubTimeline" @mousemove="onTimelineHover" @mouseleave="timelineHoverX = null">
+            <div class="fs-timeline-track">
+              <div class="fs-timeline-fill" :style="{ width: timelinePercent + '%' }"></div>
+              <div class="fs-timeline-thumb" :style="{ left: timelinePercent + '%' }"></div>
+              <div v-if="timelineHoverX !== null" class="fs-timeline-hover" :style="{ left: timelineHoverX + '%' }"></div>
+            </div>
+          </div>
+          <span class="fs-label fs-time">{{ fsTimeDisplay }}</span>
+        </div>
+      </div>
+    </Transition>
+
     <div class="hud">
       <button
         class="hud-icon-btn"
@@ -353,6 +416,84 @@ const personCount = ref<string | null>('Single Person');
 // Output options
 const outputOptions = ['SteamVR', 'Quest', 'Unity', 'Unreal', 'Gadot', 'Filesystem'];
 const outputOption = ref<string | null>(null);
+
+// Filesystem record / playback state
+const isRecording = ref(false);
+const isPlaying = ref(false);
+const fsPlaybackSeconds = ref(0);
+const fsDuration = ref(0);
+const timelineHoverX = ref<number | null>(null);
+let fsPlaybackTimer: ReturnType<typeof setInterval> | null = null;
+let fsRecordTimer: ReturnType<typeof setInterval> | null = null;
+
+const timelinePercent = computed(() => {
+  if (fsDuration.value === 0) return 0;
+  return Math.min(100, (fsPlaybackSeconds.value / fsDuration.value) * 100);
+});
+
+const fsTimeDisplay = computed(() => {
+  const t = fsPlaybackSeconds.value;
+  const m = Math.floor(t / 60).toString().padStart(2, '0');
+  const s = (t % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+});
+
+function toggleRecording() {
+  if (isRecording.value) {
+    isRecording.value = false;
+    if (fsRecordTimer) { clearInterval(fsRecordTimer); fsRecordTimer = null; }
+  } else {
+    isPlaying.value = false;
+    stopFsTimer();
+    fsPlaybackSeconds.value = 0;
+    fsDuration.value = 0;
+    isRecording.value = true;
+    fsRecordTimer = setInterval(() => { fsDuration.value++; }, 1000);
+  }
+}
+
+function togglePlayback() {
+  if (isPlaying.value) {
+    isPlaying.value = false;
+    stopFsTimer();
+  } else {
+    if (fsDuration.value === 0) return;
+    isPlaying.value = true;
+    fsPlaybackTimer = setInterval(() => {
+      if (fsPlaybackSeconds.value >= fsDuration.value) {
+        isPlaying.value = false;
+        stopFsTimer();
+      } else {
+        fsPlaybackSeconds.value++;
+      }
+    }, 1000);
+  }
+}
+
+function skipBackward() {
+  fsPlaybackSeconds.value = Math.max(0, fsPlaybackSeconds.value - 10);
+}
+
+function skipForward() {
+  fsPlaybackSeconds.value = Math.min(fsDuration.value, fsPlaybackSeconds.value + 10);
+}
+
+function scrubTimeline(e: MouseEvent) {
+  if (isRecording.value || fsDuration.value === 0) return;
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  fsPlaybackSeconds.value = Math.round(pct * fsDuration.value);
+}
+
+function onTimelineHover(e: MouseEvent) {
+  if (fsDuration.value === 0) return;
+  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  timelineHoverX.value = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+}
+
+function stopFsTimer() {
+  if (fsPlaybackTimer) { clearInterval(fsPlaybackTimer); fsPlaybackTimer = null; }
+}
 
 const lastSentMsg = ref('');
 
@@ -555,6 +696,8 @@ onBeforeUnmount(() => {
   disposeSceneCameras();
   disposePlaySpace();
   if (browserMockTimer) { clearInterval(browserMockTimer); browserMockTimer = null; }
+  stopFsTimer();
+  if (fsRecordTimer) { clearInterval(fsRecordTimer); fsRecordTimer = null; }
 });
 
 
@@ -618,6 +761,66 @@ function updateLicenseKey(value: string) {
 
 <style scoped>
 .hud{ position: fixed; left: 16px; bottom: 16px; height: 48px; display:flex; align-items:center; gap:8px; padding:0 10px; background: rgba(12,18,25,.6); border:1px solid rgba(255,255,255,.08); border-radius: 12px; backdrop-filter: blur(10px); }
+.hud-fs {
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 16px;
+  gap: 12px;
+  padding: 0 16px;
+}
+.sidebar-open .hud-fs {
+  left: calc(50% - 125px);
+}
+.fs-group { display: flex; align-items: center; gap: 8px; }
+.fs-sep { width: 1px; height: 24px; background: rgba(255,255,255,.12); }
+.fs-label { font-size: .78rem; font-weight: 700; color: rgba(255,255,255,.5); letter-spacing: .04em; min-width: 40px; }
+.fs-time { font-variant-numeric: tabular-nums; color: #e6edf3; min-width: 38px; }
+.fs-timeline {
+  width: 160px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.fs-timeline-track {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  background: rgba(255,255,255,.15);
+  border-radius: 2px;
+}
+.fs-timeline-fill {
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.25s linear;
+}
+.fs-timeline-thumb {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 4px rgba(0,0,0,.5);
+  transition: left 0.25s linear;
+}
+.fs-timeline-hover {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.4);
+  pointer-events: none;
+}
+.fs-timeline:hover .fs-timeline-track { height: 6px; }
+.fs-btn.fs-recording { color: #ff5f5f; border-color: rgba(255,95,95,.5); background: rgba(255,95,95,.12); }
+.fs-btn.fs-recording:hover { background: rgba(255,95,95,.22); }
+.fs-bar-enter-active, .fs-bar-leave-active { transition: opacity 0.25s ease, transform 0.25s ease; }
+.fs-bar-enter-from, .fs-bar-leave-to { opacity: 0; transform: translateX(-50%) translateY(10px); }
 .hud-right{ left: auto; right: 16px; }
 .sidebar-open .hud-right{ right: 266px; /* 250px sidenav + 16px gap */ }
 @media (max-width: 768px) {
