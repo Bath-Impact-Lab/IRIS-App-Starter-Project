@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 
+
 let mainWindow;
 let mockTimer = null;
 
@@ -45,7 +46,8 @@ function createWindow() {
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
-            nodeIntegration: false
+            nodeIntegration: false,
+            webSecurity: false,
         }
     });
 
@@ -65,6 +67,7 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+
     registerIrisIpc();
 
     createWindow();
@@ -169,7 +172,8 @@ ipcMain.handle('fs-get-recording-data', async (event, recordingPath) => {
     return { positions, videoFiles };
 });
 
-// Return a file:// URL the renderer can load as a video src
+// Return a file:// URL the renderer can load as a video src.
+// webSecurity is disabled so the renderer can access local files directly.
 ipcMain.handle('fs-get-video-url', async (event, filePath) => {
     return 'file:///' + filePath.replace(/\\/g, '/');
 });

@@ -2,7 +2,7 @@
   <div class="panel-root">
     <div class="cameras">
       <div
-        v-for="(url, i) in props.videoUrls"
+        v-for="(_url, i) in props.videoUrls"
         :key="i"
         class="camera-list"
       >
@@ -12,11 +12,11 @@
 
         <div :id="`camera-box${i}`">
           <video
+            ref="videoRefs"
             style="width: 100%;"
             :id="`cameraFeed${i}`"
             playsinline
             muted
-            :src="url ?? undefined"
           />
         </div>
       </div>
@@ -25,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { watch, nextTick } from 'vue';
+import { ref, watch, onMounted, nextTick } from 'vue';
 
 interface Props {
   /** Resolved file:// URLs for each video track, indexed by camera slot. */
@@ -38,20 +38,55 @@ interface Props {
 
 const props = defineProps<Props>();
 
-// ── Play / pause on isPlaying change ────────────────────────────────────────
-watch(() => props.isPlaying, async (playing) => {
-  await nextTick();
-  props.videoUrls.forEach((url, i) => {
+// v-for ref — Vue populates this array with each <video> element in order
+const videoRefs = ref<HTMLVideoElement[]>([]);
+
+function loadAll() {
+  videoRefs.value.forEach((video, i) => {
+    const url = props.videoUrls[i];
     if (!url) return;
-    const video = document.getElementById(`cameraFeed${i}`) as HTMLVideoElement | null;
-    if (!video) return;
-    if (playing) {
-      video.play().catch(() => {});
-    } else {
-      video.pause();
-    }
+    // Always set src and reload — let the browser deduplicate
+    video.src = url;
+    video.load();
   });
+}
+
+function playAll() {
+  videoRefs.value.forEach((video, i) => {
+    if (!props.videoUrls[i]) return;
+    video.play().catch(() => {});
+  });
+}
+
+function pauseAll() {
+  videoRefs.value.forEach(video => {
+    if (!video.paused) video.pause();
+  });
+}
+
+// Load videos once the component has mounted and refs are populated
+onMounted(async () => {
+  await nextTick();
+  loadAll();
+  if (props.isPlaying) playAll();
 });
+
+// When URLs change (new recording selected), reload all
+watch(() => props.videoUrls, async () => {
+  await nextTick();
+  loadAll();
+  if (props.isPlaying) playAll();
+}, { deep: true });
+
+// Play / pause when the parent toggles isPlaying
+watch(() => props.isPlaying, (playing) => {
+  if (playing) {
+    playAll();
+  } else {
+    pauseAll();
+  }
+});
+
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function feedLabel(index: number): string {
@@ -96,4 +131,3 @@ function feedLabel(index: number): string {
   white-space: nowrap;
 }
 </style>
-

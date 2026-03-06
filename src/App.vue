@@ -699,17 +699,7 @@ function togglePlayback() {
       fsPlaybackSeconds.value = 0;
     }
     isPlaying.value = true;
-    // Seek all playback videos to current time then play — sidebar's isPlayingBack watcher handles .play()
-    nextTick(() => {
-      fsPlaybackVideoUrls.value.forEach((url, i) => {
-        if (!url) return;
-        const video = document.getElementById(`cameraFeed${i}`) as HTMLVideoElement | null;
-        if (video) {
-          video.currentTime = fsPlaybackSeconds.value;
-          video.play().catch(() => {});
-        }
-      });
-    });
+    // PlaybackPanel watches isPlaying and calls .play() on each video element
     fsPlaybackTimer = setInterval(() => {
       if (fsFrameIndex.value >= fsPositions.value.length - 1) {
         isPlaying.value = false;
@@ -770,12 +760,7 @@ function onTimelineHover(e: MouseEvent) {
 
 function stopFsTimer() {
   if (fsPlaybackTimer) { clearInterval(fsPlaybackTimer); fsPlaybackTimer = null; }
-  // Pause any playing playback video elements
-  fsPlaybackVideoUrls.value.forEach((url, i) => {
-    if (!url) return;
-    const video = document.getElementById(`cameraFeed${i}`) as HTMLVideoElement | null;
-    if (video && !video.paused) video.pause();
-  });
+  // PlaybackPanel's watch(isPlaying) handles pause when isPlaying becomes false
 }
 
 const lastSentMsg = ref('');
