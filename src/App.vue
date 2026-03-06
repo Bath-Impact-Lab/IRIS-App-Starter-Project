@@ -144,7 +144,7 @@
           :value="fsSelectedRecording?.path ?? ''"
           @change="onRecordingSelectChange"
         >
-          <option v-if="!fsRecordings.length" value="" disabled>No recordings</option>
+          <option value="">✦ New Recording</option>
           <option v-for="r in fsRecordings" :key="r.path" :value="r.path">{{ r.name }}</option>
         </select>
         <button
@@ -185,6 +185,8 @@
       :camera-rotation="cameraRotation"
       :devices="devices"
       :selected-camera-ids="selectedDeviceId"
+      :playback-video-urls="fsPlaybackVideoUrls"
+      :is-playing-back="isPlaying"
       @sphere-update="sphereMeshUpdate"
       @skeleton-update="skeletonMeshUpdate"
       @iris-data-update="irisDataUpdate"
@@ -457,7 +459,14 @@ const {
 
 // Construct scene camera
 const selectedCameraCount = computed(() => selectedDevices.value?.length ?? 0);
-const hasCameraSelected = computed(() => !!selectedDevices.value && selectedDevices.value.length > 0);
+// Also show the sidebar during filesystem playback when video files exist
+const fsVideoFiles = ref<{ index: number; name: string; path: string }[]>([]);
+// Resolved file:// URLs for each video, indexed by position — bound directly to sidebar <video :src>
+const fsPlaybackVideoUrls = ref<(string | null)[]>([]);
+const hasCameraSelected = computed(() =>
+  (!!selectedDevices.value && selectedDevices.value.length > 0) ||
+  (outputOption.value === 'Filesystem' && fsVideoFiles.value.length > 0)
+);
 
 const showPlaySpace = ref(true);
 const showCameras = ref(true);
@@ -496,15 +505,14 @@ async function refreshRecordings() {
   const ipc = (window as any).ipc;
   if (ipc?.fsListRecordings) {
     fsRecordings.value = await ipc.fsListRecordings(fsRecordingsDir.value);
-    if (fsRecordings.value.length && !fsSelectedRecording.value) {
-      fsSelectedRecording.value = fsRecordings.value[0]; // list is already sorted newest first
-    }
+    // Do NOT auto-select — default is always "New Recording" (null)
   }
 }
 
 function onRecordingSelectChange(e: Event) {
   const path = (e.target as HTMLSelectElement).value;
-  fsSelectedRecording.value = fsRecordings.value.find(r => r.path === path) ?? null;
+  // Empty string = "New Recording" sentinel — clear selection so live panel shows
+  fsSelectedRecording.value = path ? (fsRecordings.value.find(r => r.path === path) ?? null) : null;
 }
 
 // Rename recording modal
@@ -544,12 +552,27 @@ async function submitRename() {
 }
 
 // When Filesystem is selected, auto-load the default recordings directory
-watch(outputOption, async (val) => {
+watch(outputOption, async (val, oldVal) => {
   if (val === 'Filesystem' && !fsRecordingsDir.value) {
     const ipc = (window as any).ipc;
     if (ipc?.fsGetDefaultRecordingsDir) {
       fsRecordingsDir.value = await ipc.fsGetDefaultRecordingsDir();
       await refreshRecordings();
+    }
+  }
+  // When leaving Filesystem mode, clear synthetic playback cameras
+  if (oldVal === 'Filesystem' && val !== 'Filesystem') {
+    isPlaying.value = false;
+    stopFsTimer();
+    fsPositions.value = [];
+    fsVideoFiles.value = [];
+    fsPlaybackVideoUrls.value = [];
+    fsFrameIndex.value = 0;
+    fsPlaybackSeconds.value = 0;
+    // Remove synthetic devices if no real cameras were selected
+    if (selectedDevices.value?.every(d => d.deviceId.startsWith('fs-playback-'))) {
+      selectedDevices.value = null;
+      selectedDeviceId.value = null;
     }
   }
 });
@@ -559,8 +582,12 @@ watch(outputOption, async (val) => {
 const isRecording = ref(false);
 const isPlaying = ref(false);
 
-// Playback controls are disabled when no recording is selected (no recordings available yet)
-const playbackDisabled = computed(() => isRecording.value || !fsSelectedRecording.value);
+// Loaded position frames for the currently selected recording
+const fsPositions = ref<IrisData[]>([]);
+const fsFrameIndex = ref(0);
+
+// Playback controls are disabled when no recording is selected or positions aren't loaded
+const playbackDisabled = computed(() => isRecording.value || !fsSelectedRecording.value || fsPositions.value.length === 0);
 const fsPlaybackSeconds = ref(0);
 const fsDuration = ref(0);
 const timelineHoverX = ref<number | null>(null);
@@ -571,14 +598,72 @@ let fsRecordTimer: ReturnType<typeof setInterval> | null = null;
 watch(isRecording, async (val) => {
   if (!val) {
     await refreshRecordings();
-    // Always jump to the newest recording when one finishes
-    if (fsRecordings.value.length) fsSelectedRecording.value = fsRecordings.value[0];
+    // Stay on "New Recording" — user can manually select the recording they just made
+  }
+});
+
+// Load position frames + video URLs whenever a recording is selected
+watch(fsSelectedRecording, async (rec) => {
+  // Stop any active playback
+  isPlaying.value = false;
+  stopFsTimer();
+  fsFrameIndex.value = 0;
+  fsPlaybackSeconds.value = 0;
+  fsPositions.value = [];
+  fsDuration.value = 0;
+  fsVideoFiles.value = [];
+  fsPlaybackVideoUrls.value = [];
+
+  if (!rec) {
+    // Back to "New Recording" — remove synthetic playback devices so CameraLivePanel shows
+    if (selectedDevices.value?.every(d => d.deviceId.startsWith('fs-playback-'))) {
+      selectedDevices.value = null;
+      selectedDeviceId.value = null;
+    }
+    return;
+  }
+
+  const ipc = (window as any).ipc;
+  if (!ipc?.fsGetRecordingData) return;
+
+  const data = await ipc.fsGetRecordingData(rec.path);
+
+  if (Array.isArray(data?.positions) && data.positions.length > 0) {
+    fsPositions.value = data.positions;
+    fsDuration.value = Math.floor(data.positions.length / 30);
+  }
+
+  // Build synthetic MediaDeviceInfo-like entries for each video file
+  // so the sidebar renders the video feeds even without real cameras
+  if (Array.isArray(data?.videoFiles) && data.videoFiles.length > 0) {
+    fsVideoFiles.value = data.videoFiles;
+
+    // Only replace selectedDevices if no real cameras are active
+    if (!selectedDevices.value || selectedDevices.value.length === 0) {
+      selectedDevices.value = data.videoFiles.map((vf: { index: number; name: string; path: string }) => ({
+        deviceId: `fs-playback-${vf.index}`,
+        groupId: '',
+        kind: 'videoinput' as MediaDeviceKind,
+        label: vf.name,
+        toJSON: () => ({}),
+      } as MediaDeviceInfo));
+      selectedDeviceId.value = selectedDevices.value?.map(d => d.deviceId) ?? [];
+    }
+
+    // Resolve file:// URLs for each video — bound reactively to sidebar <video :src>
+    if (ipc.fsGetVideoUrl) {
+      const urls: (string | null)[] = new Array(data.videoFiles.length).fill(null);
+      await Promise.all(data.videoFiles.map(async (vf: { index: number; path: string }) => {
+        urls[vf.index] = await ipc.fsGetVideoUrl(vf.path);
+      }));
+      fsPlaybackVideoUrls.value = urls;
+    }
   }
 });
 
 const timelinePercent = computed(() => {
-  if (fsDuration.value === 0) return 0;
-  return Math.min(100, (fsPlaybackSeconds.value / fsDuration.value) * 100);
+  if (fsPositions.value.length === 0) return 0;
+  return Math.min(100, (fsFrameIndex.value / (fsPositions.value.length - 1)) * 100);
 });
 
 const fsTimeDisplay = computed(() => {
@@ -607,42 +692,90 @@ function togglePlayback() {
     isPlaying.value = false;
     stopFsTimer();
   } else {
-    if (fsDuration.value === 0) return;
+    if (fsPositions.value.length === 0) return;
+    // Restart from beginning if we reached the end
+    if (fsFrameIndex.value >= fsPositions.value.length - 1) {
+      fsFrameIndex.value = 0;
+      fsPlaybackSeconds.value = 0;
+    }
     isPlaying.value = true;
+    // Seek all playback videos to current time then play — sidebar's isPlayingBack watcher handles .play()
+    nextTick(() => {
+      fsPlaybackVideoUrls.value.forEach((url, i) => {
+        if (!url) return;
+        const video = document.getElementById(`cameraFeed${i}`) as HTMLVideoElement | null;
+        if (video) {
+          video.currentTime = fsPlaybackSeconds.value;
+          video.play().catch(() => {});
+        }
+      });
+    });
     fsPlaybackTimer = setInterval(() => {
-      if (fsPlaybackSeconds.value >= fsDuration.value) {
+      if (fsFrameIndex.value >= fsPositions.value.length - 1) {
         isPlaying.value = false;
         stopFsTimer();
-      } else {
-        fsPlaybackSeconds.value++;
+        return;
       }
-    }, 1000);
+      fsFrameIndex.value++;
+      irisData.value = fsPositions.value[fsFrameIndex.value];
+      fsPlaybackSeconds.value = Math.floor(fsFrameIndex.value / 30);
+    }, 1000 / 30);
   }
 }
 
 function skipBackward() {
-  fsPlaybackSeconds.value = Math.max(0, fsPlaybackSeconds.value - 10);
+  const newFrame = Math.max(0, fsFrameIndex.value - 10 * 30);
+  fsFrameIndex.value = newFrame;
+  fsPlaybackSeconds.value = Math.floor(newFrame / 30);
+  if (fsPositions.value[newFrame]) irisData.value = fsPositions.value[newFrame];
+  fsPlaybackVideoUrls.value.forEach((url, i) => {
+    if (!url) return;
+    const video = document.getElementById(`cameraFeed${i}`) as HTMLVideoElement | null;
+    if (video) video.currentTime = fsPlaybackSeconds.value;
+  });
 }
 
 function skipForward() {
-  fsPlaybackSeconds.value = Math.min(fsDuration.value, fsPlaybackSeconds.value + 10);
+  const newFrame = Math.min(fsPositions.value.length - 1, fsFrameIndex.value + 10 * 30);
+  fsFrameIndex.value = newFrame;
+  fsPlaybackSeconds.value = Math.floor(newFrame / 30);
+  if (fsPositions.value[newFrame]) irisData.value = fsPositions.value[newFrame];
+  fsPlaybackVideoUrls.value.forEach((url, i) => {
+    if (!url) return;
+    const video = document.getElementById(`cameraFeed${i}`) as HTMLVideoElement | null;
+    if (video) video.currentTime = fsPlaybackSeconds.value;
+  });
 }
 
 function scrubTimeline(e: MouseEvent) {
-  if (playbackDisabled.value || fsDuration.value === 0) return;
+  if (playbackDisabled.value || fsPositions.value.length === 0) return;
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
   const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  fsPlaybackSeconds.value = Math.round(pct * fsDuration.value);
+  const newFrame = Math.round(pct * (fsPositions.value.length - 1));
+  fsFrameIndex.value = newFrame;
+  fsPlaybackSeconds.value = Math.floor(newFrame / 30);
+  if (fsPositions.value[newFrame]) irisData.value = fsPositions.value[newFrame];
+  fsPlaybackVideoUrls.value.forEach((url, i) => {
+    if (!url) return;
+    const video = document.getElementById(`cameraFeed${i}`) as HTMLVideoElement | null;
+    if (video) video.currentTime = fsPlaybackSeconds.value;
+  });
 }
 
 function onTimelineHover(e: MouseEvent) {
-  if (fsDuration.value === 0) return;
+  if (fsPositions.value.length === 0) return;
   const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
   timelineHoverX.value = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
 }
 
 function stopFsTimer() {
   if (fsPlaybackTimer) { clearInterval(fsPlaybackTimer); fsPlaybackTimer = null; }
+  // Pause any playing playback video elements
+  fsPlaybackVideoUrls.value.forEach((url, i) => {
+    if (!url) return;
+    const video = document.getElementById(`cameraFeed${i}`) as HTMLVideoElement | null;
+    if (video && !video.paused) video.pause();
+  });
 }
 
 const lastSentMsg = ref('');

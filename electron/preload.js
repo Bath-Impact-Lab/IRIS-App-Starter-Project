@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('ipc', {
   fsListRecordings: (rootDir) => ipcRenderer.invoke('fs-list-recordings', rootDir),
   fsOpenRecording: (folderPath) => ipcRenderer.invoke('fs-open-recording', folderPath),
   fsRenameRecording: (oldPath, newName) => ipcRenderer.invoke('fs-rename-recording', oldPath, newName),
+  fsGetRecordingData: (recordingPath) => ipcRenderer.invoke('fs-get-recording-data', recordingPath),
+  fsGetVideoUrl: (filePath) => ipcRenderer.invoke('fs-get-video-url', filePath),
 })
 
 contextBridge.exposeInMainWorld('electronAPI', {

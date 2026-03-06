@@ -139,6 +139,41 @@ ipcMain.handle('fs-open-recording', async (event, folderPath) => {
     await shell.openPath(folderPath);
 });
 
+// Read position.json + enumerate video files for a recording folder
+ipcMain.handle('fs-get-recording-data', async (event, recordingPath) => {
+    const posPath = path.join(recordingPath, 'position.json');
+    let positions = [];
+    try {
+        if (fs.existsSync(posPath)) {
+            const raw = fs.readFileSync(posPath, 'utf8');
+            positions = JSON.parse(raw);
+        }
+    } catch (err) {
+        console.error('[recording] failed to read position.json:', err);
+    }
+
+    let videoFiles = [];
+    try {
+        const entries = fs.readdirSync(recordingPath);
+        videoFiles = entries
+            .filter(f => /\.(webm|mp4|mkv|avi|mov)$/i.test(f))
+            .map((f, i) => ({
+                index: i,
+                name: f,
+                path: path.join(recordingPath, f),
+            }));
+    } catch (err) {
+        console.error('[recording] failed to list video files:', err);
+    }
+
+    return { positions, videoFiles };
+});
+
+// Return a file:// URL the renderer can load as a video src
+ipcMain.handle('fs-get-video-url', async (event, filePath) => {
+    return 'file:///' + filePath.replace(/\\/g, '/');
+});
+
 // Rename a recording folder
 ipcMain.handle('fs-rename-recording', async (event, oldPath, newName) => {
     try {
