@@ -36,6 +36,19 @@
         <div class="video-modal">
           <div class="video-modal-header">
             <span class="video-modal-title">{{ modalIndex !== null ? feedLabel(modalIndex) : '' }}</span>
+            <div class="video-modal-meta" v-if="modalMeta.resolution">
+              <span class="meta-pill" v-if="props.isPlaying || modalMeta.fps !== null">{{ modalMeta.fps !== null ? `${modalMeta.fps} fps` : '… fps' }}</span>
+              <span class="meta-pill">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:3px;margin-top:-1px">
+                  <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>{{ modalMeta.resolution }}px
+              </span>
+              <span class="meta-pill" v-if="modalMeta.duration !== null">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:middle;margin-right:3px;margin-top:-1px">
+                  <circle cx="12" cy="13" r="8"/><polyline points="12 9 12 13 14.5 15.5"/><path d="M9 3h6"/><line x1="12" y1="3" x2="12" y2="5"/>
+                </svg>{{ modalMeta.duration }}
+              </span>
+            </div>
             <button class="video-modal-close" @click="closeModal" title="Close">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -78,39 +91,112 @@ const videoRefs = ref<HTMLVideoElement[]>([]);
 const modalIndex = ref<number | null>(null);
 const modalVideoRef = ref<HTMLVideoElement | null>(null);
 
+interface ModalMeta {
+  fps: number | null;
+  resolution: string | null;
+  duration: string | null;
+}
+const modalMeta = ref<ModalMeta>({ fps: null, resolution: null, duration: null });
+
+let fpsFrameCount = 0;
+let fpsWindowStart = 0;
+let fpsRafHandle = 0;
+
+function startFpsMeasurement(video: HTMLVideoElement) {
+  stopFpsMeasurement();
+  fpsFrameCount = 0;
+  fpsWindowStart = 0;
+
+  function onFrame(_now: DOMHighResTimeStamp, meta: VideoFrameCallbackMetadata) {
+    if (fpsWindowStart === 0) {
+      // First frame — just record timestamp, request next
+      fpsWindowStart = meta.expectedDisplayTime;
+      fpsFrameCount = 0;
+    } else {
+      fpsFrameCount++;
+      const elapsed = meta.expectedDisplayTime - fpsWindowStart;
+      if (elapsed >= 500 && fpsFrameCount >= 2) {
+        // Enough data — derive FPS from frame interval average
+        const avgInterval = elapsed / fpsFrameCount;
+        modalMeta.value.fps = Math.round(1000 / avgInterval);
+        // Stop — we have a stable reading; restart only on seek/resume
+        fpsRafHandle = 0;
+        return;
+      }
+    }
+    if (modalIndex.value !== null && !video.paused && !video.ended) {
+      fpsRafHandle = video.requestVideoFrameCallback(onFrame);
+    }
+  }
+  fpsRafHandle = video.requestVideoFrameCallback(onFrame);
+}
+
+function stopFpsMeasurement() {
+  if (fpsRafHandle && modalVideoRef.value) {
+    modalVideoRef.value.cancelVideoFrameCallback(fpsRafHandle);
+  }
+  fpsRafHandle = 0;
+}
+
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return m > 0 ? `${m}m ${s.toString().padStart(2, '0')}s` : `${s}s`;
+}
+
 async function openModal(i: number) {
   const url = props.videoUrls[i];
   if (!url) return;
   modalIndex.value = i;
+  modalMeta.value = { fps: null, resolution: null, duration: null };
   await nextTick();
   if (!modalVideoRef.value) return;
-  // Mirror the current playback position from the sidebar video
   const sidebarVideo = videoRefs.value[i];
-  modalVideoRef.value.src = url;
-  modalVideoRef.value.load();
-  modalVideoRef.value.addEventListener('loadeddata', () => {
-    if (sidebarVideo) modalVideoRef.value!.currentTime = sidebarVideo.currentTime;
-    if (props.isPlaying) modalVideoRef.value!.play().catch(() => {});
+  const video = modalVideoRef.value;
+  video.src = url;
+  video.load();
+  video.addEventListener('loadedmetadata', () => {
+    modalMeta.value.resolution = `${video.videoWidth}×${video.videoHeight}`;
+    if (isFinite(video.duration)) {
+      modalMeta.value.duration = formatDuration(video.duration);
+    }
   }, { once: true });
+  video.addEventListener('loadeddata', () => {
+    if (sidebarVideo) video.currentTime = sidebarVideo.currentTime;
+    if (props.isPlaying) {
+      video.play().catch(() => {});
+      startFpsMeasurement(video);
+    }
+  }, { once: true });
+  // Restart measurement on every play (covers opens, re-seeks, play-after-pause)
+  video.addEventListener('playing', () => {
+    modalMeta.value.fps = null;
+    startFpsMeasurement(video);
+  });
 }
 
-function closeModal() {
-  if (modalVideoRef.value) {
-    modalVideoRef.value.pause();
-    modalVideoRef.value.src = '';
-  }
-  modalIndex.value = null;
-}
-
-// Keep modal video in sync with play/pause state
+// Restart FPS measurement when video resumes
 watch(() => props.isPlaying, (playing) => {
   if (modalIndex.value === null || !modalVideoRef.value) return;
   if (playing) {
     modalVideoRef.value.play().catch(() => {});
+    modalMeta.value.fps = null;
+    startFpsMeasurement(modalVideoRef.value);
   } else {
     modalVideoRef.value.pause();
+    stopFpsMeasurement();
   }
 });
+
+function closeModal() {
+  stopFpsMeasurement();
+  if (modalVideoRef.value) {
+    modalVideoRef.value.pause();
+    modalVideoRef.value.src = '';
+  }
+  modalMeta.value = { fps: null, resolution: null, duration: null };
+  modalIndex.value = null;
+}
 
 // ── Sidebar video management ─────────────────────────────────────────────────
 function loadAll() {
@@ -259,6 +345,30 @@ function feedLabel(index: number): string {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex-shrink: 0;
+  max-width: 200px;
+}
+
+.video-modal-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.meta-pill {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: rgba(255,255,255,0.45);
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .video-modal-close {
