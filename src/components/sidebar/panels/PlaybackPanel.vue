@@ -19,10 +19,11 @@
         <div :id="`camera-box${i}`">
           <video
             ref="videoRefs"
-            style="width: 100%;"
+            style="width: 100%; cursor: pointer;"
             :id="`cameraFeed${i}`"
             playsinline
             muted
+            @click="openModal(i)"
           />
         </div>
       </div>
