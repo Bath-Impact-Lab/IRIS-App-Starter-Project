@@ -72,5 +72,6 @@ interface Window {
     startMonitor: (outputDir: string) => Promise<{ok: boolean, outputDir?: string, error?: string}>;
     stopMonitor: () => Promise<{ok: boolean}>;
     checkIrisCli: () => Promise<{found: boolean, path: string}>;
+    onIrisCliOutput: (callback: (data: {channel: string; cameraIndex?: number; line: string}) => void) => void;
   }
 } 

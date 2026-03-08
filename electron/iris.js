@@ -337,7 +337,15 @@ function registerIrisIpc() {
 ipcMain.handle('calculate-intrinsics', async (event, index, rotation) => {
   let inactivityTimer
   let ok = false
-  
+
+  const targetWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow();
+
+  function sendOutput(line) {
+    if (targetWindow && !targetWindow.isDestroyed()) {
+      targetWindow.webContents.send('iris-cli-output', { channel: 'intrinsics', cameraIndex: index, line });
+    }
+  }
+
   let exePath = IRIS_CLI_EXE
   let args = ["calculate-intrinsics", `--camera ${index}`, "--preview", `--rotate ${rotation}`]
   const child = spawn(exePath, args, {
@@ -349,7 +357,7 @@ ipcMain.handle('calculate-intrinsics', async (event, index, rotation) => {
     inactivityTimer = setTimeout(() => {
       console.log("No new data for 10s. Killing process...");
       child.kill();
-      const targetWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow();
+      sendOutput('[timeout] No new data for 10s — process killed.');
       if (targetWindow && !targetWindow.isDestroyed()) {
         targetWindow.webContents.send('intrinsics-complete', {idx: index, path: "None"});
       }
@@ -363,8 +371,9 @@ ipcMain.handle('calculate-intrinsics', async (event, index, rotation) => {
   child.stdout.on('data', (d) => {
     const data = d.toString().trim()
     console.log("[Intrinsics] " + data)
+    data.split('\n').forEach(line => { if (line.trim()) sendOutput(line.trim()); });
     if (data.includes("Intrinsics saved to:")) {
-      const targetWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow();
+      clearTimeout(inactivityTimer);
       if (targetWindow && !targetWindow.isDestroyed()) {
         targetWindow.webContents.send('intrinsics-complete', {idx: index, path: data.replace("Intrinsics saved to: ", "")});
       }
@@ -377,6 +386,7 @@ ipcMain.handle('calculate-intrinsics', async (event, index, rotation) => {
   child.stderr.on('data', (d) => {
     const data = d.toString().trim()
     console.log("[Intrinsics Error] " + data)
+    data.split('\n').forEach(line => { if (line.trim()) sendOutput('[stderr] ' + line.trim()); });
   })
 
   return {ok} 
@@ -407,6 +417,14 @@ ipcMain.handle('calculate-extrinsics', async (event, cameraIndices) => {
 
   console.log(`[extrinsics] spawning: ${exePath} ${args.join(' ')}`)
 
+  const targetWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow()
+
+  function sendOutput(line) {
+    if (targetWindow && !targetWindow.isDestroyed()) {
+      targetWindow.webContents.send('iris-cli-output', { channel: 'extrinsics', line });
+    }
+  }
+
   const child = spawn(exePath, args, {
     stdio: ['pipe', 'pipe', 'pipe'],
   })
@@ -417,7 +435,7 @@ ipcMain.handle('calculate-extrinsics', async (event, cameraIndices) => {
     inactivityTimer = setTimeout(() => {
       console.log('[extrinsics] no new data for 15s, killing process...')
       child.kill()
-      const targetWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow()
+      sendOutput('[timeout] No new data for 15s — process killed.')
       if (targetWindow && !targetWindow.isDestroyed()) {
         targetWindow.webContents.send('extrinsics-complete', { ok: false, error: 'timeout' })
       }
@@ -429,10 +447,10 @@ ipcMain.handle('calculate-extrinsics', async (event, cameraIndices) => {
   child.stdout.on('data', (d) => {
     const data = d.toString().trim()
     console.log('[extrinsics] ' + data)
+    data.split('\n').forEach(line => { if (line.trim()) sendOutput(line.trim()); });
     if (data.toLowerCase().includes('extrinsics saved') || data.toLowerCase().includes('saved to:')) {
       clearTimeout(inactivityTimer)
       child.kill()
-      const targetWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow()
       if (targetWindow && !targetWindow.isDestroyed()) {
         targetWindow.webContents.send('extrinsics-complete', { ok: true, message: data })
       }
@@ -444,13 +462,14 @@ ipcMain.handle('calculate-extrinsics', async (event, cameraIndices) => {
   child.stderr.on('data', (d) => {
     const data = d.toString().trim()
     console.log('[extrinsics error] ' + data)
+    data.split('\n').forEach(line => { if (line.trim()) sendOutput('[stderr] ' + line.trim()); });
     resetTimer()
   })
 
   child.on('error', (err) => {
     console.error('[extrinsics] process error:', err)
     clearTimeout(inactivityTimer)
-    const targetWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow()
+    sendOutput('[error] ' + err.message)
     if (targetWindow && !targetWindow.isDestroyed()) {
       targetWindow.webContents.send('extrinsics-complete', { ok: false, error: err.message })
     }

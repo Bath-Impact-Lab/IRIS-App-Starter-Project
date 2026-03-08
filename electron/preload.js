@@ -21,6 +21,11 @@ contextBridge.exposeInMainWorld('ipc', {
       callback(data)
     })
   },
+  onIrisCliOutput: (callback) => {
+    ipcRenderer.on('iris-cli-output', (event, data) => {
+      callback(data)
+    })
+  },
   startMonitor: (outputDir) => ipcRenderer.invoke('start-monitor', outputDir),
   stopMonitor: () => ipcRenderer.invoke('stop-monitor'),
   checkIrisCli: () => ipcRenderer.invoke('check-iris-cli'),

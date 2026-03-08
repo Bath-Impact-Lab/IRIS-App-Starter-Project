@@ -117,13 +117,26 @@
       <button class="button btn" @click="onStopIris" :disabled="!running">Stop IRIS</button>
     </div>
   </div>
+
+  <!-- Console output modal — rendered outside the sidenav so it overlays the full window -->
+  <Teleport to="body">
+    <ConsoleModal
+      :show="consoleModal.show"
+      :title="consoleModal.title"
+      :lines="consoleModal.lines"
+      :status="consoleModal.status"
+      :can-close="consoleModal.canClose"
+      @close="consoleModal.show = false"
+    />
+  </Teleport>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, reactive, onMounted } from 'vue';
 import { useSceneCameras, SceneCameraEntry } from '../../../lib/useSceneCameras';
 import { deviceShortCode, applyCameraRotation } from '../useCameraFeedUtils';
 import * as THREE from 'three';
+import ConsoleModal from '../../ConsoleModal.vue';
 
 interface Props {
   selectedCameras: MediaDeviceInfo[];
@@ -151,6 +164,35 @@ const emit = defineEmits<{
 const running = ref(false);
 const calibratingExtrinsics = ref(false);
 const calibratingIntrinsics = ref<Set<string>>(new Set());
+
+// ── Console modal ─────────────────────────────────────────────────────────────
+const consoleModal = reactive({
+  show: false,
+  title: '',
+  lines: [] as string[],
+  status: 'idle' as 'idle' | 'running' | 'success' | 'error',
+  canClose: false,
+});
+
+onMounted(() => {
+  window.ipc?.onIrisCliOutput((data: { channel: string; cameraIndex?: number; line: string }) => {
+    // If a different operation opened the modal, keep appending; otherwise reset for new operations.
+    const expectedTitle =
+      data.channel === 'intrinsics'
+        ? `Calibrate Intrinsics — Camera ${data.cameraIndex}`
+        : 'Calibrate Extrinsics';
+
+    if (!consoleModal.show || consoleModal.title !== expectedTitle) {
+      // New operation — reset lines but keep title
+      consoleModal.title = expectedTitle;
+      consoleModal.lines = [];
+      consoleModal.status = 'running';
+      consoleModal.canClose = false;
+      consoleModal.show = true;
+    }
+    consoleModal.lines.push(data.line);
+  });
+});
 
 // ── Scene camera gizmo rotation ──────────────────────────────────────────────
 const selectedCameraCount = computed(() => props.selectedCameras.length);
@@ -256,6 +298,14 @@ async function onCalibrateIntrinsics(d: MediaDeviceInfo) {
 
   const cams = (await navigator.mediaDevices.enumerateDevices()).filter(x => x.kind === 'videoinput');
   const idx = cams.findIndex(c => c.deviceId === d.deviceId);
+
+  // Open console modal right away
+  consoleModal.title = `Calibrate Intrinsics — Camera ${idx}`;
+  consoleModal.lines = [`Starting intrinsics calibration for camera ${idx}…`];
+  consoleModal.status = 'running';
+  consoleModal.canClose = false;
+  consoleModal.show = true;
+
   const slotIndex = props.selectedCameras.indexOf(d);
   if (slotIndex >= 0) stopCameraStream(slotIndex);
   await window.ipc?.calculateIntrinsics(idx, localCameraRotation.value[d.deviceId]);
@@ -272,6 +322,13 @@ async function onCalibrateExtrinsics() {
     const idx = allCams.findIndex(c => c.deviceId === d.deviceId);
     return idx >= 0 ? idx : 0;
   });
+
+  // Open console modal right away
+  consoleModal.title = `Calibrate Extrinsics — Cameras [${cameraIndices.join(', ')}]`;
+  consoleModal.lines = [`Starting extrinsics calibration for cameras [${cameraIndices.join(', ')}]…`];
+  consoleModal.status = 'running';
+  consoleModal.canClose = false;
+  consoleModal.show = true;
 
   // Stop live streams so iris_cli.exe can access the cameras
   props.selectedCameras.forEach((_, i) => stopCameraStream(i));
@@ -326,13 +383,25 @@ async function onStopIris() {
 }
 
 // ── Intrinsics completion callback ───────────────────────────────────────────
-window.ipc?.intrinsicsComplete((data: { idx: number }) => {
+window.ipc?.intrinsicsComplete((data: { idx: number; path: string }) => {
   const device = props.devices[data.idx];
   if (!device) return;
   // Clear the per-camera calibrating state
   const next = new Set(calibratingIntrinsics.value);
   next.delete(device.deviceId);
   calibratingIntrinsics.value = next;
+
+  // Update console modal
+  const succeeded = data.path && data.path !== 'None';
+  if (consoleModal.show) {
+    consoleModal.status = succeeded ? 'success' : 'error';
+    consoleModal.canClose = true;
+    if (succeeded) {
+      consoleModal.lines.push(`✓ Intrinsics saved to: ${data.path}`);
+    } else {
+      consoleModal.lines.push('✗ Calibration timed out or failed.');
+    }
+  }
 
   const index = props.selectedCameraIds?.indexOf(device.deviceId) ?? -1;
   if (index >= 0) startCameraStream(device, index);
@@ -343,6 +412,18 @@ window.ipc?.extrinsicsComplete((data: { ok: boolean; message?: string; error?: s
   calibratingExtrinsics.value = false;
   // Restart live streams now that iris_cli.exe has released the cameras
   props.selectedCameras.forEach((d, i) => startCameraStream(d, i));
+
+  // Update console modal
+  if (consoleModal.show) {
+    consoleModal.status = data.ok ? 'success' : 'error';
+    consoleModal.canClose = true;
+    if (data.ok) {
+      consoleModal.lines.push(`✓ ${data.message ?? 'Extrinsics calibration complete.'}`);
+    } else {
+      consoleModal.lines.push(`✗ ${data.error ?? 'Calibration failed or timed out.'}`);
+    }
+  }
+
   if (data.ok) {
     console.log('[extrinsics] calibration complete:', data.message);
   } else {
