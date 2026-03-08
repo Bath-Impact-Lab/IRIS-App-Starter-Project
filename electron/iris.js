@@ -10,7 +10,7 @@ const fs = require('fs')
 const os = require('os')
 
 // ── IRIS CLI path ─────────────────────────────────────────────────────────────
-const IRIS_CLI_EXE = 'C:\\Program Files\\Bath Impact\\bin\\iris_cli.exe'
+const IRIS_CLI_EXE = 'C:\\Program Files\\Bath Impact Lab\\IRIS\\bin\\iris_cli.exe'
 
 const workers = new Map()
 
