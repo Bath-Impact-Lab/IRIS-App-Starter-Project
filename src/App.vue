@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div id="app-container" :class="{ 'sidebar-open': hasCameraSelected }">
     <!-- Global Overlay for Dropdowns -->
     <Transition name="fade">
@@ -135,7 +135,7 @@
           </div>
         </div>
 
-        <!-- Filesystem recordings dropdown — shown right of Output when Filesystem is selected -->
+        <!-- Filesystem recordings dropdown â€” shown right of Output when Filesystem is selected -->
         <select
           v-if="outputOption === 'Filesystem'"
           class="btn fs-recordings-select"
@@ -144,7 +144,7 @@
           :value="fsSelectedRecording?.path ?? ''"
           @change="onRecordingSelectChange"
         >
-          <option value="">✦ New Recording</option>
+          <option value="">âœ¦ New Recording</option>
           <option v-for="r in fsRecordings" :key="r.path" :value="r.path">{{ r.name }}</option>
         </select>
         <button
@@ -318,7 +318,7 @@
       <div class="hud-sep"></div>
       <span class="hud-item fps-counter">{{ irisDisplayFps }} <span class="fps-unit">FPS</span></span>
     </div>
-    <!-- License Badge — bottom-centre pill -->
+    <!-- License Badge â€” bottom-centre pill -->
     <div class="hud hud-right">
       <div
         class="license-badge-container"
@@ -352,7 +352,7 @@
     <Transition name="fade">
       <div v-if="showRenameModal" class="rename-overlay" @click.self="closeRenameModal">
         <div class="rename-dialog">
-          <button class="rename-dialog-close" @click="closeRenameModal">×</button>
+          <button class="rename-dialog-close" @click="closeRenameModal">Ã—</button>
           <div class="rename-dialog-header">
             <h2 class="rename-dialog-title">Rename Recording</h2>
             <p class="rename-dialog-subtitle">Update the folder name for this recording</p>
@@ -389,10 +389,9 @@
               <line x1="12" y1="16" x2="12.01" y2="16"/>
             </svg>
           </div>
-          <h2 class="iris-missing-title">IRIS Runtime Not Found</h2>
+          <h2 class="iris-missing-title">IRIS Engine Not Found</h2>
           <p class="iris-missing-body">
-            <code>iris_cli.exe</code> could not be located on this machine.<br>
-            Please download and install the IRIS runtime to continue.
+            Please download and install IRIS to continue.
           </p>
           <a
             class="btn iris-missing-download-btn"
@@ -408,7 +407,7 @@
           </a>
           <p class="iris-missing-checking">
             <span class="iris-missing-pulse"></span>
-            Checking for installation…
+            Checking for installation
           </p>
         </div>
       </div>
@@ -497,7 +496,7 @@ const {
 const selectedCameraCount = computed(() => selectedDevices.value?.length ?? 0);
 // Also show the sidebar during filesystem playback when video files exist
 const fsVideoFiles = ref<{ index: number; name: string; path: string }[]>([]);
-// Resolved file:// URLs for each video, indexed by position — bound directly to sidebar <video :src>
+// Resolved file:// URLs for each video, indexed by position â€” bound directly to sidebar <video :src>
 const fsPlaybackVideoUrls = ref<(string | null)[]>([]);
 const hasCameraSelected = computed(() =>
   (!!selectedDevices.value && selectedDevices.value.length > 0) ||
@@ -541,13 +540,13 @@ async function refreshRecordings() {
   const ipc = (window as any).ipc;
   if (ipc?.fsListRecordings) {
     fsRecordings.value = await ipc.fsListRecordings(fsRecordingsDir.value);
-    // Do NOT auto-select — default is always "New Recording" (null)
+    // Do NOT auto-select â€” default is always "New Recording" (null)
   }
 }
 
 function onRecordingSelectChange(e: Event) {
   const path = (e.target as HTMLSelectElement).value;
-  // Empty string = "New Recording" sentinel — clear selection so live panel shows
+  // Empty string = "New Recording" sentinel â€” clear selection so live panel shows
   fsSelectedRecording.value = path ? (fsRecordings.value.find(r => r.path === path) ?? null) : null;
 }
 
@@ -634,7 +633,7 @@ let fsRecordTimer: ReturnType<typeof setInterval> | null = null;
 watch(isRecording, async (val) => {
   if (!val) {
     await refreshRecordings();
-    // Stay on "New Recording" — user can manually select the recording they just made
+    // Stay on "New Recording" â€” user can manually select the recording they just made
   }
 });
 
@@ -651,7 +650,7 @@ watch(fsSelectedRecording, async (rec) => {
   fsPlaybackVideoUrls.value = [];
 
   if (!rec) {
-    // Back to "New Recording" — remove synthetic playback devices so CameraLivePanel shows
+    // Back to "New Recording" â€” remove synthetic playback devices so CameraLivePanel shows
     if (selectedDevices.value?.every(d => d.deviceId.startsWith('fs-playback-'))) {
       selectedDevices.value = null;
       selectedDeviceId.value = null;
@@ -686,7 +685,7 @@ watch(fsSelectedRecording, async (rec) => {
       selectedDeviceId.value = selectedDevices.value?.map(d => d.deviceId) ?? [];
     }
 
-    // Resolve file:// URLs for each video — bound reactively to sidebar <video :src>
+    // Resolve file:// URLs for each video â€” bound reactively to sidebar <video :src>
     if (ipc.fsGetVideoUrl) {
       const urls: (string | null)[] = new Array(data.videoFiles.length).fill(null);
       await Promise.all(data.videoFiles.map(async (vf: { index: number; path: string }) => {
@@ -817,13 +816,13 @@ const lastSentMsg = ref('');
 const running = ref(false);
 const irisDisplayFps = ref(0);
 
-// ── IRIS CLI presence check ──────────────────────────────────────────────────
+// â”€â”€ IRIS CLI presence check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const showIrisNotFound = ref(false);
 let irisPollTimer: ReturnType<typeof setInterval> | null = null;
 
 async function checkIrisCli() {
   const ipc = (window as any).ipc;
-  if (!ipc?.checkIrisCli) return; // not in Electron — skip
+  if (!ipc?.checkIrisCli) return; // not in Electron â€” skip
   const result = await ipc.checkIrisCli();
   if (result.found) {
     showIrisNotFound.value = false;
@@ -1102,571 +1101,7 @@ function updateLicenseKey(value: string) {
 
 </script>
 
-<style scoped>
-.hud{ position: fixed; left: 16px; bottom: 16px; height: 48px; display:flex; align-items:center; gap:8px; padding:0 10px; background: rgba(12,18,25,.6); border:1px solid rgba(255,255,255,.08); border-radius: 12px; backdrop-filter: blur(10px); }
-.hud-fs {
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 16px;
-  gap: 12px;
-  padding: 0 16px;
-}
-.sidebar-open .hud-fs {
-  left: calc(50% - 125px);
-}
-.fs-group { display: flex; align-items: center; gap: 8px; }
-.fs-sep { width: 1px; height: 24px; background: rgba(255,255,255,.12); }
-.fs-label { font-size: .78rem; font-weight: 700; color: rgba(255,255,255,.5); letter-spacing: .04em; min-width: 40px; }
-.fs-rec-label { color: #ffffff; }
-.fs-rec-label { width: 52px; min-width: 52px; }
-.fs-time { font-variant-numeric: tabular-nums; color: #e6edf3; min-width: 38px; }
-/* Recordings dropdown */
-.fs-recordings-dropdown { position: relative; }
-.fs-recordings-btn {
-  display: flex; align-items: center; gap: 6px;
-  padding: 0 10px; height: 32px; width: auto;
-  font-size: .78rem; font-weight: 600; color: rgba(255,255,255,.6);
-  white-space: nowrap;
-}
-.fs-recordings-label { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fs-chevron { transition: transform 0.2s ease; flex-shrink: 0; }
-.fs-recordings-dropdown.open .fs-chevron { transform: rotate(180deg); }
-.fs-recordings-menu {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
-  min-width: 240px;
-  max-width: 320px;
-  background: var(--bg-elev);
-  border: 1px solid rgba(255,255,255,.1);
-  border-radius: 12px;
-  padding: 8px;
-  box-shadow: 0 -8px 24px rgba(0,0,0,.5);
-  z-index: 300;
-  max-height: 280px;
-  overflow-y: auto;
-  scrollbar-width: none;
-}
-.fs-recordings-select {
-  appearance: auto;
-  cursor: pointer;
-  font-size: .85rem;
-  font-weight: 600;
-  color: var(--fg);
-  background: linear-gradient(180deg, #1a2330, #121922);
-  max-width: 160px;
-}
-.fs-recordings-select option {
-  background: #11161d;
-  color: var(--fg);
-}
-.fs-timeline {
-  width: 160px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  padding: 0 2px;
-}
-.fs-timeline-track {
-  position: relative;
-  width: 100%;
-  height: 4px;
-  background: rgba(255,255,255,.15);
-  border-radius: 2px;
-}
-.fs-timeline-fill {
-  position: absolute;
-  left: 0; top: 0; bottom: 0;
-  background: var(--accent);
-  border-radius: 2px;
-  transition: width 0.25s linear;
-}
-.fs-timeline-thumb {
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 10px; height: 10px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 4px rgba(0,0,0,.5);
-  transition: left 0.25s linear;
-}
-.fs-timeline-hover {
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 6px; height: 6px;
-  border-radius: 50%;
-  background: rgba(255,255,255,.4);
-  pointer-events: none;
-}
-.fs-timeline:hover .fs-timeline-track { height: 6px; }
-.fs-timeline-disabled { cursor: not-allowed; opacity: 0.4; pointer-events: none; }
-.fs-time-disabled { color: rgba(255,255,255,.3) !important; }
-.hud-icon-btn.fs-btn { color: #ffffff; border-color: rgba(255,255,255,.4); background: rgba(255,255,255,.1); }
-.hud-icon-btn.fs-btn:hover { color: #fff; border-color: rgba(255,255,255,.5); background: rgba(255,255,255,.18); }
-.hud-icon-btn.fs-btn.fs-recording { color: #ff5f5f; border-color: rgba(255,95,95,.5); background: rgba(255,95,95,.12); }
-.hud-icon-btn.fs-btn.fs-recording:hover { background: rgba(255,95,95,.22); }
-.hud-icon-btn:disabled { opacity: 0.3; cursor: not-allowed; pointer-events: none; }
-.fs-rec-indicator {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  height: 28px;
-  width: 52px;
-}
-.fs-rec-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #ff5f5f;
-  box-shadow: 0 0 6px rgba(255,95,95,.8);
-  animation: fs-dot-pulse 1s ease-in-out infinite;
-  flex-shrink: 0;
-  margin-right: 2px;
-}
-.fs-rec-bar {
-  display: inline-block;
-  width: 3px;
-  height: var(--h, 12px);
-  background: #ff5f5f;
-  border-radius: 2px;
-  animation-name: fs-wave;
-  animation-duration: 0.7s;
-  animation-delay: var(--d, 0ms);
-  animation-timing-function: ease-in-out;
-  animation-iteration-count: infinite;
-  animation-direction: alternate;
-}
-@keyframes fs-dot-pulse {
-  0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(255,95,95,.8); }
-  50%       { opacity: 0.3; box-shadow: none; }
-}
-@keyframes fs-wave {
-  from { transform: scaleY(0.3); }
-  to   { transform: scaleY(1); }
-}
-.fs-bar-enter-active, .fs-bar-leave-active { transition: opacity 0.25s ease, transform 0.25s ease; }
-.fs-bar-enter-from, .fs-bar-leave-to { opacity: 0; transform: translateX(-50%) translateY(10px); }
-.hud-right{ left: auto; right: 16px; }
-.sidebar-open .hud-right{ right: 266px; /* 250px sidenav + 16px gap */ }
-@media (max-width: 768px) {
-  .hud-right {
-    right: 16px;
-  }
-}
-.hud-center{ left: calc(50% - 125px); transform: translateX(-50%); }
-.activity-blinker{
-  width: 8px; height: 8px; border-radius: 50%;
-  background: #6be675;
-  box-shadow: 0 0 6px rgba(107,230,117,0.8);
-  animation: blink 1.2s ease-in-out infinite;
-  flex-shrink: 0;
-}
-@keyframes blink{
-  0%, 100%{ opacity: 1; box-shadow: 0 0 6px rgba(107,230,117,0.8); }
-  50%{ opacity: 0.25; box-shadow: none; }
-}
-.fps-counter{ font-variant-numeric: tabular-nums; font-size: .85rem; color: #e6edf3; font-weight: 700; }
-.fps-unit{ font-size: .7rem; font-weight: 600; color: rgba(255,255,255,.45); margin-left: 2px; }
-.demo-banner{
-  position: absolute;
-  top: 18px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 16px;
-  background: rgba(12,18,25,.65);
-  border: 1px solid rgba(255,255,255,.1);
-  border-radius: 20px;
-  backdrop-filter: blur(10px);
-  color: rgba(255,255,255,.55);
-  font-size: .8rem;
-  font-weight: 600;
-  letter-spacing: .02em;
-  pointer-events: none;
-  white-space: nowrap;
-  z-index: 1;
-}
-.demo-icon{ display:flex; align-items:center; color: rgba(255,180,50,.7); }
-.demo-fade-enter-active, .demo-fade-leave-active{ transition: opacity .4s ease, transform .4s ease; }
-.demo-fade-enter-from, .demo-fade-leave-to{ opacity: 0; transform: translateX(-50%) translateY(-6px); }
-.hud-item{ display:flex; align-items:center; gap:8px; color:#e6edf3; font-weight:600; }
-.hud-sep{ width:1px; background:rgba(255,255,255,.1); margin:0 6px; }
-.hud-icon-btn{ display:flex; align-items:center; justify-content:center; width:32px; height:32px; border-radius:8px; border:1px solid rgba(255,255,255,.1); background:transparent; color:rgba(255,255,255,.35); cursor:pointer; transition:color .2s, background .2s, border-color .2s; padding:0; }
-.hud-icon-btn:hover{ background:rgba(255,255,255,.08); color:rgba(255,255,255,.7); }
-.hud-icon-btn.active{ color:#ffffff; border-color:rgba(255,255,255,.4); background:rgba(255,255,255,.1); }
-.dot{ width:8px; height:8px; border-radius:50%; display:inline-block; box-shadow:0 0 10px rgba(0,0,0,.5) }
-.dot.ok{ background:#6be675 }
-.dot.warn{ background:#ff9a5c }
-.btn.btn-mini{ padding:6px 10px; font-size:.8rem; border-radius:8px; border:1px solid rgba(255,255,255,.08); background:rgba(26,35,48,.8); color:#e6edf3; cursor:pointer }
-.debug{ position: fixed; left: 16px; bottom: 70px; width: 540px; max-width: calc(100vw - 32px); background: rgba(12,18,25,.85); border:1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 10px; backdrop-filter: blur(10px); box-shadow:0 10px 28px rgba(0,0,0,.35) }
-.debug-row{ display:flex; gap:10px; align-items:center; margin-bottom:8px }
-.debug-col{ flex:1; min-width:0 }
-.debug-title{ color:#9fb1c1; font-weight:700; font-size:.8rem; margin-bottom:4px }
-.debug-pre{ margin:0; max-height:140px; overflow:auto; background:#0e141b; padding:8px; border-radius:8px; border:1px solid rgba(255,255,255,.06); color:#cfe2f3; font-size:.78rem }
-
-/* Navbar layout: brand left, menu centered, right side for sign-in */
-.navbar{
-  position: relative; /* enable absolute-centering of the menu */
-  display:flex;
-  align-items:center;
-  justify-content: space-between; /* keep brand left and right area placed */
-  gap:12px;
-  padding:12px 18px;
-}
-.brand{ display:flex; align-items:center; gap:10px; color:#e6edf3; font-weight:700; z-index:2; }
-.brand-logo{ height: 28px; width: auto; object-fit: contain; display: block; }
-.menu{
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;
-  min-width: 0;
-  justify-content: center;
-  z-index: 1;
-}
-.nav-right{ display:flex; align-items:center; gap:12px; z-index:2; flex-shrink:0; }
-.btn-icon{
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px;
-  border-radius: 9px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: rgba(26,35,48,0.9);
-  color: #e6edf3;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-.btn-icon:hover{
-  background: rgba(40,50,65,0.9);
-}
-.btn-icon svg{
-  display: block;
-}
-/* Accessibility focus styles */
-.btn:focus-visible, .btn.btn-mini:focus-visible {
-  outline: 2px solid #6be675;
-  outline-offset: 2px;
-}
-.dropdown-menu:focus { outline: none; }
-.device.active { background: rgba(107, 230, 117, 0.12); border-radius: 8px; }
-.device.active > div > div { color: #e6ffe9; }
-
-/* License Badge Styles */
-.license-badge-container {
-  display: flex;
-  align-items: center;
-  transition: transform 0.2s ease;
-}
-
-.license-badge-container.clickable {
-  cursor: pointer;
-}
-
-.license-badge-container.clickable:hover {
-  transform: translateY(-2px);
-}
-
-.license-badge-container .badge,
-.license-badge-container .badge-upgrade {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0;
-  background: none;
-  border: none;
-  border-radius: 0;
-  backdrop-filter: none;
-  font-size: 13px;
-  font-weight: 600;
-  color: #e6edf3;
-}
-
-.badge.error {
-  border-color: rgba(255, 59, 48, 0.3);
-}
-
-.badge-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #6be675; /* Default to Premium green */
-  box-shadow: 0 0 8px rgba(107, 230, 117, 0.4);
-}
-
-.badge-dot.trial {
-  background: #ff9a5c;
-  box-shadow: 0 0 8px rgba(255, 154, 92, 0.4);
-}
-
-.badge-dot.invalid {
-  background: #ff3b30;
-  box-shadow: 0 0 8px rgba(255, 59, 48, 0.4);
-}
-
-.badge-trial-icon {
-  color: #ff9a5c;
-  filter: drop-shadow(0 0 4px rgba(255, 154, 92, 0.6));
-  flex-shrink: 0;
-}
-
-.badge-text {
-  letter-spacing: 0.5px;
-}
-
-
-.upgrade-action {
-  background: linear-gradient(135deg, #6be675, #4ecb58);
-  color: #0b0f14;
-  padding: 6px 12px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  text-transform: uppercase;
-  font-weight: 800;
-  letter-spacing: 0.8px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 12px rgba(107, 230, 117, 0.2);
-}
-
-.license-badge-container.clickable:hover .upgrade-action {
-  transform: translateX(2px);
-  filter: brightness(1.1);
-  box-shadow: 0 4px 15px rgba(107, 230, 117, 0.4);
-}
-
-.settings-footer {
-  flex-direction: column;
-  gap: 16px;
-}
-
-.navbar {
-  z-index: 300 !important;
-  position: relative;
-  isolation: isolate;
-}
-
-.dropdown-overlay {
-  position: fixed;
-  top: 63px; /* below navbar */
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
-  z-index: 150;
-}
-
-.fade-enter-active, .fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-.fade-enter-from, .fade-leave-to {
-  opacity: 0;
-}
-
-.btn-content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.btn-icon-svg {
-  display: none;
-  flex-shrink: 0;
-}
-
-@media (max-width: 768px) {
-  .navbar {
-    padding: 8px 12px;
-  }
-  .brand {
-    gap: 6px;
-  }
-  .brand-logo {
-    height: 24px;
-  }
-  .menu {
-    gap: 6px;
-  }
-  .btn {
-    padding: 8px;
-  }
-  .btn-text {
-    display: none;
-  }
-  .btn-icon-svg {
-    display: block;
-  }
-  .dropdown-menu {
-    position: fixed !important;
-    top: 70px !important;
-    left: 50% !important;
-    right: auto !important;
-    transform: translateX(-50%) !important;
-    width: 90% !important;
-    max-width: 340px !important;
-    margin: 0 !important;
-    z-index: 200 !important;
-    border-color: rgba(255, 255, 255, 0.12) !important;
-    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6) !important;
-  }
-  .dropdown {
-    margin-left: 4px !important;
-  }
-}
-/* Rename Recording Modal */
-.rename-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(12px);
-  z-index: 2000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.rename-dialog {
-  background: rgba(22, 30, 41, 0.97);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  width: 90%;
-  max-width: 420px;
-  padding: 32px;
-  position: relative;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
-  animation: fadeUp 0.25s ease-out;
-}
-.rename-dialog-close {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 22px;
-  cursor: pointer;
-  line-height: 1;
-  padding: 4px 8px;
-}
-.rename-dialog-close:hover { color: #fff; }
-.rename-dialog-header { margin-bottom: 24px; }
-.rename-dialog-title { font-size: 20px; margin: 0 0 6px; color: #fff; }
-.rename-dialog-subtitle { color: rgba(255, 255, 255, 0.45); font-size: 13px; margin: 0; }
-.rename-modal-body { display: flex; flex-direction: column; gap: 8px; padding-bottom: 20px; }
-.rename-label { font-size: .78rem; font-weight: 700; color: rgba(255,255,255,.45); letter-spacing: .04em; }
-.rename-input {
-  width: 100%;
-  padding: 10px 12px;
-  background: rgba(255,255,255,.05);
-  border: 1px solid rgba(255,255,255,.1);
-  border-radius: 8px;
-  color: var(--fg);
-  font-size: .9rem;
-  outline: none;
-  transition: border-color 0.2s;
-}
-.rename-input:focus { border-color: var(--accent); }
-.rename-error { font-size: .78rem; color: #ff5f5f; margin: 0; }
-.rename-modal-footer { display: flex; justify-content: flex-end; gap: 8px; }
-.rename-cancel { background: transparent; border-color: rgba(255,255,255,.12); color: rgba(255,255,255,.5); }
-.rename-confirm { background: linear-gradient(180deg, #1e3a22, #142a18); border-color: rgba(107,230,117,.3); color: var(--accent); }
-.rename-confirm:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/* ── IRIS not-found modal ─────────────────────────────────────────────────── */
-.iris-missing-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(6px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-}
-.iris-missing-dialog {
-  background: var(--bg-elev, #151c25);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 18px;
-  padding: 40px 44px;
-  max-width: 440px;
-  width: calc(100% - 32px);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
-  animation: fadeUp 0.25s ease;
-  text-align: center;
-}
-.iris-missing-icon {
-  color: rgba(255, 190, 60, 0.85);
-  filter: drop-shadow(0 0 10px rgba(255, 190, 60, 0.3));
-}
-.iris-missing-title {
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: var(--fg, #e6edf3);
-  margin: 0;
-}
-.iris-missing-body {
-  font-size: .88rem;
-  color: rgba(255, 255, 255, 0.55);
-  margin: 0;
-  line-height: 1.6;
-}
-.iris-missing-body code {
-  font-family: monospace;
-  font-size: .85rem;
-  color: rgba(255, 200, 80, 0.9);
-  background: rgba(255, 200, 80, 0.08);
-  padding: 1px 5px;
-  border-radius: 4px;
-}
-.iris-missing-download-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 10px 20px;
-  background: linear-gradient(180deg, #1e3a22, #142a18);
-  border: 1px solid rgba(107, 230, 117, 0.35);
-  border-radius: 10px;
-  color: #6be675;
-  font-size: .88rem;
-  font-weight: 600;
-  text-decoration: none;
-  cursor: pointer;
-  transition: background 0.15s, box-shadow 0.15s;
-}
-.iris-missing-download-btn:hover {
-  background: linear-gradient(180deg, #254a29, #193420);
-  box-shadow: 0 0 12px rgba(107, 230, 117, 0.2);
-}
-.iris-missing-checking {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: .76rem;
-  color: rgba(255, 255, 255, 0.3);
-  margin: 0;
-}
-.iris-missing-pulse {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.35);
-  animation: blink 1.4s ease-in-out infinite;
-  flex-shrink: 0;
-}
-
+<style>
+@import './App.css';
 </style>
+
