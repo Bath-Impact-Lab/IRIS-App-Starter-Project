@@ -42,8 +42,34 @@
           </div>
 
           <div>
-            <button class="button btn" style="margin-top: 5px;" @click="onCalibrateIntrinsics(d)">
-              calibrate intrinsics
+            <button
+              class="button btn calibrate-intrinsics-btn"
+              style="margin-top: 5px;"
+              @click="onCalibrateIntrinsics(d)"
+              :disabled="running || calibratingIntrinsics.has(d.deviceId)"
+              title="Hold ArUco marker in front of this camera, then click"
+            >
+              <span v-if="calibratingIntrinsics.has(d.deviceId)" class="calib-spinner"></span>
+              <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0; align-self:center; display:block;">
+                <rect x="2" y="2" width="20" height="20" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                <rect x="4" y="4" width="6" height="6" fill="currentColor" rx="0.5"/>
+                <rect x="5" y="5" width="4" height="4" fill="var(--sidebar, #111)" rx="0.3"/>
+                <rect x="6" y="6" width="2" height="2" fill="currentColor"/>
+                <rect x="14" y="4" width="6" height="6" fill="currentColor" rx="0.5"/>
+                <rect x="15" y="5" width="4" height="4" fill="var(--sidebar, #111)" rx="0.3"/>
+                <rect x="16" y="6" width="2" height="2" fill="currentColor"/>
+                <rect x="4" y="14" width="6" height="6" fill="currentColor" rx="0.5"/>
+                <rect x="5" y="15" width="4" height="4" fill="var(--sidebar, #111)" rx="0.3"/>
+                <rect x="6" y="16" width="2" height="2" fill="currentColor"/>
+                <rect x="11" y="4"  width="2" height="2" fill="currentColor"/>
+                <rect x="14" y="11" width="2" height="2" fill="currentColor"/>
+                <rect x="11" y="11" width="2" height="2" fill="currentColor"/>
+                <rect x="11" y="14" width="2" height="2" fill="currentColor"/>
+                <rect x="14" y="17" width="2" height="2" fill="currentColor"/>
+                <rect x="17" y="11" width="2" height="2" fill="currentColor"/>
+                <rect x="17" y="14" width="2" height="2" fill="currentColor"/>
+              </svg>
+              {{ calibratingIntrinsics.has(d.deviceId) ? 'Calibrating…' : 'Calibrate Intrinsics' }}
             </button>
           </div>
         </div>
@@ -61,7 +87,7 @@
       >
         <span v-if="calibratingExtrinsics" class="calib-spinner"></span>
         <!-- ArUco marker board icon -->
-        <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+        <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0; align-self:center; display:block;">
           <!-- outer border -->
           <rect x="2" y="2" width="20" height="20" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
           <!-- top-left finder pattern -->
@@ -124,6 +150,7 @@ const emit = defineEmits<{
 // ── Running state ────────────────────────────────────────────────────────────
 const running = ref(false);
 const calibratingExtrinsics = ref(false);
+const calibratingIntrinsics = ref<Set<string>>(new Set());
 
 // ── Scene camera gizmo rotation ──────────────────────────────────────────────
 const selectedCameraCount = computed(() => props.selectedCameras.length);
@@ -224,6 +251,9 @@ async function startCameraStream(camera: MediaDeviceInfo, index: number) {
 
 // ── Intrinsics calibration ───────────────────────────────────────────────────
 async function onCalibrateIntrinsics(d: MediaDeviceInfo) {
+  if (calibratingIntrinsics.value.has(d.deviceId)) return;
+  calibratingIntrinsics.value = new Set(calibratingIntrinsics.value).add(d.deviceId);
+
   const cams = (await navigator.mediaDevices.enumerateDevices()).filter(x => x.kind === 'videoinput');
   const idx = cams.findIndex(c => c.deviceId === d.deviceId);
   const slotIndex = props.selectedCameras.indexOf(d);
@@ -296,10 +326,14 @@ async function onStopIris() {
 }
 
 // ── Intrinsics completion callback ───────────────────────────────────────────
-// Registered once here; the panel owns this concern.
 window.ipc?.intrinsicsComplete((data: { idx: number }) => {
   const device = props.devices[data.idx];
   if (!device) return;
+  // Clear the per-camera calibrating state
+  const next = new Set(calibratingIntrinsics.value);
+  next.delete(device.deviceId);
+  calibratingIntrinsics.value = next;
+
   const index = props.selectedCameraIds?.indexOf(device.deviceId) ?? -1;
   if (index >= 0) startCameraStream(device, index);
 });
@@ -397,6 +431,18 @@ window.ipc?.extrinsicsComplete((data: { ok: boolean; message?: string; error?: s
   gap: 6px;
 }
 .calibrate-extrinsics-btn:disabled { opacity: 0.4; }
+
+.calibrate-intrinsics-btn {
+  width: 100%;
+  font-size: 11px;
+  color: rgba(255, 200, 80, 0.9);
+  border-color: rgba(255, 200, 80, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.calibrate-intrinsics-btn:disabled { opacity: 0.4; }
 
 .calib-spinner {
   display: inline-block;
