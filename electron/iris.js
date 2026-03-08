@@ -542,4 +542,4 @@ ipcMain.handle('stop-monitor', async () => {
   })
 })
 
-module.exports = { registerIrisIpc }
+module.exports = { registerIrisIpc, IRIS_CLI_EXE }

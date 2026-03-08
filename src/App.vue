@@ -378,6 +378,42 @@
       </div>
     </Transition>
 
+    <!-- IRIS not installed modal -->
+    <Transition name="fade">
+      <div v-if="showIrisNotFound" class="iris-missing-overlay">
+        <div class="iris-missing-dialog">
+          <div class="iris-missing-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+          <h2 class="iris-missing-title">IRIS Runtime Not Found</h2>
+          <p class="iris-missing-body">
+            <code>iris_cli.exe</code> could not be located on this machine.<br>
+            Please download and install the IRIS runtime to continue.
+          </p>
+          <a
+            class="btn iris-missing-download-btn"
+            href="#"
+            @click.prevent="openIrisDownload"
+          >
+            Download IRIS from iris.cs.bath.ac.uk
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+              <polyline points="15 3 21 3 21 9"/>
+              <line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+          </a>
+          <p class="iris-missing-checking">
+            <span class="iris-missing-pulse"></span>
+            Checking for installation…
+          </p>
+        </div>
+      </div>
+    </Transition>
+
   </div>
 
 </template>
@@ -781,6 +817,30 @@ const lastSentMsg = ref('');
 const running = ref(false);
 const irisDisplayFps = ref(0);
 
+// ── IRIS CLI presence check ──────────────────────────────────────────────────
+const showIrisNotFound = ref(false);
+let irisPollTimer: ReturnType<typeof setInterval> | null = null;
+
+async function checkIrisCli() {
+  const ipc = (window as any).ipc;
+  if (!ipc?.checkIrisCli) return; // not in Electron — skip
+  const result = await ipc.checkIrisCli();
+  if (result.found) {
+    showIrisNotFound.value = false;
+    if (irisPollTimer) { clearInterval(irisPollTimer); irisPollTimer = null; }
+  } else {
+    showIrisNotFound.value = true;
+    // Start polling every 5 seconds if not already polling
+    if (!irisPollTimer) {
+      irisPollTimer = setInterval(checkIrisCli, 5000);
+    }
+  }
+}
+
+function openIrisDownload() {
+  (window as any).electronAPI?.openExternal('https://iris.cs.bath.ac.uk/');
+}
+
 // Skeleton always visible by default
 
 let browserMockTimer: ReturnType<typeof setInterval> | null = null;
@@ -949,6 +1009,9 @@ onMounted(() => {
     else if (document.activeElement === cameraListRef.value) { cameraButtonRef.value?.focus(); }
   });
 
+  // Check whether iris_cli.exe is installed; show modal + poll if not
+  checkIrisCli();
+
   window.ipc?.onIrisData((data) => {
     irisData.value = data
   })
@@ -977,6 +1040,7 @@ onBeforeUnmount(() => {
   if (browserMockTimer) { clearInterval(browserMockTimer); browserMockTimer = null; }
   stopFsTimer();
   if (fsRecordTimer) { clearInterval(fsRecordTimer); fsRecordTimer = null; }
+  if (irisPollTimer) { clearInterval(irisPollTimer); irisPollTimer = null; }
 });
 
 
@@ -1517,6 +1581,92 @@ function updateLicenseKey(value: string) {
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── IRIS not-found modal ─────────────────────────────────────────────────── */
+.iris-missing-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+.iris-missing-dialog {
+  background: var(--bg-elev, #151c25);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  padding: 40px 44px;
+  max-width: 440px;
+  width: calc(100% - 32px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  animation: fadeUp 0.25s ease;
+  text-align: center;
+}
+.iris-missing-icon {
+  color: rgba(255, 190, 60, 0.85);
+  filter: drop-shadow(0 0 10px rgba(255, 190, 60, 0.3));
+}
+.iris-missing-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--fg, #e6edf3);
+  margin: 0;
+}
+.iris-missing-body {
+  font-size: .88rem;
+  color: rgba(255, 255, 255, 0.55);
+  margin: 0;
+  line-height: 1.6;
+}
+.iris-missing-body code {
+  font-family: monospace;
+  font-size: .85rem;
+  color: rgba(255, 200, 80, 0.9);
+  background: rgba(255, 200, 80, 0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.iris-missing-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 20px;
+  background: linear-gradient(180deg, #1e3a22, #142a18);
+  border: 1px solid rgba(107, 230, 117, 0.35);
+  border-radius: 10px;
+  color: #6be675;
+  font-size: .88rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+.iris-missing-download-btn:hover {
+  background: linear-gradient(180deg, #254a29, #193420);
+  box-shadow: 0 0 12px rgba(107, 230, 117, 0.2);
+}
+.iris-missing-checking {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: .76rem;
+  color: rgba(255, 255, 255, 0.3);
+  margin: 0;
+}
+.iris-missing-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  animation: blink 1.4s ease-in-out infinite;
+  flex-shrink: 0;
 }
 
 </style>

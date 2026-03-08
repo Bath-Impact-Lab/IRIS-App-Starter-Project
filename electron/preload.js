@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('ipc', {
   },
   startMonitor: (outputDir) => ipcRenderer.invoke('start-monitor', outputDir),
   stopMonitor: () => ipcRenderer.invoke('stop-monitor'),
+  checkIrisCli: () => ipcRenderer.invoke('check-iris-cli'),
   fsGetDefaultRecordingsDir: () => ipcRenderer.invoke('fs-get-default-recordings-dir'),
   fsPickRecordingsDir: () => ipcRenderer.invoke('fs-pick-recordings-dir'),
   fsListRecordings: (rootDir) => ipcRenderer.invoke('fs-list-recordings', rootDir),

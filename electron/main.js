@@ -1,5 +1,5 @@
 const { app, BrowserWindow, ipcMain, nativeTheme, shell, dialog } = require('electron');
-const { registerIrisIpc } = require('./iris');
+const { registerIrisIpc, IRIS_CLI_EXE } = require('./iris');
 const { MOCK_EXTRINSICS } = require('./mockExtrinsics');
 const path = require('path');
 const fs = require('fs');
@@ -94,6 +94,13 @@ ipcMain.handle('open-external', async (event, url) => {
         console.error('[Main] shell.openExternal failed:', e);
         return { ok: false, error: e.message };
     }
+});
+
+// Check whether iris_cli.exe is present on disk
+ipcMain.handle('check-iris-cli', () => {
+    const found = fs.existsSync(IRIS_CLI_EXE);
+    console.log(`[iris-cli] check: ${found ? 'found' : 'NOT found'} at ${IRIS_CLI_EXE}`);
+    return { found, path: IRIS_CLI_EXE };
 });
 
 // ── Filesystem recordings ────────────────────────────────────────────────────
