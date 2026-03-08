@@ -15,6 +15,14 @@ contextBridge.exposeInMainWorld('ipc', {
       callback(data)
     })
   },
+  calculateExtrinsics: (cameraIndices) => ipcRenderer.invoke('calculate-extrinsics', cameraIndices),
+  extrinsicsComplete: (callback) => {
+    ipcRenderer.on('extrinsics-complete', (event, data) => {
+      callback(data)
+    })
+  },
+  startMonitor: (outputDir) => ipcRenderer.invoke('start-monitor', outputDir),
+  stopMonitor: () => ipcRenderer.invoke('stop-monitor'),
   fsGetDefaultRecordingsDir: () => ipcRenderer.invoke('fs-get-default-recordings-dir'),
   fsPickRecordingsDir: () => ipcRenderer.invoke('fs-pick-recordings-dir'),
   fsListRecordings: (rootDir) => ipcRenderer.invoke('fs-list-recordings', rootDir),

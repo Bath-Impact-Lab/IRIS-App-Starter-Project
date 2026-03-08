@@ -52,6 +52,16 @@
 
     <!-- IRIS engine controls -->
     <div class="iris-controls">
+      <!-- Extrinsics calibration — spans all cameras -->
+      <button
+        class="button btn calibrate-extrinsics-btn"
+        @click="onCalibrateExtrinsics"
+        :disabled="running || calibratingExtrinsics || props.selectedCameras.length < 2"
+        :title="props.selectedCameras.length < 2 ? 'Select at least 2 cameras' : 'Hold ArUco marker in front of ALL cameras, then click'"
+      >
+        <span v-if="calibratingExtrinsics" class="calib-spinner"></span>
+        {{ calibratingExtrinsics ? 'Calibrating…' : 'Calibrate Extrinsics' }}
+      </button>
       <button class="button btn" @click="onStartIris" :disabled="running">Start IRIS</button>
       <button class="button btn" @click="onStopIris" :disabled="!running">Stop IRIS</button>
     </div>
@@ -88,6 +98,7 @@ const emit = defineEmits<{
 
 // ── Running state ────────────────────────────────────────────────────────────
 const running = ref(false);
+const calibratingExtrinsics = ref(false);
 
 // ── Scene camera gizmo rotation ──────────────────────────────────────────────
 const selectedCameraCount = computed(() => props.selectedCameras.length);
@@ -195,6 +206,24 @@ async function onCalibrateIntrinsics(d: MediaDeviceInfo) {
   await window.ipc?.calculateIntrinsics(idx, localCameraRotation.value[d.deviceId]);
 }
 
+// ── Extrinsics calibration ───────────────────────────────────────────────────
+async function onCalibrateExtrinsics() {
+  if (calibratingExtrinsics.value) return;
+  calibratingExtrinsics.value = true;
+
+  // Resolve system camera indices for each selected device
+  const allCams = (await navigator.mediaDevices.enumerateDevices()).filter(x => x.kind === 'videoinput');
+  const cameraIndices = props.selectedCameras.map(d => {
+    const idx = allCams.findIndex(c => c.deviceId === d.deviceId);
+    return idx >= 0 ? idx : 0;
+  });
+
+  // Stop live streams so iris_cli.exe can access the cameras
+  props.selectedCameras.forEach((_, i) => stopCameraStream(i));
+
+  await window.ipc?.calculateExtrinsics(cameraIndices);
+}
+
 // ── IRIS engine ──────────────────────────────────────────────────────────────
 async function onStartIris() {
   emit('sphereUpdate', null);
@@ -248,6 +277,18 @@ window.ipc?.intrinsicsComplete((data: { idx: number }) => {
   if (!device) return;
   const index = props.selectedCameraIds?.indexOf(device.deviceId) ?? -1;
   if (index >= 0) startCameraStream(device, index);
+});
+
+// ── Extrinsics completion callback ───────────────────────────────────────────
+window.ipc?.extrinsicsComplete((data: { ok: boolean; message?: string; error?: string }) => {
+  calibratingExtrinsics.value = false;
+  // Restart live streams now that iris_cli.exe has released the cameras
+  props.selectedCameras.forEach((d, i) => startCameraStream(d, i));
+  if (data.ok) {
+    console.log('[extrinsics] calibration complete:', data.message);
+  } else {
+    console.warn('[extrinsics] calibration failed or timed out:', data.error);
+  }
 });
 </script>
 
@@ -318,6 +359,30 @@ window.ipc?.intrinsicsComplete((data: { idx: number }) => {
   align-items: center;
   z-index: 100;
 }
-.iris-controls button { margin: 10px 0; }
+.iris-controls button { margin: 5px 0; }
+
+.calibrate-extrinsics-btn {
+  width: 90%;
+  font-size: 12px;
+  color: rgba(255, 200, 80, 0.9);
+  border-color: rgba(255, 200, 80, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.calibrate-extrinsics-btn:disabled { opacity: 0.4; }
+
+.calib-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 2px solid rgba(255, 200, 80, 0.3);
+  border-top-color: rgba(255, 200, 80, 0.9);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 </style>
 

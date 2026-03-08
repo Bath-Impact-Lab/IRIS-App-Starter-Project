@@ -677,13 +677,26 @@ function toggleRecording() {
   if (isRecording.value) {
     isRecording.value = false;
     if (fsRecordTimer) { clearInterval(fsRecordTimer); fsRecordTimer = null; }
+    // Stop the iris_cli.exe monitor process
+    (window as any).ipc?.stopMonitor?.();
   } else {
     isPlaying.value = false;
     stopFsTimer();
     fsPlaybackSeconds.value = 0;
     fsDuration.value = 0;
+
+    // Build a timestamped sub-folder under the recordings root
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const recordingName = `recording-${timestamp}`;
+    const outputDir = fsRecordingsDir.value
+      ? `${fsRecordingsDir.value}\\${recordingName}`
+      : recordingName;
+
     isRecording.value = true;
     fsRecordTimer = setInterval(() => { fsDuration.value++; }, 1000);
+
+    // Spawn iris_cli.exe monitor --output-dir <path>
+    (window as any).ipc?.startMonitor?.(outputDir);
   }
 }
 
