@@ -60,6 +60,31 @@
         :title="props.selectedCameras.length < 2 ? 'Select at least 2 cameras' : 'Hold ArUco marker in front of ALL cameras, then click'"
       >
         <span v-if="calibratingExtrinsics" class="calib-spinner"></span>
+        <!-- ArUco marker board icon -->
+        <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0">
+          <!-- outer border -->
+          <rect x="2" y="2" width="20" height="20" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+          <!-- top-left finder pattern -->
+          <rect x="4" y="4" width="6" height="6" fill="currentColor" rx="0.5"/>
+          <rect x="5" y="5" width="4" height="4" fill="var(--sidebar, #111)" rx="0.3"/>
+          <rect x="6" y="6" width="2" height="2" fill="currentColor"/>
+          <!-- top-right finder pattern -->
+          <rect x="14" y="4" width="6" height="6" fill="currentColor" rx="0.5"/>
+          <rect x="15" y="5" width="4" height="4" fill="var(--sidebar, #111)" rx="0.3"/>
+          <rect x="16" y="6" width="2" height="2" fill="currentColor"/>
+          <!-- bottom-left finder pattern -->
+          <rect x="4" y="14" width="6" height="6" fill="currentColor" rx="0.5"/>
+          <rect x="5" y="15" width="4" height="4" fill="var(--sidebar, #111)" rx="0.3"/>
+          <rect x="6" y="16" width="2" height="2" fill="currentColor"/>
+          <!-- data bits in centre -->
+          <rect x="11" y="4"  width="2" height="2" fill="currentColor"/>
+          <rect x="14" y="11" width="2" height="2" fill="currentColor"/>
+          <rect x="11" y="11" width="2" height="2" fill="currentColor"/>
+          <rect x="11" y="14" width="2" height="2" fill="currentColor"/>
+          <rect x="14" y="17" width="2" height="2" fill="currentColor"/>
+          <rect x="17" y="11" width="2" height="2" fill="currentColor"/>
+          <rect x="17" y="14" width="2" height="2" fill="currentColor"/>
+        </svg>
         {{ calibratingExtrinsics ? 'Calibrating…' : 'Calibrate Extrinsics' }}
       </button>
       <button class="button btn" @click="onStartIris" :disabled="running">Start IRIS</button>
