@@ -821,6 +821,7 @@ const showIrisNotFound = ref(false);
 let irisPollTimer: ReturnType<typeof setInterval> | null = null;
 
 async function checkIrisCli() {
+  if (import.meta.env.VITE_APP_SKIP_IRIS_INSTALL === 'true') return; // env flag — skip check
   const ipc = (window as any).ipc;
   if (!ipc?.checkIrisCli) return; // not in Electron â€” skip
   const result = await ipc.checkIrisCli();
