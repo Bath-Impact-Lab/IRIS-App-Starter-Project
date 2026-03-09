@@ -66,8 +66,10 @@ interface Window {
     getExtrinsics: () => Promise<any>;
     onIrisData: (callback: (data: IrisData[] | IrisData) => void) => void;
     calculateIntrinsics: (index: number, rotation: number) => Promise<{ok: boolean, path?: string}>;
+    cancelIntrinsics: () => Promise<{ok: boolean}>;
     intrinsicsComplete: (callback: (data: {idx: number, path: string}) => void) => void;
     calculateExtrinsics: (cameraIndices: number[]) => Promise<{ok: boolean}>;
+    cancelExtrinsics: () => Promise<{ok: boolean}>;
     extrinsicsComplete: (callback: (data: {ok: boolean, message?: string, error?: string}) => void) => void;
     startMonitor: (outputDir: string) => Promise<{ok: boolean, outputDir?: string, error?: string}>;
     stopMonitor: () => Promise<{ok: boolean}>;

@@ -126,7 +126,7 @@
       :lines="consoleModal.lines"
       :status="consoleModal.status"
       :can-close="consoleModal.canClose"
-      @close="consoleModal.show = false"
+      @close="closeConsoleModal"
     />
   </Teleport>
 </template>
@@ -165,6 +165,9 @@ const running = ref(false);
 const calibratingExtrinsics = ref(false);
 const calibratingIntrinsics = ref<Set<string>>(new Set());
 
+// Track which device/slot is currently being calibrated so we can restart it on cancel
+const intrinsicsCalibDevice = ref<{ device: MediaDeviceInfo; slotIndex: number } | null>(null)
+
 // ── Console modal ─────────────────────────────────────────────────────────────
 const consoleModal = reactive({
   show: false,
@@ -173,6 +176,30 @@ const consoleModal = reactive({
   status: 'idle' as 'idle' | 'running' | 'success' | 'error',
   canClose: false,
 });
+
+async function closeConsoleModal() {
+  if (consoleModal.status === 'running') {
+    // Determine whether this is an intrinsics or extrinsics modal and cancel accordingly
+    if (consoleModal.title.startsWith('Calibrate Intrinsics')) {
+      await window.ipc?.cancelIntrinsics()
+      // Restart the paused camera stream
+      if (intrinsicsCalibDevice.value) {
+        const { device, slotIndex } = intrinsicsCalibDevice.value
+        startCameraStream(device, slotIndex)
+        const next = new Set(calibratingIntrinsics.value)
+        next.delete(device.deviceId)
+        calibratingIntrinsics.value = next
+        intrinsicsCalibDevice.value = null
+      }
+    } else if (consoleModal.title.startsWith('Calibrate Extrinsics')) {
+      await window.ipc?.cancelExtrinsics()
+      // Restart all camera streams
+      props.selectedCameras.forEach((d, i) => startCameraStream(d, i))
+      calibratingExtrinsics.value = false
+    }
+  }
+  consoleModal.show = false
+}
 
 onMounted(() => {
   window.ipc?.onIrisCliOutput((data: { channel: string; cameraIndex?: number; line: string }) => {
@@ -307,7 +334,9 @@ async function onCalibrateIntrinsics(d: MediaDeviceInfo) {
   consoleModal.show = true;
 
   const slotIndex = props.selectedCameras.indexOf(d);
-  if (slotIndex >= 0) stopCameraStream(slotIndex);
+  // Store so we can restart the stream if the modal is closed early
+  intrinsicsCalibDevice.value = { device: d, slotIndex }
+  if (slotIndex >= 0) await stopCameraStream(slotIndex);
   await window.ipc?.calculateIntrinsics(idx, localCameraRotation.value[d.deviceId]);
 }
 
@@ -390,6 +419,7 @@ window.ipc?.intrinsicsComplete((data: { idx: number; path: string }) => {
   const next = new Set(calibratingIntrinsics.value);
   next.delete(device.deviceId);
   calibratingIntrinsics.value = next;
+  intrinsicsCalibDevice.value = null;
 
   // Update console modal
   const succeeded = data.path && data.path !== 'None';
