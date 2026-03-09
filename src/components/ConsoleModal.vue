@@ -182,6 +182,12 @@ watch(
   background: rgba(255, 255, 255, 0.12);
   border-radius: 3px;
 }
+:global([data-theme="light"]) .console-body {
+  scrollbar-color: rgba(31,78,121,0.2) transparent;
+}
+:global([data-theme="light"]) .console-body::-webkit-scrollbar-thumb {
+  background: rgba(31,78,121,0.2);
+}
 
 .console-empty {
   color: rgba(255, 255, 255, 0.25);

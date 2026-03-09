@@ -130,3 +130,19 @@ body{
 canvas{ display:block; width:100%; height:100%; }
 @keyframes rise{ from{ transform: translateY(120%); opacity:0 } to { transform: translateY(0%); opacity:1 } }
 
+/* ── Global scrollbar ── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 3px; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
+
+[data-theme="light"] * {
+  scrollbar-color: rgba(31,78,121,0.2) transparent;
+}
+[data-theme="light"] *::-webkit-scrollbar-thumb { background: rgba(31,78,121,0.2); }
+[data-theme="light"] *::-webkit-scrollbar-thumb:hover { background: rgba(31,78,121,0.35); }
+

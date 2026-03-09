@@ -1,4 +1,4 @@
-﻿<template>
+﻿﻿<template>
   <div id="app-container" :class="{ 'sidebar-open': hasCameraSelected }">
     <!-- Global Overlay for Dropdowns -->
     <Transition name="fade">
@@ -459,7 +459,7 @@ const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 const logoError = ref(false);
 
 // ── Theme ──
-const currentTheme = ref<'dark' | 'light'>('dark');
+const currentTheme = ref<'dark' | 'light'>('light');
 function applyTheme(theme: 'dark' | 'light') {
   currentTheme.value = theme;
   document.documentElement.setAttribute('data-theme', theme);
@@ -1036,7 +1036,7 @@ function refresh() {
 
 onMounted(() => {
   // Restore saved theme
-  const savedTheme = (localStorage.getItem('app-theme') as 'dark' | 'light') || 'dark';
+  const savedTheme = (localStorage.getItem('app-theme') as 'dark' | 'light') || 'light';
   applyTheme(savedTheme);
 
   document.addEventListener('click', onClickOutside);
