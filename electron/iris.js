@@ -27,7 +27,7 @@ function buildConfigFromOptions(opts = {}) {
     pose_capacity: 256,
     export_shm: false,
     camera_count: opts.cameras?.length,
-    camera_slots: 1,
+    camera_slots: 32,
     camera_width: opts.camera_width ?? 1920,
     camera_height: opts.camera_height ?? 1080,
   };
@@ -97,7 +97,7 @@ function buildConfigFromOptions(opts = {}) {
       pose_sources: "pose0",
       calibration_dir: "calibration_output",
       extrinsics_file: "calibration_output/extrinsics.json",
-      camera_ids: [0, 1, 2, 3],
+      camera_ids: opts.cameras.map((_, idx) => idx),
       compute_reprojection: true,
       store_reprojection_error: true,
       gate_by_reprojection_error: true,
