@@ -466,7 +466,7 @@ function irisCameras(index) {
 }
 
 // ── Extrinsics calibration ────────────────────────────────────────────────────
-ipcMain.handle('calculate-extrinsics', async (event, cameraIndices) => {
+ipcMain.handle('calculate-extrinsics', async (event, cameraIndices, rotation) => {
   const exePath = IRIS_CLI_EXE
   const cameraArg = Array.isArray(cameraIndices) ? cameraIndices.join(',') : String(cameraIndices)
   const args = ['calculate-extrinsics', '--cameras', cameraArg, "--rotate", String(rotation), ]

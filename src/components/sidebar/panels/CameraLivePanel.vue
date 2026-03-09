@@ -362,7 +362,7 @@ async function onCalibrateExtrinsics() {
   // Stop live streams so iris_cli.exe can access the cameras
   props.selectedCameras.forEach((_, i) => stopCameraStream(i));
 
-  await window.ipc?.calculateExtrinsics(cameraIndices);
+  await window.ipc?.calculateExtrinsics(cameraIndices, localCameraRotation.value[props.selectedCameras[0].deviceId]);
 }
 
 // ── IRIS engine ──────────────────────────────────────────────────────────────
