@@ -392,7 +392,8 @@ async function onStartIris() {
   props.selectedCameras.forEach((_, i) => stopCameraStream(i));
   running.value = true;
   emit('isRunning', true);
-  await window.ipc?.startIRIS(options);
+  if (options.stream) await window.ipc?.startIRISStream?.(options);
+  else await window.ipc?.startIRIS(options);
 }
 
 async function onStopIris() {
