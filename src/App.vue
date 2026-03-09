@@ -144,7 +144,7 @@
           :value="fsSelectedRecording?.path ?? ''"
           @change="onRecordingSelectChange"
         >
-          <option value="">âœ¦ New Recording</option>
+          <option value="">No Recordings</option>
           <option v-for="r in fsRecordings" :key="r.path" :value="r.path">{{ r.name }}</option>
         </select>
         <button
