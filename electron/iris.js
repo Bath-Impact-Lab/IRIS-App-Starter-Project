@@ -501,13 +501,13 @@ ipcMain.handle('calculate-extrinsics', async (event, cameraIndices) => {
     clearTimeout(inactivityTimer)
     inactivityTimer = setTimeout(() => {
       if (completed) return
-      console.log('[extrinsics] no new data for 15s, killing process...')
+      console.log('[extrinsics] no new data for 50s, killing process...')
       child.kill()
-      sendOutput('[timeout] No new data for 15s — process killed.')
+      sendOutput('[timeout] No new data for 50s — process killed.')
       if (targetWindow && !targetWindow.isDestroyed()) {
         targetWindow.webContents.send('extrinsics-complete', { ok: false, error: 'timeout' })
       }
-    }, 15000)
+    }, 50000)
   }
 
   resetTimer()
