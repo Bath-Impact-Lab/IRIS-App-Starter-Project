@@ -4,10 +4,14 @@ const readline = require('readline');
 const { app, ipcMain } = require('electron')
 const crypto = require('crypto')
 const path = require('path')
-const { spawn, execFile } = require('child_process')
+const { spawn, execFile, exec } = require('child_process')
 const { BrowserWindow } = require('electron')
 const fs = require('fs')
 const os = require('os')
+const pty = require('node-pty')
+
+// ── IRIS CLI path ─────────────────────────────────────────────────────────────
+const IRIS_CLI_EXE = 'C:\\Program Files\\Bath Impact Lab\\IRIS\\bin\\iris_cli.exe'
 
 const workers = new Map()
 
@@ -23,7 +27,7 @@ function buildConfigFromOptions(opts = {}) {
     pose_capacity: 256,
     export_shm: false,
     camera_count: opts.cameras?.length,
-    camera_slots: 1,
+    camera_slots: 32,
     camera_width: opts.camera_width ?? 1920,
     camera_height: opts.camera_height ?? 1080,
   };
@@ -44,6 +48,86 @@ function buildConfigFromOptions(opts = {}) {
     }
   }));
 
+  const detection = {
+    name: "det0",
+    params: {
+      device_id: 0,
+      batch_size: 4,
+      rtmdet_engine_path: "models/rtmdet_t_bs4_fp16.trt",
+      rtmdet_input_width: 640,
+      rtmdet_input_height: 640,
+      rtmdet_conf_threshold: 0.7,
+      rtmdet_iou_threshold: 0.45,
+      detection_skip_enabled: true,
+      detection_skip_frames: 20,
+      reid_enabled: true,
+      osnet_engine_path: "models/osnet_x05_fp16.trt",
+      reid_min_detection_conf: 0.55
+    }
+  }
+
+  const global_reid_tracking = {
+    name: "global_track",
+    params: {
+      single_person_mode: false,
+      max_age: 200,
+      min_hits: 1,
+      min_detection_confidence: 0.5,
+      appearance_threshold: 0.45,
+      cross_camera_unconfirmed_threshold: 0.55,
+      use_motion_prediction: false
+    }
+  }
+
+  const pose_estimation =  {
+    name: "pose0",
+    params: {
+      device_id: 0,
+      batch: 16,
+      engine: "models/rtmpose_bs16_fp16.trt",
+      input_w: 192,
+      input_h: 256,
+      split_ratio: 2.0
+    }
+  }
+
+  const triangulation = {
+    name: "tri0",
+    params: {
+      pose_sources: "pose0",
+      calibration_dir: "calibration_output",
+      extrinsics_file: "calibration_output/extrinsics.json",
+      camera_ids: opts.cameras.map((_, idx) => idx),
+      compute_reprojection: true,
+      store_reprojection_error: true,
+      gate_by_reprojection_error: true,
+      max_reprojection_error_px: 50.0,
+      smoothing: {
+        enabled: true,
+        freq: 100.0,
+        min_cutoff: 1.0,
+        beta: 0.5,
+        d_cutoff: 1.0,
+        cleanup_interval: 300
+      }
+    }
+  }
+  
+  const online_calibration = {
+    name: "online_calib",
+    type: "OnlineCalibration",
+    inputs: {
+      PoseBatch: "triangulation.PoseBatch"
+    },
+    params: {
+      window_size: 300,
+      min_joint_conf: 0.6,
+      learning_rate: 0.01,
+      num_epochs: 100,
+      huber_delta: 10.0
+    }
+  }
+
   const output = {
     name: 'output',
     params: {
@@ -51,11 +135,22 @@ function buildConfigFromOptions(opts = {}) {
       capacity: 120,
       frame_width: opts.camera_width ?? 1920,
       frame_height: opts.camera_height ?? 1080,
-      num_cameras: opts.cameras.length,
+      num_cameras: opts.cameras.length,  
     }
   };
 
-  return { run_id, devices, buffers, capture, output }
+  return { 
+    run_id, 
+    devices, 
+    buffers, 
+    capture, 
+    detection, 
+    global_reid_tracking, 
+    pose_estimation, 
+    triangulation, 
+    online_calibration, 
+    output 
+  }
 }
 
 function writeTempConfigFile(configObj) {
@@ -104,11 +199,12 @@ function registerIrisIpc() {
     const paths = writeTempConfigFile(cfgObj)
     const cfgPath = paths.cfgPath
     const tmpDir = paths.tmpDir
-    if (fs.existsSync(path.join(__dirname, "..", "iris_runtime_bundle", "exe file"))) {
+    if (fs.existsSync(IRIS_CLI_EXE)) {
       try {
-        const args = ['--config', cfgPath]
+        const args = ["run", cfgPath]
         //waiting for iris stuff to be done to implement
-        let exePath = path.join(__dirname, "..", "iris_runtime_bundle", "exe file")
+        let exePath = IRIS_CLI_EXE
+
         if (app.isPackaged) {
           exePath = path.join(process.resourcesPath, "app.asar.unpacked", "iris_runtime_bundle", "exe file")
         }
@@ -189,7 +285,7 @@ function registerIrisIpc() {
       }
     }
     else {
-      const positions = require("./../public/assets/position 2.json")
+      const positions = require("./../public/assets/mock-halpe26-stream.json")
       const targetWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow()
       if (targetWindow && !targetWindow.isDestroyed()) {
         targetWindow.webContents.send('iris-data', positions)
@@ -197,7 +293,7 @@ function registerIrisIpc() {
     }
   })
   
-  ipcMain.handle('stop-iris', (event, Id) =>{
+  ipcMain.handle('stop-iris', (event, Id) => {
     const sessionId = String(Id);
     const entry = workers.get(sessionId);
     if (!entry) return { ok: false, error: 'not_found' };
@@ -239,4 +335,301 @@ function registerIrisIpc() {
   })
 }
 
-module.exports = { registerIrisIpc }
+// Active calibration processes — so they can be cancelled
+let activeIntrinsicsChild = null
+let activeExtrinsicsChild = null
+
+ipcMain.handle('cancel-intrinsics', () => {
+  if (activeIntrinsicsChild) {
+    console.log('[Intrinsics] cancelled by user')
+    try { activeIntrinsicsChild.kill() } catch {}
+    activeIntrinsicsChild = null
+  }
+  return { ok: true }
+})
+
+ipcMain.handle('cancel-extrinsics', () => {
+  if (activeExtrinsicsChild) {
+    console.log('[extrinsics] cancelled by user')
+    try { activeExtrinsicsChild.kill() } catch {}
+    activeExtrinsicsChild = null
+  }
+  return { ok: true }
+})
+
+ipcMain.handle('calculate-intrinsics', async (event, index, rotation) => {
+  let inactivityTimer
+  let completed = false
+
+  const targetWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow();
+
+  function sendOutput(line) {
+    if (targetWindow && !targetWindow.isDestroyed()) {
+      targetWindow.webContents.send('iris-cli-output', { channel: 'intrinsics', cameraIndex: index, line });
+    }
+  }
+
+  let exePath = IRIS_CLI_EXE
+  let args = ["calculate-intrinsics", "--camera", String(index), "--rotate", String(rotation), ]
+
+  console.log(`[Intrinsics] spawning: ${exePath} ${args.join(' ')}`)
+
+  let child
+  try {
+    child = pty.spawn(exePath, args, {
+      name: 'xterm-color',
+      cols: 220,
+      rows: 30,
+      cwd: path.dirname(exePath),
+      env: process.env,
+    })
+    activeIntrinsicsChild = child
+  } catch (err) {
+    console.error('[Intrinsics] pty spawn error:', err)
+    sendOutput('[error] ' + err.message)
+    if (targetWindow && !targetWindow.isDestroyed()) {
+      targetWindow.webContents.send('intrinsics-complete', { idx: index, path: "None" })
+    }
+    return { ok: false }
+  }
+
+  function resetTimer() {
+    if (completed) return
+    clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(() => {
+      if (completed) return
+      console.log("No new data for 25s. Killing process...");
+      child.kill();
+      sendOutput('[timeout] No new data for 25s — process killed.');
+      if (targetWindow && !targetWindow.isDestroyed()) {
+        targetWindow.webContents.send('intrinsics-complete', {idx: index, path: "None"});
+      }
+    }, 25000);
+  }
+
+  resetTimer()
+  let bufferData = ""
+  child.onData((data) => {
+    bufferData += data.toString().replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    const lines = bufferData.split('\n')
+    bufferData = lines.pop()
+    lines.forEach(line => {
+      if (line.trim()) {
+        console.log("[Intrinsics] " + line.trim());
+        sendOutput(line.trim()); 
+      } 
+    });
+    if (data.includes("Intrinsics saved to:")) {
+      completed = true
+      clearTimeout(inactivityTimer);
+      child.kill()
+      const match = data.match(/Intrinsics saved to:\s*(.+)/)
+      const savedPath = match ? match[1].trim() : "None"
+      if (targetWindow && !targetWindow.isDestroyed()) {
+        targetWindow.webContents.send('intrinsics-complete', {idx: index, path: savedPath});
+      }
+    } else {
+      resetTimer()
+    }
+  })
+
+  child.onExit(({ exitCode }) => {
+    clearTimeout(inactivityTimer)
+    activeIntrinsicsChild = null
+    console.log(`[Intrinsics] process exited with code ${exitCode}`)
+    if (!completed) {
+      completed = true
+      if (targetWindow && !targetWindow.isDestroyed()) {
+        targetWindow.webContents.send('intrinsics-complete', { idx: index, path: "None" })
+      }
+    }
+  })
+
+  return { ok: true }
+})
+
+
+function irisCameras(index) {
+  let exePath = IRIS_CLI_EXE
+  let args = ["show-cameras", "-v"]
+  const child = spawn(exePath, args, {
+    stdio: ['pipe', 'pipe', 'pipe'],
+  })
+  
+  child.stdout.on('data', (d) => {
+    const data = d.toString().trim()
+    
+    const ids = [...data.matchAll(/device_path: ([^}]+})\\global/gm)].map(m => m[1]);
+    console.log(data)
+    console.log(ids, index)
+  })
+}
+
+// ── Extrinsics calibration ────────────────────────────────────────────────────
+ipcMain.handle('calculate-extrinsics', async (event, cameraIndices, rotation) => {
+  const exePath = IRIS_CLI_EXE
+  const cameraArg = Array.isArray(cameraIndices) ? cameraIndices.join(',') : String(cameraIndices)
+  const args = ['calculate-extrinsics', '--cameras', cameraArg, "--rotate", String(rotation), ]
+
+  console.log(`[extrinsics] spawning: ${exePath} ${args.join(' ')}`)
+
+  const targetWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow()
+
+  function sendOutput(line) {
+    if (targetWindow && !targetWindow.isDestroyed()) {
+      targetWindow.webContents.send('iris-cli-output', { channel: 'extrinsics', line });
+    }
+  }
+
+  let child
+  try {
+    child = pty.spawn(exePath, args, {
+      name: 'xterm-color',
+      cols: 220,
+      rows: 30,
+      cwd: path.dirname(exePath),
+      env: process.env,
+    })
+    activeExtrinsicsChild = child
+  } catch (err) {
+    console.error('[extrinsics] pty spawn error:', err)
+    sendOutput('[error] ' + err.message)
+    if (targetWindow && !targetWindow.isDestroyed()) {
+      targetWindow.webContents.send('extrinsics-complete', { ok: false, error: err.message })
+    }
+    return { ok: false }
+  }
+
+  let inactivityTimer
+  let completed = false
+
+  function resetTimer() {
+    if (completed) return
+    clearTimeout(inactivityTimer)
+    inactivityTimer = setTimeout(() => {
+      if (completed) return
+      console.log('[extrinsics] no new data for 50s, killing process...')
+      child.kill()
+      sendOutput('[timeout] No new data for 50s — process killed.')
+      if (targetWindow && !targetWindow.isDestroyed()) {
+        targetWindow.webContents.send('extrinsics-complete', { ok: false, error: 'timeout' })
+      }
+    }, 50000)
+  }
+
+  resetTimer()
+
+  child.onData((data) => {
+    const lines = data.toString().replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    lines.split('\n').forEach(line => { if (line.trim()) { console.log('[extrinsics] ' + line.trim()); sendOutput(line.trim()); } });
+    if (data.toLowerCase().includes('extrinsics saved') || data.toLowerCase().includes('saved to:')) {
+      completed = true
+      clearTimeout(inactivityTimer)
+      child.kill()
+      if (targetWindow && !targetWindow.isDestroyed()) {
+        targetWindow.webContents.send('extrinsics-complete', { ok: true, message: data })
+      }
+    } else {
+      resetTimer()
+    }
+  })
+
+  child.onExit(({ exitCode }) => {
+    clearTimeout(inactivityTimer)
+    activeExtrinsicsChild = null
+    console.log(`[extrinsics] process exited with code ${exitCode}`)
+    if (!completed) {
+      completed = true
+      if (targetWindow && !targetWindow.isDestroyed()) {
+        targetWindow.webContents.send('extrinsics-complete', { ok: false, error: `exited with code ${exitCode}` })
+      }
+    }
+  })
+
+  return { ok: true }
+})
+
+// ── Monitor (recording) ───────────────────────────────────────────────────────
+let monitorProcess = null
+
+ipcMain.handle('start-monitor', async (event, outputDir) => {
+  if (monitorProcess) {
+    console.warn('[monitor] already running, stopping previous instance first')
+    try { monitorProcess.kill() } catch {}
+    monitorProcess = null
+  }
+
+  // Ensure output directory exists
+  try {
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true })
+      console.log('[monitor] created output dir:', outputDir)
+    }
+  } catch (err) {
+    console.error('[monitor] failed to create output dir:', err)
+    return { ok: false, error: err.message }
+  }
+
+  const exePath = IRIS_CLI_EXE
+  const args = ['monitor', '--output-dir', outputDir]
+
+  console.log(`[monitor] spawning: ${exePath} ${args.join(' ')}`)
+
+  try {
+    monitorProcess = spawn(exePath, args, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+
+    monitorProcess.stdout.on('data', (d) => {
+      console.log('[monitor] ' + d.toString().trim())
+    })
+
+    monitorProcess.stderr.on('data', (d) => {
+      console.log('[monitor stderr] ' + d.toString().trim())
+    })
+
+    monitorProcess.on('error', (err) => {
+      console.error('[monitor] process error:', err)
+      monitorProcess = null
+    })
+
+    monitorProcess.on('exit', (code, signal) => {
+      console.log(`[monitor] exited code=${code} signal=${signal}`)
+      monitorProcess = null
+    })
+
+    return { ok: true, outputDir }
+  } catch (err) {
+    console.error('[monitor] failed to spawn:', err)
+    return { ok: false, error: err.message }
+  }
+})
+
+ipcMain.handle('stop-monitor', async () => {
+  if (!monitorProcess) {
+    console.log('[monitor] stop called but no process running')
+    return { ok: true }
+  }
+
+  console.log('[monitor] stopping...')
+
+  return new Promise((resolve) => {
+    const proc = monitorProcess
+    monitorProcess = null
+
+    const done = () => resolve({ ok: true })
+
+    if (process.platform === 'win32' && proc.pid) {
+      execFile('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { windowsHide: true }, () => done())
+    } else {
+      try { proc.kill('SIGTERM') } catch {}
+      setTimeout(() => {
+        try { proc.kill('SIGKILL') } catch {}
+        done()
+      }, 3000)
+      proc.once('exit', done)
+    }
+  })
+})
+
+module.exports = { registerIrisIpc, IRIS_CLI_EXE }
