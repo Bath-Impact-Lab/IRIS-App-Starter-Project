@@ -370,7 +370,7 @@ ipcMain.handle('calculate-intrinsics', async (event, index, rotation) => {
   }
 
   let exePath = IRIS_CLI_EXE
-  let args = ["calculate-intrinsics", "--camera", String(index)]
+  let args = ["calculate-intrinsics", "--camera", String(index), "--rotate", String(rotation), ]
 
   console.log(`[Intrinsics] spawning: ${exePath} ${args.join(' ')}`)
 
@@ -408,10 +408,17 @@ ipcMain.handle('calculate-intrinsics', async (event, index, rotation) => {
   }
 
   resetTimer()
-
+  let bufferData = ""
   child.onData((data) => {
-    const lines = data.toString().replace(/\r\n/g, '\n').replace(/\r/g, '\n')
-    lines.split('\n').forEach(line => { if (line.trim()) { console.log("[Intrinsics] " + line.trim()); sendOutput(line.trim()); } });
+    bufferData += data.toString().replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    const lines = bufferData.split('\n')
+    bufferData = lines.pop()
+    lines.forEach(line => {
+      if (line.trim()) {
+        console.log("[Intrinsics] " + line.trim());
+        sendOutput(line.trim()); 
+      } 
+    });
     if (data.includes("Intrinsics saved to:")) {
       completed = true
       clearTimeout(inactivityTimer);
@@ -462,7 +469,7 @@ function irisCameras(index) {
 ipcMain.handle('calculate-extrinsics', async (event, cameraIndices) => {
   const exePath = IRIS_CLI_EXE
   const cameraArg = Array.isArray(cameraIndices) ? cameraIndices.join(',') : String(cameraIndices)
-  const args = ['calculate-extrinsics', '--cameras', cameraArg]
+  const args = ['calculate-extrinsics', '--cameras', cameraArg, "--rotate", String(rotation), ]
 
   console.log(`[extrinsics] spawning: ${exePath} ${args.join(' ')}`)
 
