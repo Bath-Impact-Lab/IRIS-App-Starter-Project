@@ -462,7 +462,7 @@ function irisCameras(index) {
 ipcMain.handle('calculate-extrinsics', async (event, cameraIndices) => {
   const exePath = IRIS_CLI_EXE
   const cameraArg = Array.isArray(cameraIndices) ? cameraIndices.join(',') : String(cameraIndices)
-  const args = ['calculate-extrinsics', '--cameras', cameraArg, '--preview']
+  const args = ['calculate-extrinsics', '--cameras', cameraArg]
 
   console.log(`[extrinsics] spawning: ${exePath} ${args.join(' ')}`)
 
