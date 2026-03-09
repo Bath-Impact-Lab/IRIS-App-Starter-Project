@@ -93,7 +93,15 @@ function collectBonesFromSkinnedMesh(root: THREE.Object3D) {
   activeBones['knee_l'] = leftKnee as THREE.Object3D;
   activeBones['knee_r'] = rightKnee as THREE.Object3D;
   activeBones['pelvis'] = pelvis as THREE.Object3D;
- 
+  
+  if (pelvis) {
+    bindPelvisWorldOffset = new THREE.Vector3();
+    // Because the model root is at 0,0,0 right after loading, 
+    // the pelvis's world position gives us the exact height difference 
+    // between the floor and the hips (accounting for your 0.01 scale!).
+    pelvis.getWorldPosition(bindPelvisWorldOffset);
+  }
+
   for (const key in activeBones) {
     if (activeBones[key]) {
       boneBindQuats[key] = activeBones[key].quaternion.clone();
@@ -118,7 +126,7 @@ async function loadModel(scene: THREE.Scene, type: string) {
       const modelRoot = modelsRoot[modelsRoot.length - 1]
       modelRoot.castShadow = true
       modelRoot.receiveShadow = true
-      modelRoot.scale.set(0.01, 0.01, 0.01) 
+      modelRoot.scale.set(0.01, 0.01, 0.01)
       scene.add(modelRoot)
       modelRoot.updateMatrixWorld(true)
 
@@ -209,12 +217,12 @@ async function initThree(container: HTMLElement) {
   });
   resizeObserver.observe(container);
 }
- 
+
 const tmpParentWorldQuat = new THREE.Quaternion();
-const tmpParentWorldQuatInv = new THREE.Quaternion(); 
+const tmpParentWorldQuatInv = new THREE.Quaternion();
 const tmpBoneAxis = new THREE.Vector3(0, 1, 0); // Mixamo bones typically point along Y 
-const tmpTargetDirWorld = new THREE.Vector3(); 
-const tmpDeltaLocal = new THREE.Quaternion(); 
+const tmpTargetDirWorld = new THREE.Vector3();
+const tmpDeltaLocal = new THREE.Quaternion();
 const tmpTargetDirLocal = new THREE.Vector3();
 const tmpBindDirLocal = new THREE.Vector3();
 
@@ -226,19 +234,19 @@ function alignBoneFromBindPose(
   const bone = activeBones[boneKey];
   const bindQuat = boneBindQuats[boneKey];
   if (!bone || !bindQuat || !bone.parent || !p1 || !p2) return;
- 
+
   const worldStart = new THREE.Vector3(p1[0], p1[2], p1[1]);
   const worldEnd = new THREE.Vector3(p2[0], p2[2], p2[1]);
   tmpTargetDirWorld.subVectors(worldEnd, worldStart).normalize();
-  
+
   if (tmpTargetDirWorld.lengthSq() < 1e-8) return;
- 
+
   bone.parent.getWorldQuaternion(tmpParentWorldQuat);
-  tmpParentWorldQuatInv.copy(tmpParentWorldQuat).invert(); 
-  tmpTargetDirLocal.copy(tmpTargetDirWorld).applyQuaternion(tmpParentWorldQuatInv).normalize(); 
-  tmpBindDirLocal.copy(tmpBoneAxis).applyQuaternion(bindQuat).normalize(); 
-  tmpDeltaLocal.setFromUnitVectors(tmpBindDirLocal, tmpTargetDirLocal); 
-  bone.quaternion.copy(tmpDeltaLocal).multiply(bindQuat).normalize(); 
+  tmpParentWorldQuatInv.copy(tmpParentWorldQuat).invert();
+  tmpTargetDirLocal.copy(tmpTargetDirWorld).applyQuaternion(tmpParentWorldQuatInv).normalize();
+  tmpBindDirLocal.copy(tmpBoneAxis).applyQuaternion(bindQuat).normalize();
+  tmpDeltaLocal.setFromUnitVectors(tmpBindDirLocal, tmpTargetDirLocal);
+  bone.quaternion.copy(tmpDeltaLocal).multiply(bindQuat).normalize();
   bone.updateMatrixWorld(true);
 }
 
@@ -308,26 +316,49 @@ function renderIRISdata(poseInfo: IrisData) {
           } else {
             modelsRoot[0].position.copy(targetPelvis);
           }
+          const leftHipPos = person.joint_centers[11];
+          const rightHipPos = person.joint_centers[12];
+
+          // Map to Three.js coordinates
+          const lHip = new THREE.Vector3(leftHipPos[0], leftHipPos[2], leftHipPos[1]);
+          const rHip = new THREE.Vector3(rightHipPos[0], rightHipPos[2], rightHipPos[1]);
+
+          // Get the directional vector from Right Hip to Left Hip
+          const hipDir = new THREE.Vector3().subVectors(lHip, rHip);
+
+          // Restrict to the XZ plane so the character doesn't tilt/lean over
+          hipDir.y = 0;
+
+          if (hipDir.lengthSq() > 1e-8) {
+            hipDir.normalize();
+
+            // Default Right-to-Left vector. 
+            // (Mixamo models usually face +Z, so Right to Left points to +X)
+            const defaultHipDir = new THREE.Vector3(-1, 0, 0);
+
+            const rootRotation = new THREE.Quaternion().setFromUnitVectors(defaultHipDir, hipDir);
+            modelsRoot[0].quaternion.copy(rootRotation);
+          }
         }
- 
+
         // Torso (Pelvis -> Neck)
         alignBoneFromBindPose('spine', person.joint_centers[19], person.joint_centers[18]);
 
-        // Left Arm (Shoulder -> Elbow, Elbow -> Wrist)
-        alignBoneFromBindPose('shoulder_l', person.joint_centers[5], person.joint_centers[7]);
-        alignBoneFromBindPose('elbow_l', person.joint_centers[7], person.joint_centers[9]);
-
         // Right Arm (Shoulder -> Elbow, Elbow -> Wrist)
-        alignBoneFromBindPose('shoulder_r', person.joint_centers[6], person.joint_centers[8]);
-        alignBoneFromBindPose('elbow_r', person.joint_centers[8], person.joint_centers[10]);
+        alignBoneFromBindPose('shoulder_r', person.joint_centers[5], person.joint_centers[7]);
+        alignBoneFromBindPose('elbow_r', person.joint_centers[7], person.joint_centers[9]);
 
-        // Left Leg (Hip -> Knee, Knee -> Ankle)
-        alignBoneFromBindPose('hip_l', person.joint_centers[11], person.joint_centers[13]);
-        alignBoneFromBindPose('knee_l', person.joint_centers[13], person.joint_centers[15]);
+        // Left Arm (Shoulder -> Elbow, Elbow -> Wrist)
+        alignBoneFromBindPose('shoulder_l', person.joint_centers[6], person.joint_centers[8]);
+        alignBoneFromBindPose('elbow_l', person.joint_centers[8], person.joint_centers[10]);
 
         // Right Leg (Hip -> Knee, Knee -> Ankle)
-        alignBoneFromBindPose('hip_r', person.joint_centers[12], person.joint_centers[14]);
-        alignBoneFromBindPose('knee_r', person.joint_centers[14], person.joint_centers[16]);
+        alignBoneFromBindPose('hip_r', person.joint_centers[11], person.joint_centers[13]);
+        alignBoneFromBindPose('knee_r', person.joint_centers[13], person.joint_centers[15]);
+
+        // Left Leg (Hip -> Knee, Knee -> Ankle)
+        alignBoneFromBindPose('hip_l', person.joint_centers[12], person.joint_centers[14]);
+        alignBoneFromBindPose('knee_l', person.joint_centers[14], person.joint_centers[16]);
 
         skeletonHelper?.update();
       }
