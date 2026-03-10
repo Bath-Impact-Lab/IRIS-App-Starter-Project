@@ -170,7 +170,7 @@ function getLineChartOption(metric, echarts, theme) {
         showSymbol: true,
         symbolSize: 6,
         lineStyle: { width: 3, color: metric.accent },
-        itemStyle: { color: isLight ? '#ffffff' : '#dff2ff', borderColor: metric.accent, borderWidth: 2 },
+        itemStyle: { color: isLight ? '#1F4E79' : '#dff2ff', borderColor: metric.accent, borderWidth: 2 },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
             { offset: 0, color: metric.areaStart ?? 'rgba(120, 191, 255, 0.35)' },
