@@ -4,14 +4,19 @@
   border-color: rgba(31,78,121,.15);
 }
 .hud-fs {
-  left: 50%;
-  transform: translateX(-50%);
+  left: 220px;
+  right: 0;
   bottom: 16px;
   gap: 12px;
   padding: 0 16px;
+  /* override the fixed left from .hud base, centre within the content area */
+  position: fixed;
+  width: fit-content;
+  margin: 0 auto;
+  transform: none;
 }
 .sidebar-open .hud-fs {
-  left: calc(50% - 125px);
+  right: 250px;
 }
 .fs-group { display: flex; align-items: center; gap: 8px; }
 .fs-sep { width: 1px; height: 24px; background: rgba(255,255,255,.12); }

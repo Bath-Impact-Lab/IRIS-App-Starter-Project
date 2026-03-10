@@ -1,4 +1,4 @@
-﻿﻿<template>
+﻿<template>
   <div id="app-container" :class="{ 'sidebar-open': hasCameraSelected }">
     <!-- Global Overlay for Dropdowns -->
     <Transition name="fade">
@@ -115,40 +115,19 @@
           </div>
         </div>
 
-        <!-- Output option dropdown -->
-        <div class="dropdown" :class="{ open: openOutput }" style="margin-left: 12px;">
-          <button class="btn" @click="toggleOutput" :disabled="running">
-            <div class="btn-content">
-              <svg class="btn-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
-              </svg>
-              <span class="btn-text">{{ outputOption || 'Output' }}</span>
-            </div>
-          </button>
-          <div class="dropdown-menu">
-            <h4>Output</h4>
-            <div class="device" v-for="o in outputOptions" :key="o" @click="selectOutput(o)">
-              <div>
-                <div>{{ o }}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Filesystem recordings dropdown â€” shown right of Output when Filesystem is selected -->
+        <!-- Filesystem recordings dropdown -->
         <select
-          v-if="outputOption === 'Filesystem'"
           class="btn fs-recordings-select"
           style="margin-left: 12px;"
           :disabled="running"
           :value="fsSelectedRecording?.path ?? ''"
           @change="onRecordingSelectChange"
         >
-          <option value="">No Recordings</option>
+          <option value="">{{ fsRecordings.length ? 'Select Recording' : 'No Recordings' }}</option>
           <option v-for="r in fsRecordings" :key="r.path" :value="r.path">{{ r.name }}</option>
         </select>
         <button
-          v-if="outputOption === 'Filesystem' && fsSelectedRecording"
+          v-if="fsSelectedRecording"
           class="hud-icon-btn"
           style="margin-left: 6px; flex-shrink: 0;"
           @click="openRenameModal"
@@ -343,25 +322,15 @@
     </div>
 
     <!-- License Badge â€” bottom-centre pill -->
-    <div class="hud hud-right">
+    <div v-if="isValidLicense" class="hud hud-right">
       <div
         class="license-badge-container"
-        :class="{ 'clickable': !isValidLicense || planType === 'Trial' }"
-        @click="(!isValidLicense || planType === 'Trial') ? showSettings = true : null"
+        :class="{ 'clickable': planType === 'Trial' }"
+        @click="planType === 'Trial' ? showSettings = true : null"
       >
-        <div v-if="isValidLicense" class="badge glass">
+        <div class="badge glass">
           <span class="badge-dot" :class="planType?.toLowerCase()"></span>
           <span class="badge-text">{{ planType || 'Trial' }} License</span>
-        </div>
-        <div v-else class="badge-upgrade glass">
-          <svg class="badge-trial-icon" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-          </svg>
-          <span class="badge-text">FREE Trial</span>
-          <div class="upgrade-action">
-            Upgrade
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
-          </div>
         </div>
       </div>
     </div>
@@ -427,8 +396,7 @@
             Download IRIS from iris.cs.bath.ac.uk
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-              <polyline points="15 3 21 3 21 9"/>
-              <line x1="10" y1="14" x2="21" y2="3"/>
+              <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
             </svg>
           </a>
           <p class="iris-missing-checking">
@@ -561,9 +529,8 @@ const trackingType = ref<string | null>('Full body');
 const personCountOptions = ['Single Person', 'Multi-Person'];
 const personCount = ref<string | null>('Single Person');
 
-// Output options
-const outputOptions = ['SteamVR', 'Quest', 'Unity', 'Unreal', 'Gadot', 'Filesystem'];
-const outputOption = ref<string | null>(null);
+// Output always uses Filesystem
+const outputOption = ref<string>('Filesystem');
 
 
 // Filesystem recordings dropdown
@@ -1051,6 +1018,15 @@ onMounted(() => {
 
   // Check whether iris_cli.exe is installed; show modal + poll if not
   checkIrisCli();
+
+  // Load filesystem recordings directory on startup
+  const ipc = (window as any).ipc;
+  if (ipc?.fsGetDefaultRecordingsDir) {
+    ipc.fsGetDefaultRecordingsDir().then((dir: string) => {
+      fsRecordingsDir.value = dir;
+      refreshRecordings();
+    });
+  }
 
   window.ipc?.onIrisData((data) => {
     irisData.value = data

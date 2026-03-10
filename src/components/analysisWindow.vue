@@ -20,6 +20,69 @@
 
       <div class="analysis-actions">
         <span class="analysis-chip">{{ activeCategoryLabel }}</span>
+        <div ref="addChartDockRef" class="add-chart-dock">
+          <Transition name="add-chart-modal">
+            <div
+              v-if="showAddChartModal"
+              id="add-chart-modal"
+              class="add-chart-modal"
+              role="dialog"
+              aria-label="Choose chart layout"
+            >
+              <button
+                v-for="option in addChartOptions"
+                :key="option.id"
+                class="chart-option-btn"
+                type="button"
+                @click="selectAddChartOption(option)"
+              >
+                <span class="chart-option-graphic" :class="[`type-${option.chartType}`, `size-${option.size}`]" aria-hidden="true">
+                  <svg
+                    v-if="option.chartType === 'line'"
+                    class="chart-preview chart-preview-line"
+                    viewBox="0 0 120 48"
+                  >
+                    <path class="area" d="M8 37 L28 24 L48 28 L70 14 L90 20 L112 11 L112 42 L8 42 Z" />
+                    <polyline class="trend" points="8,37 28,24 48,28 70,14 90,20 112,11" />
+                    <circle class="point" cx="70" cy="14" r="2.2" />
+                    <circle class="point" cx="90" cy="20" r="2.2" />
+                  </svg>
+                  <svg
+                    v-else
+                    class="chart-preview chart-preview-box"
+                    viewBox="0 0 120 48"
+                  >
+                    <line class="whisker" x1="20" y1="10" x2="20" y2="38" />
+                    <line class="whisker" x1="92" y1="12" x2="92" y2="40" />
+                    <line class="cap" x1="14" y1="10" x2="26" y2="10" />
+                    <line class="cap" x1="14" y1="38" x2="26" y2="38" />
+                    <line class="cap" x1="86" y1="12" x2="98" y2="12" />
+                    <line class="cap" x1="86" y1="40" x2="98" y2="40" />
+                    <rect class="box" x="34" y="18" width="44" height="16" rx="3" />
+                    <line class="median" x1="56" y1="18" x2="56" y2="34" />
+                  </svg>
+                </span>
+                <span class="chart-option-text">
+                  <span class="chart-option-title">{{ option.label }}</span>
+                  <span class="chart-option-subtitle">{{ option.subtitle }}</span>
+                </span>
+              </button>
+            </div>
+          </Transition>
+          <button
+            ref="addChartButtonRef"
+            class="add-chart-btn"
+            type="button"
+            aria-label="Add chart"
+            aria-haspopup="dialog"
+            aria-controls="add-chart-modal"
+            :aria-expanded="showAddChartModal"
+            @click="toggleAddChartModal"
+          >
+            <span class="add-chart-icon">+</span>
+            <span>Add Chart</span>
+          </button>
+        </div>
       </div>
     </header>
 
@@ -42,71 +105,6 @@
         </div>
         <div :ref="(el) => setChartHost(card.id, el)" class="chart-host"></div>
       </article>
-    </div>
-
-    <div ref="addChartDockRef" class="add-chart-dock">
-      <Transition name="add-chart-modal">
-        <div
-          v-if="showAddChartModal"
-          id="add-chart-modal"
-          class="add-chart-modal"
-          role="dialog"
-          aria-label="Choose chart layout"
-        >
-          <button
-            v-for="option in addChartOptions"
-            :key="option.id"
-            class="chart-option-btn"
-            type="button"
-            @click="selectAddChartOption(option)"
-          >
-            <span class="chart-option-graphic" :class="[`type-${option.chartType}`, `size-${option.size}`]" aria-hidden="true">
-              <svg
-                v-if="option.chartType === 'line'"
-                class="chart-preview chart-preview-line"
-                viewBox="0 0 120 48"
-              >
-                <path class="area" d="M8 37 L28 24 L48 28 L70 14 L90 20 L112 11 L112 42 L8 42 Z" />
-                <polyline class="trend" points="8,37 28,24 48,28 70,14 90,20 112,11" />
-                <circle class="point" cx="70" cy="14" r="2.2" />
-                <circle class="point" cx="90" cy="20" r="2.2" />
-              </svg>
-              <svg
-                v-else
-                class="chart-preview chart-preview-box"
-                viewBox="0 0 120 48"
-              >
-                <line class="whisker" x1="20" y1="10" x2="20" y2="38" />
-                <line class="whisker" x1="92" y1="12" x2="92" y2="40" />
-                <line class="cap" x1="14" y1="10" x2="26" y2="10" />
-                <line class="cap" x1="14" y1="38" x2="26" y2="38" />
-                <line class="cap" x1="86" y1="12" x2="98" y2="12" />
-                <line class="cap" x1="86" y1="40" x2="98" y2="40" />
-                <rect class="box" x="34" y="18" width="44" height="16" rx="3" />
-                <line class="median" x1="56" y1="18" x2="56" y2="34" />
-              </svg>
-            </span>
-            <span class="chart-option-text">
-              <span class="chart-option-title">{{ option.label }}</span>
-              <span class="chart-option-subtitle">{{ option.subtitle }}</span>
-            </span>
-          </button>
-        </div>
-      </Transition>
-
-      <button
-        ref="addChartButtonRef"
-        class="add-chart-btn"
-        type="button"
-        aria-label="Add chart"
-        aria-haspopup="dialog"
-        aria-controls="add-chart-modal"
-        :aria-expanded="showAddChartModal"
-        @click="toggleAddChartModal"
-      >
-        <span class="add-chart-icon">+</span>
-        <span>Add Chart</span>
-      </button>
     </div>
   </section>
 </template>
@@ -374,7 +372,7 @@ onBeforeUnmount(() => {
 .analysis-window {
   position: absolute;
   inset: 63px 250px 0 220px;
-  padding: 20px 20px 86px;
+  padding: 20px;
   overflow: auto;
   background: radial-gradient(120% 120% at 15% 0%, rgba(45, 87, 138, 0.15) 0%, rgba(8, 13, 20, 0.95) 62%);
 }
@@ -466,7 +464,8 @@ onBeforeUnmount(() => {
 
 .analysis-actions {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 10px;
 }
 
@@ -489,20 +488,18 @@ onBeforeUnmount(() => {
 }
 
 .add-chart-dock {
-  position: absolute;
-  left: 50%;
-  bottom: 16px;
-  transform: translateX(-50%);
-  z-index: 8;
+  position: relative;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
+  justify-content: flex-end;
+  z-index: 8;
 }
 
 .add-chart-modal {
   position: absolute;
-  left: 50%;
-  bottom: calc(100% + 10px);
-  transform: translateX(-50%);
+  right: 0;
+  top: calc(100% + 10px);
+  transform: none;
   width: min(560px, calc(100vw - 120px));
   padding: 12px;
   border-radius: 14px;
@@ -684,13 +681,13 @@ onBeforeUnmount(() => {
 .add-chart-modal-enter-from,
 .add-chart-modal-leave-to {
   opacity: 0;
-  transform: translate(-50%, 8px) scale(0.96);
+  transform: translateY(-6px) scale(0.96);
 }
 
 .add-chart-modal-enter-to,
 .add-chart-modal-leave-from {
   opacity: 1;
-  transform: translate(-50%, 0) scale(1);
+  transform: translateY(0) scale(1);
 }
 
 .add-chart-btn {
