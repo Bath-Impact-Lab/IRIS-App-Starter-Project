@@ -496,6 +496,8 @@ window.ipc?.extrinsicsComplete((data: { ok: boolean; message?: string; error?: s
   transition: color 0.15s;
 }
 .drag-handle:hover { color: rgba(255,255,255,0.6); }
+[data-theme="light"] .drag-handle { color: rgba(31,78,121,0.35); }
+[data-theme="light"] .drag-handle:hover { color: rgba(31,78,121,0.7); }
 
 .drag-item { border-radius: 10px; }
 .drag-item.drag-over {
@@ -509,6 +511,10 @@ window.ipc?.extrinsicsComplete((data: { ok: boolean; message?: string; error?: s
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 10px;
   margin: 5px 0;
+}
+[data-theme="light"] .camera-list {
+  border-color: rgba(31,78,121,0.12);
+  color: #1F4E79;
 }
 
 .camera-text {
@@ -527,6 +533,9 @@ window.ipc?.extrinsicsComplete((data: { ok: boolean; message?: string; error?: s
 }
 .button:hover { background: rgba(18,27,36,0.72); }
 .button:active { background: rgba(12,18,25,0.808); }
+[data-theme="light"] .button { border-color: rgba(31,78,121,0.15); }
+[data-theme="light"] .button:hover { background: rgba(31,78,121,0.07); }
+[data-theme="light"] .button:active { background: rgba(31,78,121,0.13); }
 
 .cameras {
   height: 75%;

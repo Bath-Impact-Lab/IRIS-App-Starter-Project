@@ -282,6 +282,9 @@ function feedLabel(index: number): string {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+[data-theme="light"] .feed-label {
+  color: #1F4E79;
+}
 
 .expand-btn {
   display: flex;
@@ -302,6 +305,15 @@ function feedLabel(index: number): string {
   color: rgba(255,255,255,0.85);
   background: rgba(255,255,255,0.08);
   border-color: rgba(255,255,255,0.25);
+}
+[data-theme="light"] .expand-btn {
+  color: rgba(31,78,121,0.5);
+  border-color: rgba(31,78,121,0.15);
+}
+[data-theme="light"] .expand-btn:hover {
+  color: #1F4E79;
+  background: rgba(31,78,121,0.07);
+  border-color: rgba(31,78,121,0.35);
 }
 
 /* Modal */
