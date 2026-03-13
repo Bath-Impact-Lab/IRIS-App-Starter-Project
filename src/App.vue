@@ -135,6 +135,32 @@
           </div>
         </div>
 
+        <!-- Avatar selection dropdown -->
+        <div class="dropdown" :class="{ open: openAvatar }" style="margin-left: 12px;">
+          <button class="btn" @click="toggleAvatar">
+            <div class="btn-content">
+              <svg class="btn-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
+              </svg>
+              <span class="btn-text">{{ selectedAvatar ? avatarOptions.find(a => a.file === selectedAvatar)?.label : 'Avatar' }}</span>
+            </div>
+          </button>
+          <div class="dropdown-menu">
+            <h4>Avatar</h4>
+            <div
+              v-for="a in avatarOptions"
+              :key="a.label"
+              class="device"
+              :class="{ active: selectedAvatar === a.file }"
+              @click="selectAvatar(a.file)"
+            >
+              <div>
+                <div>{{ a.label }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Filesystem recordings dropdown â€” shown right of Output when Filesystem is selected -->
         <select
           v-if="outputOption === 'Filesystem'"
@@ -203,6 +229,7 @@
       :create-play-space="createPlaySpace"
       :add-scene-cameras="addSceneCameras"
       :test="test"
+      :selected-avatar="selectedAvatar"
       @give-scene="asignScene"
       @give-sphere-mesh="sphereMeshUpdate"
       @give-skeleton-mesh="skeletonMeshUpdate"
@@ -437,17 +464,19 @@ const openCamera = ref(false);
 const openPersonCount = ref(false);
 const openTrack = ref(false);
 const openOutput = ref(false);
+const openAvatar = ref(false);
 // Camera menu focus + ARIA state
 const cameraButtonRef = ref<HTMLButtonElement | null>(null);
 const cameraListRef = ref<HTMLElement | null>(null);
 const cameraActiveIndex = ref(0);
 // Dropdown management
-const anyDropdownOpen = computed(() => openCamera.value || openPersonCount.value || openTrack.value || openOutput.value);
+const anyDropdownOpen = computed(() => openCamera.value || openPersonCount.value || openTrack.value || openOutput.value || openAvatar.value);
 function closeAllDropdowns() {
   openCamera.value = false;
   openPersonCount.value = false;
   openTrack.value = false;
   openOutput.value = false;
+  openAvatar.value = false;
 }
 
 // Sign-in state
@@ -528,6 +557,13 @@ const personCount = ref<string | null>('Single Person');
 // Output options
 const outputOptions = ['SteamVR', 'Quest', 'Unity', 'Unreal', 'Gadot', 'Filesystem'];
 const outputOption = ref<string | null>(null);
+
+// Avatar options
+const avatarOptions = [
+  { label: 'None', file: null },
+  { label: 'Mutant', file: 'avatars/Mutant.fbx' },
+];
+const selectedAvatar = ref<string | null>(null);
 
 
 // Filesystem recordings dropdown
@@ -920,13 +956,18 @@ function toggleTrack() {
 function toggleOutput() {
   const willOpen = !openOutput.value;
   openOutput.value = willOpen;
-  if (willOpen) { openCamera.value = false; openPersonCount.value = false; openTrack.value = false; }
+  if (willOpen) { openCamera.value = false; openPersonCount.value = false; openTrack.value = false; openAvatar.value = false; }
+}
+function toggleAvatar() {
+  const willOpen = !openAvatar.value;
+  openAvatar.value = willOpen;
+  if (willOpen) { openCamera.value = false; openPersonCount.value = false; openTrack.value = false; openOutput.value = false; }
 }
 function onClickOutside(e: MouseEvent) {
   // close any open dropdown if click outside
-  if (!openCamera.value && !openPersonCount.value && !openTrack.value && !openOutput.value) return;
+  if (!openCamera.value && !openPersonCount.value && !openTrack.value && !openOutput.value && !openAvatar.value) return;
   const dd = (e.target as HTMLElement)?.closest('.dropdown');
-  if (!dd) { openCamera.value = false; openPersonCount.value = false; openTrack.value = false; openOutput.value = false; }
+  if (!dd) { openCamera.value = false; openPersonCount.value = false; openTrack.value = false; openOutput.value = false; openAvatar.value = false; }
 }
 
 function reorderCameras(newOrder: MediaDeviceInfo[]) {
@@ -1057,6 +1098,11 @@ function selectPersonCount(p: string) {
 function selectOutput(o: string) {
   outputOption.value = o;
   openOutput.value = false;
+}
+
+function selectAvatar(file: string | null) {
+  selectedAvatar.value = file;
+  openAvatar.value = false;
 }
 
 function toggleSignIn() {

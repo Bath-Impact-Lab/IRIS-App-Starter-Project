@@ -16,7 +16,8 @@ interface Props {
   addSceneCameras: (scene: THREE.Scene) => Promise<void>,
   spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null,
 	skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null,
-  test: boolean
+  test: boolean,
+  selectedAvatar: string | null,
 }
 
 const props = defineProps<Props>()
@@ -41,6 +42,8 @@ let spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMateri
 let skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null  = props.skeletonLine;
 const position = new THREE.Object3D()
 
+let avatarRoot: THREE.Object3D | null = null;
+
 const manager = new THREE.LoadingManager();
 let mixer: THREE.AnimationMixer[] | null;
 
@@ -63,6 +66,17 @@ const linePositions = new Float32Array(halpe26_pairs.length * 3 * 2)
 onMounted(() => {
   if (sceneRef.value) initThree(sceneRef.value);
   if (resizeObserver && sceneRef.value) resizeObserver.unobserve(sceneRef.value);
+
+  watch(() => props.selectedAvatar, (avatarFile) => {
+    // Remove existing avatar from the scene
+    if (avatarRoot) {
+      scene.remove(avatarRoot);
+      avatarRoot = null;
+    }
+    if (avatarFile) {
+      loadAvatar(scene, avatarFile);
+    }
+  });
 })
 
 async function loadModel(scene: THREE.Scene, type: string) {
@@ -107,6 +121,26 @@ async function loadModel(scene: THREE.Scene, type: string) {
     console.log("error loading file")
     console.log(err)
   }
+}
+
+function loadAvatar(scene: THREE.Scene, file: string) {
+  const loader = new FBXLoader(manager);
+  loader.load(`assets/${file}`, (group) => {
+    group.scale.set(0.01, 0.01, 0.01);
+    group.position.set(0, 0, 0);
+    group.castShadow = true;
+    group.receiveShadow = true;
+    avatarRoot = group;
+    if (group.animations && group.animations.length) {
+      const mix = new THREE.AnimationMixer(group);
+      const action = mix.clipAction(group.animations[0]);
+      action.play();
+      if (mixer) mixer.push(mix); else mixer = [mix];
+    }
+    scene.add(group);
+  }, undefined, (err) => {
+    console.error('Error loading avatar:', err);
+  });
 }
 
 async function initThree(container: HTMLElement){
