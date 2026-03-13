@@ -21,7 +21,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, nextTick, onMounted } from 'vue';
+import { ref, watch, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
 const trackerConfig = ref({
   xOffset: 0,
@@ -44,6 +44,11 @@ function passConfig() {
 onMounted(() => {
   window.ipc?.connectVR();
   console.log("connected to VR")
+})
+
+onUnmounted(() => {
+  console.log("switching")
+  window.ipc?.disconnectVR()
 })
 
 </script>

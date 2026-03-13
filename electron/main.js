@@ -248,7 +248,12 @@ ipcMain.handle('connect-VR', (event) => {
     })
 
     ipcMain.handle('update-pos', (event, val) => {
-        child.stdin.write(val + "\n")
+        child.stdin.write(JSON.stringify({cmd: val}) + "\n")
         // console.log(val)
+    })
+
+    ipcMain.handle('disconnect-VR', (event) => {
+        const msg = JSON.stringify({cmd: "stop"})
+        child.stdin.write(msg + "\n")
     })
 })

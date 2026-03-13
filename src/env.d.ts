@@ -77,5 +77,6 @@ interface Window {
     onIrisCliOutput: (callback: (data: {channel: string; cameraIndex?: number; line: string}) => void) => void;
     connectVR: () => void;
     updatePos: (val: string) => void;
+    disconnectVR: () => void;
   }
 } 
