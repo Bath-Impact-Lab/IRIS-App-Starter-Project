@@ -36,6 +36,33 @@ let camera: THREE.PerspectiveCamera;
 let resizeObserver: ResizeObserver | null = null;
 let controls: OrbitControls | null = null;
 let modelsRoot: THREE.Object3D[] | null = null;
+let grid: THREE.GridHelper | null = null;
+let hemi: THREE.HemisphereLight | null = null;
+let themeObserver: MutationObserver | null = null;
+
+const DARK_BG  = '#0b0f14';
+const LIGHT_BG = '#ddeef8';
+
+function isLightTheme() {
+  return document.documentElement.getAttribute('data-theme') === 'light';
+}
+
+function applyThemeToScene() {
+  if (!renderer) return;
+  if (isLightTheme()) {
+    renderer.setClearColor(LIGHT_BG);
+    if (grid) {
+      (grid.material as THREE.LineBasicMaterial).color.set(0x99ccee);
+    }
+    if (hemi) { hemi.groundColor.set(0xddeef8); hemi.intensity = 1.2; }
+  } else {
+    renderer.setClearColor(DARK_BG);
+    if (grid) {
+      (grid.material as THREE.LineBasicMaterial).color.set(0x5a7a99);
+    }
+    if (hemi) { hemi.groundColor.set(0x223344); hemi.intensity = 0.9; }
+  }
+}
 
 let spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null = props.spheresMesh;
 let skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null  = props.skeletonLine;
@@ -63,6 +90,11 @@ const linePositions = new Float32Array(halpe26_pairs.length * 3 * 2)
 onMounted(() => {
   if (sceneRef.value) initThree(sceneRef.value);
   if (resizeObserver && sceneRef.value) resizeObserver.unobserve(sceneRef.value);
+})
+
+onBeforeUnmount(() => {
+  themeObserver?.disconnect();
+  themeObserver = null;
 })
 
 async function loadModel(scene: THREE.Scene, type: string) {
@@ -115,7 +147,6 @@ async function initThree(container: HTMLElement){
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(width, height);
-  renderer.setClearColor('#0b0f14');
   container.appendChild(renderer.domElement);
 
   scene = new THREE.Scene();
@@ -123,11 +154,16 @@ async function initThree(container: HTMLElement){
   camera = new THREE.PerspectiveCamera(50, width/height, 0.01, 1000);
   camera.position.set(5, 5, 5);
 
-  const hemi = new THREE.HemisphereLight(0xffffff, 0x223344, 0.9);
+  hemi = new THREE.HemisphereLight(0xffffff, 0x223344, 0.9);
   scene.add(hemi);
   const dir = new THREE.DirectionalLight(0xffffff, 0.9); dir.position.set(2, 3, 2); dir.castShadow = true; scene.add(dir);
 
-  const grid = new THREE.GridHelper(10, 20, 0x2a3340, 0x1b2430); scene.add(grid);
+  grid = new THREE.GridHelper(10, 20, 0x5a7a99, 0x3d5a73); scene.add(grid);
+
+  // Apply theme immediately and watch for future changes
+  applyThemeToScene();
+  themeObserver = new MutationObserver(() => applyThemeToScene());
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
   watch(selectedCameraCount, () => { nextTick(() => props.rebuildPlaySpace()); });
 
