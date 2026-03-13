@@ -4,6 +4,7 @@ const { MOCK_EXTRINSICS } = require('./mockExtrinsics');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { spawn, execFile, exec } = require('child_process')
 
 
 let mainWindow;
@@ -226,3 +227,28 @@ ipcMain.handle('get-extrinsics', (event) => {
         return null;
     }
 });
+
+
+// connecting to steamVR/VRchat
+ipcMain.handle('connect-VR', (event) => {
+    //file path of connector
+    const irisToVr = path.join(__dirname, "..", "IRIStoVRChat", "osc-test.py")
+    console.log(irisToVr)
+    const args = ["run", irisToVr]
+    const child = spawn("uv.exe", args, {
+        stdio: ['pipe',  'pipe', 'pipe']
+    }) 
+
+    child.stdout.on('data', (d) => {
+        console.log(d.toString().trim())
+    })
+
+    child.stderr.on('data', (d) => {
+        console.log(d.toString().trim())
+    })
+
+    ipcMain.handle('update-pos', (event, val) => {
+        child.stdin.write(val + "\n")
+        // console.log(val)
+    })
+})

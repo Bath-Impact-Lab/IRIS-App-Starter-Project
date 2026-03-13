@@ -235,6 +235,11 @@
       @give-skeleton-mesh="skeletonMeshUpdate"
     />
 
+    <connectVR
+      v-if="outputOption=='SteamVR'"
+    />
+
+
     <!-- Filesystem Record / Playback bar -->
     <Transition name="fs-bar">
       <div class="hud hud-fs" v-if="outputOption === 'Filesystem'">
@@ -454,6 +459,7 @@ import { usePlaySpace } from './lib/usePlaySpace';
 import sidebar from './components/sidebar.vue';
 import ThreeWindow from './components/threeWindow.vue';
 import settingsModal from './components/settingsModal.vue';
+import connectVR from './components/connectVR.vue';
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 const logoError = ref(false);
@@ -852,7 +858,7 @@ const lastSentMsg = ref('');
 const running = ref(false);
 const irisDisplayFps = ref(0);
 
-// â”€â”€ IRIS CLI presence check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── IRIS CLI presence check ─────────────────────────────────────────────────────────────
 const showIrisNotFound = ref(false);
 let irisPollTimer: ReturnType<typeof setInterval> | null = null;
 

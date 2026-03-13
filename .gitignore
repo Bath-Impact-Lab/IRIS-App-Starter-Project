@@ -38,3 +38,4 @@ __pycache__/
 *.egg-info/
 .eggs/
 IRIS/
+IRIStoVRChat/
