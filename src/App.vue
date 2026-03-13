@@ -237,6 +237,7 @@
 
     <connectVR
       v-if="outputOption=='SteamVR'"
+      :running="running"
     />
 
 

@@ -1,6 +1,7 @@
 <template>
   <div class="sidenav">
     Tracker Config:
+    <div v-if="!props.running">Start IRIS first</div>
 
     <div v-for="(value, type) in trackerConfig">
       <div class="titles">
@@ -14,6 +15,7 @@
         step="0.01"
         :id="type"
         v-on:mouseup="passConfig"
+        :disabled="!props.running"
       >
     </div>
     
@@ -22,6 +24,12 @@
 
 <script setup lang="ts">
 import { ref, watch, computed, nextTick, onMounted, onUnmounted } from 'vue';
+
+interface Props {
+  running: boolean
+}
+
+const props = defineProps<Props>()
 
 const trackerConfig = ref({
   xOffset: 0,
