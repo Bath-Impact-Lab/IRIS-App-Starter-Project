@@ -1,5 +1,9 @@
 <template>
-    <section class="scene" ref="sceneRef"></section>
+    <section class="scene" ref="sceneRef">
+      <div class="scene-overlay">
+        <slot />
+      </div>
+    </section>
 </template>
 
 <script setup lang="ts">
@@ -248,3 +252,16 @@ function renderIRISdata(poseInfo: IrisData) {
 }
 
 </script>
+
+<style scoped>
+.scene-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.scene-overlay :deep(*) {
+  pointer-events: auto;
+}
+</style>

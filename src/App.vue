@@ -198,40 +198,41 @@
       @give-scene="asignScene"
       @give-sphere-mesh="sphereMeshUpdate"
       @give-skeleton-mesh="skeletonMeshUpdate"
-    />
+    >
+      <div class="hud hud-scene-controls">
+        <button
+          class="hud-icon-btn"
+          :class="{ active: showPlaySpace }"
+          @click="showPlaySpace = !showPlaySpace"
+          title="Toggle Playspace"
+          aria-label="Toggle Playspace"
+        >
+          <!-- floor/grid icon -->
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <line x1="3" y1="9" x2="21" y2="9"/>
+            <line x1="3" y1="15" x2="21" y2="15"/>
+            <line x1="9" y1="3" x2="9" y2="21"/>
+            <line x1="15" y1="3" x2="15" y2="21"/>
+          </svg>
+        </button>
+        <button
+          class="hud-icon-btn"
+          :class="{ active: showCameras }"
+          @click="showCameras = !showCameras"
+          title="Toggle Cameras"
+          aria-label="Toggle Cameras"
+        >
+          <!-- camera icon -->
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 7l-7 5 7 5V7z"/>
+            <rect x="1" y="5" width="15" height="14" rx="2"/>
+          </svg>
+        </button>
+      </div>
+    </ThreeWindow>
     <AnalysisWindow v-else />
 
-    <div class="hud">
-      <button
-        class="hud-icon-btn"
-        :class="{ active: showPlaySpace }"
-        @click="showPlaySpace = !showPlaySpace"
-        title="Toggle Playspace"
-        aria-label="Toggle Playspace"
-      >
-        <!-- floor/grid icon -->
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="18" height="18" rx="2"/>
-          <line x1="3" y1="9" x2="21" y2="9"/>
-          <line x1="3" y1="15" x2="21" y2="15"/>
-          <line x1="9" y1="3" x2="9" y2="21"/>
-          <line x1="15" y1="3" x2="15" y2="21"/>
-        </svg>
-      </button>
-      <button
-        class="hud-icon-btn"
-        :class="{ active: showCameras }"
-        @click="showCameras = !showCameras"
-        title="Toggle Cameras"
-        aria-label="Toggle Cameras"
-      >
-        <!-- camera icon -->
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M23 7l-7 5 7 5V7z"/>
-          <rect x="1" y="5" width="15" height="14" rx="2"/>
-        </svg>
-      </button>
-    </div>
     <div class="hud hud-center" v-if="running">
       <span class="activity-blinker"></span>
       <span class="hud-item">IRIS Engine</span>
@@ -628,6 +629,7 @@ function openAnalysisView() {
 
 <style scoped>
 .hud{ position: fixed; left: 236px; bottom: 16px; height: 48px; display:flex; align-items:center; gap:8px; padding:0 10px; background: rgba(12,18,25,.6); border:1px solid rgba(255,255,255,.08); border-radius: 12px; backdrop-filter: blur(10px); }
+.hud-scene-controls{ position: absolute; left: 16px; bottom: 16px; z-index: 4; }
 .hud-right{ left: auto; right: 266px; /* 250px sidenav + 16px gap */ }
 @media (max-width: 768px) {
   .hud-right {
@@ -949,6 +951,9 @@ function openAnalysisView() {
 @media (max-width: 768px) {
   .hud {
     left: 16px;
+  }
+  .hud-scene-controls {
+    bottom: 12px;
   }
   .session-sidenav {
     display: none;
