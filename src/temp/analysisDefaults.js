@@ -133,31 +133,32 @@ export function getMetricTemplates(categoryKey) {
   return METRIC_TEMPLATES[categoryKey] ?? [];
 }
 
-function getLineChartOption(metric, echarts) {
+function getLineChartOption(metric, echarts, theme) {
   const axis = metric.xLabels ?? frames(metric.values?.length ?? 0);
+  const isLight = theme === 'light';
   return {
-    backgroundColor: 'transparent',
+    backgroundColor: isLight ? '#ffffff' : 'transparent',
     grid: { left: 44, right: 18, top: 20, bottom: 36 },
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(15, 24, 35, 0.95)',
-      borderColor: 'rgba(150, 199, 255, 0.35)',
-      textStyle: { color: '#e8f2ff' },
+      backgroundColor: isLight ? 'rgba(255,255,255,0.97)' : 'rgba(15, 24, 35, 0.95)',
+      borderColor: isLight ? 'rgba(31,78,121,0.2)' : 'rgba(150, 199, 255, 0.35)',
+      textStyle: { color: isLight ? '#1F4E79' : '#e8f2ff' },
     },
     xAxis: {
       type: 'category',
       data: axis,
       boundaryGap: false,
-      axisLabel: { color: 'rgba(230, 237, 243, 0.6)', fontSize: 11 },
-      axisLine: { lineStyle: { color: 'rgba(230, 237, 243, 0.25)' } },
+      axisLabel: { color: isLight ? '#2E86C1' : 'rgba(230, 237, 243, 0.6)', fontSize: 11 },
+      axisLine: { lineStyle: { color: isLight ? 'rgba(31,78,121,0.15)' : 'rgba(230, 237, 243, 0.25)' } },
       axisTick: { show: false },
     },
     yAxis: {
       type: 'value',
       min: metric.yMin,
       max: metric.yMax,
-      axisLabel: { color: 'rgba(230, 237, 243, 0.6)', fontSize: 11 },
-      splitLine: { lineStyle: { color: 'rgba(114, 146, 178, 0.2)' } },
+      axisLabel: { color: isLight ? '#2E86C1' : 'rgba(230, 237, 243, 0.6)', fontSize: 11 },
+      splitLine: { lineStyle: { color: isLight ? 'rgba(31,78,121,0.08)' : 'rgba(114, 146, 178, 0.2)' } },
       axisLine: { show: false },
       axisTick: { show: false },
     },
@@ -169,7 +170,7 @@ function getLineChartOption(metric, echarts) {
         showSymbol: true,
         symbolSize: 6,
         lineStyle: { width: 3, color: metric.accent },
-        itemStyle: { color: '#dff2ff', borderColor: metric.accent, borderWidth: 1 },
+        itemStyle: { color: isLight ? '#1F4E79' : '#dff2ff', borderColor: metric.accent, borderWidth: 2 },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
             { offset: 0, color: metric.areaStart ?? 'rgba(120, 191, 255, 0.35)' },
@@ -181,16 +182,17 @@ function getLineChartOption(metric, echarts) {
   };
 }
 
-function getBoxChartOption(metric) {
+function getBoxChartOption(metric, theme) {
   const stats = metric.stats ?? [[0, 0, 0, 0, 0]];
+  const isLight = theme === 'light';
   return {
-    backgroundColor: 'transparent',
+    backgroundColor: isLight ? '#ffffff' : 'transparent',
     grid: { left: 44, right: 18, top: 20, bottom: 38 },
     tooltip: {
       trigger: 'item',
-      backgroundColor: 'rgba(15, 24, 35, 0.95)',
-      borderColor: `${metric.accent}66`,
-      textStyle: { color: '#fff5de' },
+      backgroundColor: isLight ? 'rgba(255,255,255,0.97)' : 'rgba(15, 24, 35, 0.95)',
+      borderColor: isLight ? 'rgba(31,78,121,0.2)' : `${metric.accent}66`,
+      textStyle: { color: isLight ? '#1F4E79' : '#fff5de' },
       formatter: (params) => {
         const values = params?.data;
         if (!values || values.length < 5) return '';
@@ -207,16 +209,16 @@ function getBoxChartOption(metric) {
     xAxis: {
       type: 'category',
       data: metric.categories ?? ['Sample'],
-      axisLabel: { color: 'rgba(230, 237, 243, 0.65)', fontSize: 11 },
-      axisLine: { lineStyle: { color: 'rgba(230, 237, 243, 0.25)' } },
+      axisLabel: { color: isLight ? '#2E86C1' : 'rgba(230, 237, 243, 0.65)', fontSize: 11 },
+      axisLine: { lineStyle: { color: isLight ? 'rgba(31,78,121,0.15)' : 'rgba(230, 237, 243, 0.25)' } },
       axisTick: { show: false },
     },
     yAxis: {
       type: 'value',
       min: metric.yMin,
       max: metric.yMax,
-      axisLabel: { color: 'rgba(230, 237, 243, 0.65)', fontSize: 11 },
-      splitLine: { lineStyle: { color: 'rgba(114, 146, 178, 0.2)' } },
+      axisLabel: { color: isLight ? '#2E86C1' : 'rgba(230, 237, 243, 0.65)', fontSize: 11 },
+      splitLine: { lineStyle: { color: isLight ? 'rgba(31,78,121,0.08)' : 'rgba(114, 146, 178, 0.2)' } },
       axisLine: { show: false },
       axisTick: { show: false },
     },
@@ -234,7 +236,7 @@ function getBoxChartOption(metric) {
   };
 }
 
-export function buildMetricChartOption(metric, echarts) {
-  if (metric.chartType === 'boxplot') return getBoxChartOption(metric);
-  return getLineChartOption(metric, echarts);
+export function buildMetricChartOption(metric, echarts, theme) {
+  if (metric.chartType === 'boxplot') return getBoxChartOption(metric, theme);
+  return getLineChartOption(metric, echarts, theme);
 }

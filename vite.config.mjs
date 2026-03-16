@@ -14,15 +14,29 @@ export default defineConfig({
     outDir: 'dist',
     emptyOutDir: true,
     sourcemap: false,
+    // Use esbuild for minification (much lower memory than terser)
+    minify: 'esbuild',
     cssMinify: true,
+    // Raise the chunk warning threshold to avoid noisy output
+    chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
+        // Split vendors into smaller, focused chunks so Rollup
+        // never needs to hold the entire bundle in memory at once
         manualChunks(id) {
-          if (id.includes('node_modules/three')) return 'vendor-three';
+          if (id.includes('node_modules/three/src/renderers') ||
+              id.includes('node_modules/three/src/core') ||
+              id.includes('node_modules/three/src/math')) {
+            return 'vendor-three-core';
+          }
+          if (id.includes('node_modules/three')) return 'vendor-three-extras';
+          if (id.includes('node_modules/@supabase/realtime-js')) return 'vendor-supabase-realtime';
           if (id.includes('node_modules/@supabase')) return 'vendor-supabase';
           if (id.includes('node_modules/vue') || id.includes('node_modules/@vue')) return 'vendor-vue';
         }
-      }
+      },
+      // Limit concurrent file reads to reduce peak memory
+      maxParallelFileOps: 3,
     }
   },
   resolve: {
@@ -35,3 +49,5 @@ export default defineConfig({
     strictPort: true
   }
 });
+
+

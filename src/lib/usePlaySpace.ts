@@ -32,7 +32,7 @@ export function usePlaySpace(
     if (polygons && polygons.length > 0) {
       // 1. Floor Infill (Separate mesh per island to avoid triangulation artifacts)
       const floorMat = new THREE.MeshBasicMaterial({
-        color: 0x446677,
+        color: 0x99ccee,
         transparent: false,
         opacity: 0.5,
         side: THREE.DoubleSide,
@@ -69,7 +69,7 @@ export function usePlaySpace(
       if (outlinePoints.length > 0) {
         const outlineGeo = new THREE.BufferGeometry().setFromPoints(outlinePoints);
         const outlineMat = new THREE.LineBasicMaterial({
-          color: 0x446677,
+          color: 0x99ccee,
           transparent: true,
           opacity: 0.5,
           linewidth: 2
