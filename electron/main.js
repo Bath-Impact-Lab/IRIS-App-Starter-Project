@@ -232,10 +232,9 @@ ipcMain.handle('get-extrinsics', (event) => {
 // connecting to steamVR/VRchat
 ipcMain.handle('connect-VR', (event) => {
     //file path of connector
-    const irisToVr = path.join(__dirname, "..", "IRIStoVRChat", "osc-test.py")
+    const irisToVr = path.join(__dirname, "..", "IRIStoVRChat", "rust.exe")
     console.log(irisToVr)
-    const args = ["run", irisToVr]
-    const child = spawn("uv.exe", args, {
+    const child = spawn(irisToVr, {
         stdio: ['pipe',  'pipe', 'pipe']
     }) 
 
@@ -248,12 +247,11 @@ ipcMain.handle('connect-VR', (event) => {
     })
 
     ipcMain.handle('update-pos', (event, val) => {
-        child.stdin.write(JSON.stringify({cmd: val}) + "\n")
-        // console.log(val)
+        child.stdin.write(val + "\n")
     })
 
     ipcMain.handle('disconnect-VR', (event) => {
-        const msg = JSON.stringify({cmd: "stop"}) 
-        child.stdin.write(msg + "\n")
+
+        child.stdin.write("stop" + "\n")
     })
 })

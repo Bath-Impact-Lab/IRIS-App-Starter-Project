@@ -8,7 +8,7 @@
         {{trackerMap[type]}}: {{ trackerConfig[type] }} 
       </div>
       <input 
-        v-model="trackerConfig[type]" 
+        v-model.number="trackerConfig[type]" 
         type="range" 
         min="-2.00" 
         max="2.00" 
@@ -38,9 +38,7 @@ const trackerMap = {
   xRotation: "X Rotation",
   yRotation: "y Rotation",
   zRotation: "X Rotation",
-  xScale: "X Scale",
-  yScale: "y Scale",
-  zScale: "X Scale",
+  Scale: "Scale",
 }
 const trackerConfig = ref({
   xOffset: 0,
@@ -49,13 +47,16 @@ const trackerConfig = ref({
   xRotation: 0,
   yRotation: 0,
   zRotation: 0,
-  xScale: 0,
-  yScale: 0,
-  zScale: 0,
+  Scale: 0
 })
 
 function passConfig() {
-  const data = JSON.stringify(trackerConfig.value)
+  const formatedData = {
+    translation: [trackerConfig.value.xOffset, trackerConfig.value.yOffset, trackerConfig.value.zOffset],
+    rotation: [trackerConfig.value.xRotation, trackerConfig.value.yRotation, trackerConfig.value.zRotation],
+    scale: trackerConfig.value.Scale
+  }
+  const data = JSON.stringify(formatedData)
   // console.log(data)
   window.ipc?.updatePos(data)
 }
