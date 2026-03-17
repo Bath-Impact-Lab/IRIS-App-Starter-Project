@@ -120,9 +120,17 @@ class CalibrationManager {
 
     const stopChild = () => {
       try {
-        child.kill();
+        // On Windows, node-pty's child.kill() runs conpty_console_list_agent.js to
+        // enumerate the console process list before terminating. If iris_cli has
+        // already exited naturally this causes "AttachConsole failed" noise.
+        // Killing by PID directly bypasses that ConPTY path entirely.
+        if (process.platform === 'win32' && child.pid) {
+          process.kill(child.pid);
+        } else {
+          child.kill();
+        }
       } catch {
-        // Ignore missing process errors.
+        // Ignore: process may have already exited.
       }
     };
 
