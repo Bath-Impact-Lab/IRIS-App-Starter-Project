@@ -12,7 +12,7 @@ function getIrisCliPath() {
     return path.join(process.resourcesPath, 'app.asar.unpacked', 'iris_runtime_bundle', 'iris_cli.exe');
   }
 
-  return DEV_IRIS_CLI_EXE;
+  return process.env.IRIS_CLI_EXE || path.join(os.homedir(), 'Documents', 'Iris', 'build', 'bin', 'iris_cli.exe');
 }
 
 function buildConfigFromOptions(opts = {}) {
