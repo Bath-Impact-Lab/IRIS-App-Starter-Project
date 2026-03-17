@@ -18,6 +18,29 @@
         :disabled="!IrisState.running"
       >
     </div>
+    <div style="position: relative;">
+      <div class="titles invert">
+        <span>
+          Scale: 
+          <span v-if="!invert">{{ scale }} </span>
+          <span v-else>{{ (1/scale).toPrecision(3) }}</span>
+        </span>
+        <input 
+          type="checkbox"
+          v-model="invert"
+        >
+      </div>
+      <input
+      v-model.number="scale"
+      type="range"
+      min="1.0"
+      max="10.0"
+      step="0.1"
+      v-on:mouseup="passConfig"
+      >
+    </div>
+
+
     
   </div>
 </template>
@@ -35,7 +58,6 @@ const trackerMap = {
   xRotation: "X Rotation",
   yRotation: "y Rotation",
   zRotation: "X Rotation",
-  Scale: "Scale",
 }
 const trackerConfig = ref({
   xOffset: 0,
@@ -44,14 +66,17 @@ const trackerConfig = ref({
   xRotation: 0,
   yRotation: 0,
   zRotation: 0,
-  Scale: 0
 })
+
+const scale = ref(1)
+
+const invert = ref(false)
 
 function passConfig() {
   const formatedData = {
     translation: [trackerConfig.value.xOffset, trackerConfig.value.yOffset, trackerConfig.value.zOffset],
     rotation: [trackerConfig.value.xRotation, trackerConfig.value.yRotation, trackerConfig.value.zRotation],
-    scale: trackerConfig.value.Scale
+    scale: invert ? 1/scale.value : scale.value
   }
   const data = JSON.stringify(formatedData)
   // console.log("[VR Chat]", data)
@@ -89,5 +114,12 @@ onUnmounted(() => {
 
 .titles {
   padding-top: 10px;
+}
+
+.invert {
+  display: flex;
+  flex-direction: row; 
+  align-items: center;
+  justify-content: space-between;
 }
 </style>
