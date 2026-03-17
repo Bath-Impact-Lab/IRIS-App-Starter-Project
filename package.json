@@ -15,10 +15,10 @@
     "lint": "echo 'No linter configured'",
     "check:deps": "npx npm-check-updates",
     "wait:9222": "wait-on tcp:9222"
-
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.97.0",
+    "dotenv": "^17.3.1",
     "node-pty": "^1.1.0",
     "three": "0.169.0",
     "vue": "3.5.10"

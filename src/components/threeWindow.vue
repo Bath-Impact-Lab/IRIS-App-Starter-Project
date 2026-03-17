@@ -16,7 +16,6 @@ interface Props {
   addSceneCameras: (scene: THREE.Scene) => Promise<void>,
   spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null,
   skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null,
-  test: boolean
 }
 
 const props = defineProps<Props>()
