@@ -275,7 +275,7 @@ function renderIRISdata(poseInfo: IrisData) {
       if (!(spheresMesh && skeletonLine)) {
         const sphereGeometry = new THREE.SphereGeometry(0.025, 8, 8)
         const material = new THREE.MeshBasicMaterial({color: 0xffffff})
-        spheresMesh = new THREE.InstancedMesh(sphereGeometry, material, (keypoints.length + person.skeleton.keypoints_3d.length))
+        spheresMesh = new THREE.InstancedMesh(sphereGeometry, material, (keypoints.length + person.skeleton.joint_centers.length))
         scene.add(spheresMesh)
 
         const lMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 })
