@@ -63,6 +63,7 @@ async function startCameraStream(camera: MediaDeviceInfo, index: number) {
 
 function stopCameraStream(index: number) {
   try {
+    console.log(`Stopping camera stream at index ${index}`);
     const video = document.getElementById(`cameraFeed${index}`) as HTMLVideoElement | null;
     const stream = video?.srcObject as MediaStream | null;
     if (!stream) return;
