@@ -22,7 +22,6 @@ interface Props {
 const props = defineProps<Props>()
 //defining emits for future
 const emit = defineEmits<{
-  giveScene: [THREE.Scene]
   giveSphereMesh: [THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null]
   giveSkeletonMesh: [THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null]
 }>()
@@ -43,8 +42,8 @@ let activeBones: Record<string, THREE.Object3D> = {};
 let boneBindQuats: Record<string, THREE.Quaternion> = {};
 let bindPelvisWorldOffset: THREE.Vector3 | null = null;
 
-let spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null = props.spheresMesh;
-let skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null = props.skeletonLine;
+let spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null = null;
+let skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null  = null;
 const position = new THREE.Object3D()
 
 let avatarRoot: THREE.Object3D | null = null;
@@ -67,6 +66,20 @@ const halpe26_pairs = [
 ]
 
 const linePositions = new Float32Array(halpe26_pairs.length * 3 * 2)
+
+watch(() => props.running, (running) => {
+  if (!running) {
+    if (skeletonLine) {
+      skeletonLine.removeFromParent()
+      skeletonLine = null
+    }
+    if (spheresMesh) {
+      spheresMesh.removeFromParent()
+      spheresMesh = null
+    }
+    
+  }
+})
 
 onMounted(() => {
   if (sceneRef.value) initThree(sceneRef.value);
@@ -261,10 +274,8 @@ function renderIRISdata(poseInfo: IrisData) {
       const keypoints = [[neck[0], neck[1], neck[2]], [pelvis[0], pelvis[1], pelvis[2]], [spine_mid[0], spine_mid[1], spine_mid[2]]]
       if (!(spheresMesh && skeletonLine)) {
         const sphereGeometry = new THREE.SphereGeometry(0.025, 8, 8)
-        const material = new THREE.MeshBasicMaterial({ color: 0xffffff })
-        spheresMesh = new THREE.InstancedMesh(sphereGeometry, material, (keypoints.length + person.joint_centers.length))
-        //passing mesh to main app so mesh can be removed on stop
-        emit('giveSphereMesh', spheresMesh)
+        const material = new THREE.MeshBasicMaterial({color: 0xffffff})
+        spheresMesh = new THREE.InstancedMesh(sphereGeometry, material, (keypoints.length + person.skeleton.keypoints_3d.length))
         scene.add(spheresMesh)
 
         const lMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 })
@@ -272,8 +283,6 @@ function renderIRISdata(poseInfo: IrisData) {
         lGeometry.setAttribute('position', new THREE.BufferAttribute(linePositions, 3))
 
         skeletonLine = new THREE.LineSegments(lGeometry, lMaterial)
-        //passing mesh to main app so mesh can be removed on stop
-        emit('giveSkeletonMesh', skeletonLine)
         scene.add(skeletonLine)
       }
       const positionAttr = skeletonLine.geometry.attributes.position

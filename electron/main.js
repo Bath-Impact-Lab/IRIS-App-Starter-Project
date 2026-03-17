@@ -7,6 +7,7 @@ const os = require('os');
 const dotenv = require('dotenv');
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
+const { spawn, execFile, exec } = require('child_process')
 
 
 let mainWindow;
@@ -213,7 +214,7 @@ ipcMain.handle('get-extrinsics', (event) => {
     }
 
     // Real runtime — read live calibration file
-    const extrinsicsPath = path.join(os.homedir(), 'AppData', 'Local', 'IRIS', 'extrinsics 1.json');
+    const extrinsicsPath = path.join(os.homedir(), 'AppData', 'Local', 'IRIS', 'calibration_output', 'extrinsics.json');
     try {
         if (!fs.existsSync(extrinsicsPath)) {
             console.warn(`[extrinsics] file not found: ${extrinsicsPath}`);
@@ -226,3 +227,31 @@ ipcMain.handle('get-extrinsics', (event) => {
         return null;
     }
 });
+
+
+// connecting to steamVR/VRchat
+ipcMain.handle('connect-VR', (event) => {
+    //file path of connector
+    const irisToVr = path.join(__dirname, "..", "IRIStoVRChat", "rust.exe")
+    console.log(irisToVr)
+    const child = spawn(irisToVr, {
+        stdio: ['pipe',  'pipe', 'pipe']
+    }) 
+
+    child.stdout.on('data', (d) => {
+        console.log(d.toString().trim())
+    })
+
+    child.stderr.on('data', (d) => {
+        console.log(d.toString().trim())
+    })
+
+    ipcMain.handle('update-pos', (event, val) => {
+        child.stdin.write(val + "\n")
+    })
+
+    ipcMain.handle('disconnect-VR', (event) => {
+
+        child.stdin.write("stop" + "\n")
+    })
+})

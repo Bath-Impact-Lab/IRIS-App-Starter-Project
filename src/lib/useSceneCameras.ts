@@ -5,7 +5,7 @@ import mockExtrinsicsFallback from './../../public/assets/mockExtrinsics.json';
 export interface SceneCameraDef {
   name: string;
   position: { x: number; y: number; z: number };
-  lookAt: { x: number; y: number; z: number };
+  rotation: number[];
   color: string;
 }
 
@@ -37,7 +37,7 @@ const GIZMO_SCALE = 0.2;
 
 function createCameraGizmo(
   position: { x: number; y: number; z: number },
-  lookAt: { x: number; y: number; z: number },
+  rotation: number[],
   color: string,
   rotationDeg: number = 0,
 ): THREE.Group {
@@ -113,7 +113,17 @@ function createCameraGizmo(
 
   group.position.set(position.x, position.y, position.z);
 
-  group.lookAt(lookAt.x, lookAt.y, lookAt.z);
+  const axisSwap = new THREE.Matrix4().makeRotationX(Math.PI / 2);
+  const axisSwapInv = new THREE.Matrix4().makeRotationY(-Math.PI / 2);
+  const Rotation = new THREE.Matrix4()
+  Rotation.set(
+    rotation[0], rotation[1], rotation[2], 0,
+    rotation[3], rotation[4], rotation[5], 0,    
+    rotation[6], rotation[7], rotation[8], 0,
+    0, 0, 0, 1,
+  )
+  const formatedRotation = new THREE.Matrix4().multiplyMatrices(axisSwap, Rotation)//.multiply(axisSwapInv)
+  group.setRotationFromMatrix(Rotation);
 
   return group;
 }
@@ -241,19 +251,17 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
     // R as rows: R[0..2]=row0, R[3..5]=row1, R[6..8]=row2
     // R^T columns become rows, so:
     // pos = -R^T * t
-    const posX = -(R[0] * t[0] + R[3] * t[1] + R[6] * t[2]) * scale;
-    const posY = -(R[1] * t[0] + R[4] * t[1] + R[7] * t[2]) * scale;
-    const posZ = -(R[2] * t[0] + R[5] * t[1] + R[8] * t[2]) * scale;
+    const posX = t[0]* scale//-(R[0] * t[0] + R[3] * t[1] + R[6] * t[2]) * scale;
+    const posY = t[1]* scale//-(R[1] * t[0] + R[4] * t[1] + R[7] * t[2]) * scale;
+    const posZ = t[2]* scale//-(R[2] * t[0] + R[5] * t[1] + R[8] * t[2]) * scale;
 
     // Forward direction = third row of R = [R[6], R[7], R[8]] (world Z axis of camera)
-    const fwdX = R[6];
-    const fwdY = R[7];
-    const fwdZ = R[8];
 
+    console.log(posX, posY, posZ)
     return {
       name: `Camera ${entry.cam_id}`,
-      position: { x: posX, y: posY, z: posZ },
-      lookAt: { x: posX + fwdX, y: posY + fwdY, z: posZ + fwdZ },
+      position: { x: posX, y: posY, z: posZ }, //invert y and z since z is vertical axis in IRIS
+      rotation: R,
       color: COLORS[index % COLORS.length],
     };
   }
@@ -290,11 +298,30 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
     for (const def of defs) {
       const cam = new THREE.PerspectiveCamera(45, 16 / 9, 0.01, 100);
       cam.position.set(def.position.x, def.position.y, def.position.z);
-      cam.lookAt(def.lookAt.x, def.lookAt.y, def.lookAt.z);
+      const swap = new THREE.Matrix4()
+      swap.set(
+        1, 0, 0, 0,
+        0, -1, 0, 0, 
+        0, 0, -1, 0, 
+        0, 0, 0, 1,
+      )
+      const rotation = new THREE.Matrix4()
+      rotation.set(
+        def.rotation[0], def.rotation[1], def.rotation[2], 0,
+        def.rotation[3], def.rotation[4], def.rotation[5], 0,
+        def.rotation[6], def.rotation[7], def.rotation[8], 0,
+        0, 0, 0, 1,
+      )
+      const align = rotation.multiply(swap)
+      const axisSwap = new THREE.Matrix4().makeRotationX(Math.PI / 2);
+
+      cam.setRotationFromMatrix(rotation);
+
+
       cam.name = def.name;
       cam.updateProjectionMatrix();
 
-      const gizmoMesh = createCameraGizmo(def.position, def.lookAt, def.color);
+      const gizmoMesh = createCameraGizmo(def.position, def.rotation, def.color);
       gizmoMesh.name = `${def.name}_gizmo`;
       gizmoMesh.visible = false;
 
@@ -325,7 +352,7 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
   /** Show all cameras in mock mode; otherwise show only the first N matching selected physical cameras. */
   function syncVisibility(forceShowFrustums?: boolean, forceShowGizmos?: boolean) {
     const count = selectedCount?.value ?? 0;
-    const showAll = isMockExtrinsics && count === 0;
+    const showAll = true//isMockExtrinsics && count === 0;
     const frustumVis = forceShowFrustums !== undefined ? forceShowFrustums : (showFrustums?.value ?? true);
     const gizmoVis = forceShowGizmos !== undefined ? forceShowGizmos : (showGizmos?.value ?? true);
 

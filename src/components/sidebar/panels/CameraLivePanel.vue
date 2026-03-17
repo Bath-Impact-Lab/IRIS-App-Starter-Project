@@ -160,16 +160,11 @@ interface Props {
   cameraRotation: Record<string, number>;
   devices: MediaDeviceInfo[];
   personCount: string | null;
-  spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null;
-  skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null;
-  scene: THREE.Scene | null;
 }
 
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
-  sphereUpdate: [THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null];
-  skeletonUpdate: [THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null];
   irisDataUpdate: [IrisData[] | IrisData | null];
   isRunning: [boolean];
   reorderCameras: [MediaDeviceInfo[]];
@@ -381,12 +376,13 @@ async function onCalibrateExtrinsics() {
   props.selectedCameras.forEach((_, i) => stopCameraStream(i));
 
   await window.ipc?.calculateExtrinsics(cameraIndices, localCameraRotation.value[props.selectedCameras[0].deviceId]);
+
+  // Load camera positions from extrisics.json
+  
 }
 
 // ── IRIS engine ──────────────────────────────────────────────────────────────
 async function onStartIris() {
-  emit('sphereUpdate', null);
-  emit('skeletonUpdate', null);
 
   const cameras = props.selectedCameras.map((d, i) => ({
     uri: String(i),
@@ -421,12 +417,6 @@ async function onStopIris() {
   await window.ipc?.stopIRIS('example');
 
   props.selectedCameras.forEach((d, i) => startCameraStream(d, i));
-
-  if (props.spheresMesh && props.scene) props.scene.remove(props.spheresMesh);
-  emit('sphereUpdate', null);
-
-  if (props.skeletonLine && props.scene) props.scene.remove(props.skeletonLine);
-  emit('skeletonUpdate', null);
   emit('irisDataUpdate', null);
 }
 

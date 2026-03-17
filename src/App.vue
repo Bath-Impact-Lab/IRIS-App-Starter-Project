@@ -201,10 +201,7 @@
 
     <sidebar
       v-if="hasCameraSelected"
-      :spheres-mesh="spheresMesh"
-      :skeleton-line="skeletonLine" 
       :person-count="personCount" 
-      :scene="scene" 
       :iris-data="irisData"
       :selected-cameras="selectedDevices"
       :scene-cameras="sceneCameras"
@@ -213,8 +210,6 @@
       :selected-camera-ids="selectedDeviceId"
       :playback-video-urls="fsPlaybackVideoUrls"
       :is-playing-back="isPlaying"
-      @sphere-update="sphereMeshUpdate"
-      @skeleton-update="skeletonMeshUpdate"
       @iris-data-update="irisDataUpdate"
       @is-running="runningUpdate"
       @reorder-cameras="reorderCameras"
@@ -228,12 +223,17 @@
       :rebuild-play-space="rebuildPlaySpace"
       :create-play-space="createPlaySpace"
       :add-scene-cameras="addSceneCameras"
-      :test="test"
       :selected-avatar="selectedAvatar"
-      @give-scene="asignScene"
+      :running="running"
       @give-sphere-mesh="sphereMeshUpdate"
       @give-skeleton-mesh="skeletonMeshUpdate"
     />
+
+    <connectVR
+      v-if="outputOption=='VR Chat'"
+      :running="running"
+    />
+
 
     <!-- Filesystem Record / Playback bar -->
     <Transition name="fs-bar">
@@ -458,6 +458,7 @@ import { usePlaySpace } from './lib/usePlaySpace';
 import sidebar from './components/sidebar.vue';
 import ThreeWindow from './components/threeWindow.vue';
 import settingsModal from './components/settingsModal.vue';
+import connectVR from './components/connectVR.vue';
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 const logoError = ref(false);
@@ -502,7 +503,6 @@ const isPaidLicense = computed(() => {
   return plan === 'creator' || plan === 'studio';
 });
 
-const test = ref<boolean>(false)
 
 // Sync local input with stored key on mount
 watch(storedLicenseKey, (newKey) => {
@@ -559,7 +559,7 @@ const personCountOptions = ['Single Person', 'Multi-Person'];
 const personCount = ref<string | null>('Single Person');
 
 // Output options
-const outputOptions = ['SteamVR', 'Quest', 'Unity', 'Unreal', 'Gadot', 'Filesystem'];
+const outputOptions = ['SteamVR', 'VR Chat', 'Quest', 'Unity', 'Unreal', 'Gadot', 'Filesystem'];
 const outputOption = ref<string | null>(null);
 
 // Avatar options
@@ -861,7 +861,7 @@ const jointAngles = computed(() => {
 });
 const jointAnglesPretty = computed(() => jointAngles.value ? JSON.stringify(jointAngles.value, null, 2) : '');
 
-// â”€â”€ IRIS CLI presence check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── IRIS CLI presence check ─────────────────────────────────────────────────────────────
 const showIrisNotFound = ref(false);
 let irisPollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -890,7 +890,6 @@ function openIrisDownload() {
 
 let browserMockTimer: ReturnType<typeof setInterval> | null = null;
 
-let scene =  ref<THREE.Scene | null>(null);
 let spheresMesh = ref<THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null>(null);
 let skeletonLine = ref<THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null>(null);
 let irisData = ref<IrisData[] | IrisData | null>(null);
@@ -1134,9 +1133,6 @@ function runningUpdate(value: boolean) {
   running.value = value
 }
 
-function asignScene(value: THREE.Scene) {
-  scene.value = value
-}
 
 function deviceShortCode(deviceId: string): string {
   // Produce a stable 4-char hex code from the deviceId (e.g. "Port #A3F2")
