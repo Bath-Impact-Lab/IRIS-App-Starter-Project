@@ -1,71 +1,41 @@
 <template>
   <div class="sidenav">
-    <!-- Filesystem playback mode: video files are loaded -->
     <PlaybackPanel
       v-if="isPlaybackMode"
-      :video-urls="props.playbackVideoUrls ?? []"
-      :is-playing="props.isPlayingBack ?? false"
+      :video-urls="fsPlaybackVideoUrls"
+      :is-playing="isPlaying"
       :feed-names="playbackFeedNames"
     />
 
-    <!-- Live camera mode: real webcams selected -->
-    <CameraLivePanel
-      v-else-if="props.selectedCameras && props.selectedCameras.length > 0"
-      :selected-cameras="props.selectedCameras"
-      :selected-camera-ids="props.selectedCameraIds"
-      :scene-cameras="props.sceneCameras"
-      :camera-rotation="props.cameraRotation"
-      :devices="props.devices"
-      :person-count="props.personCount"
-      @iris-data-update="emit('irisDataUpdate', $event)"
-      @is-running="emit('isRunning', $event)"
-      @reorder-cameras="emit('reorderCameras', $event)"
-    />
+    <CameraLivePanel v-else-if="selectedDevices && selectedDevices.length > 0" />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { SceneCameraEntry } from '../lib/useSceneCameras';
-import * as THREE from 'three';
 import CameraLivePanel from './sidebar/panels/CameraLivePanel.vue';
 import PlaybackPanel from './sidebar/panels/PlaybackPanel.vue';
+import { useCameraStore } from '../stores/useCameraStore';
+import { useFilesystemStore } from '../stores/useFilesystemStore';
 
-// ── Props — identical public API as before ───────────────────────────────────
-interface Props {
-  personCount: string | null;
-  irisData: IrisData[] | IrisData | null;
-  selectedCameras: MediaDeviceInfo[] | null;
-  selectedCameraIds: string[] | null;
-  sceneCameras: SceneCameraEntry[];
-  cameraRotation: Record<string, number>;
-  devices: MediaDeviceInfo[];
-  playbackVideoUrls?: (string | null)[];
-  isPlayingBack?: boolean;
-}
+const { selectedDevices, fsPlaybackVideoUrls } = useCameraStore();
+const { isPlaying } = useFilesystemStore();
 
-const props = defineProps<Props>();
+const isPlaybackMode = computed(() => (
+  fsPlaybackVideoUrls.value.length > 0 &&
+  fsPlaybackVideoUrls.value.some((url) => url !== null)
+));
 
-const emit = defineEmits<{
-  irisDataUpdate: [IrisData[] | IrisData | null];
-  isRunning: [boolean];
-  reorderCameras: [MediaDeviceInfo[]];
-}>();
-
-// ── Panel routing ────────────────────────────────────────────────────────────
-/** True when we have resolved video file URLs to play back. */
-const isPlaybackMode = computed(() =>
-  (props.playbackVideoUrls?.length ?? 0) > 0 &&
-  props.playbackVideoUrls!.some(u => u !== null)
-);
-
-/** Feed display names derived from the URL filenames. */
-const playbackFeedNames = computed(() =>
-  (props.playbackVideoUrls ?? []).map(url => {
+const playbackFeedNames = computed(() => (
+  fsPlaybackVideoUrls.value.map((url) => {
     if (!url) return '';
-    try { return decodeURIComponent(url.split('/').pop() ?? ''); } catch { return ''; }
+    try {
+      return decodeURIComponent(url.split('/').pop() ?? '');
+    } catch {
+      return '';
+    }
   })
-);
+));
 </script>
 
 <style scoped>

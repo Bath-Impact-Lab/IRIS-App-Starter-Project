@@ -1,7 +1,7 @@
 <template>
   <div class="sidenav">
     Tracker Config:
-    <div v-if="!props.running">Start IRIS first</div>
+    <div v-if="!running">Start IRIS first</div>
 
     <div v-for="(value, type) in trackerConfig">
       <div class="titles">
@@ -15,7 +15,7 @@
         step="0.01"
         :id="type"
         v-on:mouseup="passConfig"
-        :disabled="!props.running"
+        :disabled="!running"
       >
     </div>
     
@@ -23,13 +23,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
+import { useIrisStore } from '../stores/useIrisStore';
 
-interface Props {
-  running: boolean
-}
-
-const props = defineProps<Props>()
+const { running } = useIrisStore();
 
 const trackerMap = {
   xOffset: "X Offset",

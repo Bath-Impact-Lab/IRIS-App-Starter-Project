@@ -1,25 +1,41 @@
-import { watch, type Ref } from 'vue';
+import { watch } from 'vue';
 import * as THREE from 'three';
-import type { PlaySpaceBounds } from './useSceneCameras';
+import { useSceneCameras } from './useSceneCameras';
+import { useUIStore } from '../stores/useUIStore';
 
-export function usePlaySpace(
-  showPlaySpace: Ref<boolean>,
-  computePlaySpaceBounds: () => PlaySpaceBounds,
-) {
+function createPlaySpaceStore() {
+  const { showPlaySpace } = useUIStore();
+  const { computePlaySpaceBounds } = useSceneCameras();
+
   let playSpaceGroup: THREE.Group | null = null;
   let attachedScene: THREE.Scene | null = null;
+
+  function disposeGroup(scene: THREE.Scene, group: THREE.Group) {
+    scene.remove(group);
+    group.traverse((child) => {
+      if ((child as THREE.Mesh).geometry) {
+        (child as THREE.Mesh).geometry.dispose();
+      }
+      const material = (child as THREE.Mesh).material;
+      if (material) {
+        Array.isArray(material)
+          ? material.forEach((item) => item.dispose())
+          : (material as THREE.Material).dispose();
+      }
+    });
+  }
+
+  watch(showPlaySpace, (value) => {
+    if (playSpaceGroup) {
+      playSpaceGroup.visible = value;
+    }
+  });
 
   function create(scene: THREE.Scene) {
     attachedScene = scene;
 
-    // Remove old group if it exists
     if (playSpaceGroup) {
-      scene.remove(playSpaceGroup);
-      playSpaceGroup.traverse((child) => {
-        if ((child as THREE.Mesh).geometry) (child as THREE.Mesh).geometry.dispose();
-        const mat = (child as THREE.Mesh).material;
-        if (mat) Array.isArray(mat) ? mat.forEach(m => m.dispose()) : (mat as THREE.Material).dispose();
-      });
+      disposeGroup(scene, playSpaceGroup);
       playSpaceGroup = null;
     }
 
@@ -27,10 +43,9 @@ export function usePlaySpace(
     const { polygons } = bounds;
 
     const group = new THREE.Group();
-    group.position.set(0, 0.005, 0); // Tiny offset to prevent grid flickering
+    group.position.set(0, 0.005, 0);
 
-    if (polygons && polygons.length > 0) {
-      // 1. Floor Infill (Separate mesh per island to avoid triangulation artifacts)
+    if (polygons.length > 0) {
       const floorMat = new THREE.MeshBasicMaterial({
         color: 0x446677,
         transparent: false,
@@ -38,14 +53,15 @@ export function usePlaySpace(
         side: THREE.DoubleSide,
         depthWrite: false,
         depthTest: false,
-        blending: THREE.NormalBlending
+        blending: THREE.NormalBlending,
       });
 
-      polygons.forEach(poly => {
+      polygons.forEach((poly) => {
         if (poly.length < 3) return;
+
         const shape = new THREE.Shape();
         shape.moveTo(poly[0].x, poly[0].z);
-        for (let i = 1; i < poly.length; i++) {
+        for (let i = 1; i < poly.length; i += 1) {
           shape.lineTo(poly[i].x, poly[i].z);
         }
         shape.closePath();
@@ -56,11 +72,10 @@ export function usePlaySpace(
         group.add(floor);
       });
 
-      // 2. Outline boundary
       const outlinePoints: THREE.Vector3[] = [];
-      polygons.forEach(poly => {
+      polygons.forEach((poly) => {
         if (poly.length < 3) return;
-        for (let i = 0; i < poly.length; i++) {
+        for (let i = 0; i < poly.length; i += 1) {
           outlinePoints.push(poly[i]);
           outlinePoints.push(poly[(i + 1) % poly.length]);
         }
@@ -72,7 +87,7 @@ export function usePlaySpace(
           color: 0x446677,
           transparent: true,
           opacity: 0.5,
-          linewidth: 2
+          linewidth: 2,
         });
         const outline = new THREE.LineSegments(outlineGeo, outlineMat);
         group.add(outline);
@@ -85,30 +100,32 @@ export function usePlaySpace(
 
     scene.add(group);
     playSpaceGroup = group;
-
-    // Sync visibility with the ref
-    watch(showPlaySpace, (val) => {
-      if (playSpaceGroup) playSpaceGroup.visible = val;
-    });
   }
 
   function rebuild() {
-    if (attachedScene) create(attachedScene);
+    if (attachedScene) {
+      create(attachedScene);
+    }
   }
 
   function dispose() {
     if (playSpaceGroup && attachedScene) {
-      attachedScene.remove(playSpaceGroup);
-      playSpaceGroup.traverse((child) => {
-        if ((child as THREE.Mesh).geometry) (child as THREE.Mesh).geometry.dispose();
-        const mat = (child as THREE.Mesh).material;
-        if (mat) Array.isArray(mat) ? mat.forEach(m => m.dispose()) : (mat as THREE.Material).dispose();
-      });
+      disposeGroup(attachedScene, playSpaceGroup);
       playSpaceGroup = null;
     }
+
     attachedScene = null;
   }
 
   return { create, rebuild, dispose };
 }
 
+let playSpaceStore: ReturnType<typeof createPlaySpaceStore> | null = null;
+
+export function usePlaySpace() {
+  if (!playSpaceStore) {
+    playSpaceStore = createPlaySpaceStore();
+  }
+
+  return playSpaceStore;
+}

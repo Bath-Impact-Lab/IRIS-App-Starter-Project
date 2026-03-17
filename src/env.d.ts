@@ -4,16 +4,39 @@ declare module '*.vue' {
   const component: DefineComponent<{}, {}, any>
   export default component
 }
-  
-  interface IrisData {  
-  people: {
-    person_id: number;
-    joint_angles: [number, number, number, number][];
-    joint_centers: [number, number, number][]; // Array of 3D coordinates: [x, y, z]
-    points_2d: [number, number][];
-  }[];
+
+interface IrisKeypoint3D {
+  conf: number;
+  joint_idx: number;
+  x: number;
+  y: number;
+  z: number;
 }
 
+interface IrisEntity {
+  id?: number;
+  analysis?: {
+    joint_angles?: Record<string, number> | null;
+  };
+  skeleton?: {
+    keypoints_3d?: IrisKeypoint3D[];
+  };
+}
+
+interface IrisPerson {
+  person_id: number;
+  joint_angles?: Record<string, number> | null;
+  joint_centers: [number, number, number][];
+  points_2d: [number, number][];
+  skeleton: {
+    joint_centers: [number, number, number][];
+  };
+}
+
+interface IrisData {
+  people: IrisPerson[];
+  entities?: IrisEntity[];
+}
 
 interface Window {
   electronAPI?: {
@@ -38,5 +61,10 @@ interface Window {
     connectVR: () => void;
     updatePos: (val: string) => void;
     disconnectVR: () => void;
+    fsGetDefaultRecordingsDir: () => Promise<string>;
+    fsListRecordings: (rootDir: string) => Promise<{ name: string; path: string }[]>;
+    fsRenameRecording: (oldPath: string, newName: string) => Promise<{ ok: boolean; newPath?: string; error?: string }>;
+    fsGetRecordingData: (recordingPath: string) => Promise<{ positions?: IrisData[]; videoFiles?: { index: number; name: string; path: string }[] }>;
+    fsGetVideoUrl: (filePath: string) => Promise<string>;
   }
-} 
+}

@@ -1,6 +1,8 @@
-import { ref, watch, type Ref } from 'vue';
+import { ref, watch } from 'vue';
 import * as THREE from 'three';
 import mockExtrinsicsFallback from './../../public/assets/mockExtrinsics.json';
+import { useCameraStore } from '../stores/useCameraStore';
+import { useUIStore } from '../stores/useUIStore';
 
 export interface SceneCameraDef {
   name: string;
@@ -228,7 +230,9 @@ function updateFrustumLines(entry: SceneCameraEntry) {
   posAttr.needsUpdate = true;
 }
 
-export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<boolean>, showGizmos?: Ref<boolean>) {
+function createSceneCameraStore() {
+  const { selectedCameraCount } = useCameraStore();
+  const { showCameras } = useUIStore();
   const sceneCameras = ref<SceneCameraEntry[]>([]);
   let attachedScene: THREE.Scene | null = null;
 
@@ -351,10 +355,10 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
 
   /** Show all cameras in mock mode; otherwise show only the first N matching selected physical cameras. */
   function syncVisibility(forceShowFrustums?: boolean, forceShowGizmos?: boolean) {
-    const count = selectedCount?.value ?? 0;
+    const count = selectedCameraCount.value;
     const showAll = true//isMockExtrinsics && count === 0;
-    const frustumVis = forceShowFrustums !== undefined ? forceShowFrustums : (showFrustums?.value ?? true);
-    const gizmoVis = forceShowGizmos !== undefined ? forceShowGizmos : (showGizmos?.value ?? true);
+    const frustumVis = forceShowFrustums !== undefined ? forceShowFrustums : showCameras.value;
+    const gizmoVis = forceShowGizmos !== undefined ? forceShowGizmos : showCameras.value;
 
     for (let i = 0; i < sceneCameras.value.length; i++) {
       const show = showAll || i < count;
@@ -519,27 +523,19 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
     sceneCameras.value = [];
   }
 
-  if (selectedCount) {
-    let prevCount = 0;
-    watch(selectedCount, async (count) => {
-      if (prevCount === 0 && count > 0 && attachedScene) {
-        // A real camera just connected — clear mock gizmos and reload from real extrinsics
-        console.log('[cameras] real camera connected, clearing mock cameras and reloading extrinsics');
-        clearSceneCameras();
-        await addToScene(attachedScene);
-      }
-      prevCount = count;
-      syncVisibility();
-    });
-  }
+  let prevCount = 0;
+  watch(selectedCameraCount, async (count) => {
+    if (prevCount === 0 && count > 0 && attachedScene) {
+      // A real camera just connected — clear mock gizmos and reload from real extrinsics
+      console.log('[cameras] real camera connected, clearing mock cameras and reloading extrinsics');
+      clearSceneCameras();
+      await addToScene(attachedScene);
+    }
+    prevCount = count;
+    syncVisibility();
+  });
 
-  if (showFrustums) {
-    watch(showFrustums, () => syncVisibility());
-  }
-
-  if (showGizmos) {
-    watch(showGizmos, () => syncVisibility());
-  }
+  watch(showCameras, () => syncVisibility());
 
   function dispose() {
     for (const entry of sceneCameras.value) {
@@ -569,4 +565,14 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
     computePlaySpaceBounds,
     dispose,
   } as const;
+}
+
+let sceneCameraStore: ReturnType<typeof createSceneCameraStore> | null = null;
+
+export function useSceneCameras() {
+  if (!sceneCameraStore) {
+    sceneCameraStore = createSceneCameraStore();
+  }
+
+  return sceneCameraStore;
 }
