@@ -17,7 +17,7 @@ contextBridge.exposeInMainWorld('ipc', {
       callback(data)
     })
   },
-  calculateExtrinsics: (cameraIndices, rotation) => ipcRenderer.invoke('calculate-extrinsics', cameraIndices),
+  calculateExtrinsics: (cameraIndices, rotation) => ipcRenderer.invoke('calculate-extrinsics', cameraIndices, rotation),
   cancelExtrinsics: () => ipcRenderer.invoke('cancel-extrinsics'),
   extrinsicsComplete: (callback) => {
     ipcRenderer.on('extrinsics-complete', (event, data) => {

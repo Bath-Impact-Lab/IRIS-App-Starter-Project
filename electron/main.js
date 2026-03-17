@@ -1,5 +1,5 @@
 const { app, BrowserWindow, ipcMain, nativeTheme, shell, dialog } = require('electron');
-const { registerIrisIpc, IRIS_CLI_EXE } = require('./iris');
+const { registerIrisIpc, getIrisCliPath } = require('./iris');
 const { MOCK_EXTRINSICS } = require('./mockExtrinsics');
 const path = require('path');
 const fs = require('fs');
@@ -10,9 +10,7 @@ let mainWindow;
 let mockTimer = null;
 
 function startIrisMockProcess() {
-  const runtimeExists = fs.existsSync(
-    path.join(__dirname, '..', 'iris_runtime_bundle', 'exe file')
-  );
+  const runtimeExists = fs.existsSync(getIrisCliPath());
   if (runtimeExists) return;
 
   const positionsPath = path.join(__dirname, '..', 'public', 'assets', 'mock-halpe26-stream.json');
@@ -98,9 +96,10 @@ ipcMain.handle('open-external', async (event, url) => {
 
 // Check whether iris_cli.exe is present on disk
 ipcMain.handle('check-iris-cli', () => {
-    const found = fs.existsSync(IRIS_CLI_EXE);
-    console.log(`[iris-cli] check: ${found ? 'found' : 'NOT found'} at ${IRIS_CLI_EXE}`);
-    return { found, path: IRIS_CLI_EXE };
+    const irisCliPath = getIrisCliPath();
+    const found = fs.existsSync(irisCliPath);
+    console.log(`[iris-cli] check: ${found ? 'found' : 'NOT found'} at ${irisCliPath}`);
+    return { found, path: irisCliPath };
 });
 
 // ── Filesystem recordings ────────────────────────────────────────────────────
@@ -202,9 +201,7 @@ ipcMain.handle('fs-rename-recording', async (event, oldPath, newName) => {
 // - If a real runtime exists, read the live extrinsics file.
 // - The frontend should clear mock camera gizmos when real cameras connect.
 ipcMain.handle('get-extrinsics', (event) => {
-    const runtimeExists = fs.existsSync(
-        path.join(__dirname, '..', 'iris_runtime_bundle', 'exe file')
-    );
+    const runtimeExists = fs.existsSync(getIrisCliPath());
 
     // Mock mode — return the bundled mock extrinsics
     if (!runtimeExists) {
