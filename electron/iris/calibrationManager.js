@@ -41,6 +41,7 @@ class CalibrationManager {
     return this.runCalibration({
       type: 'intrinsics',
       args: ['calculate-intrinsics', '--camera', String(cameraIndex), '--rotate', String(rotation)],
+      startDelayMs: 5000,
       timeoutMs: 25000,
       onOutput,
       onComplete,
@@ -56,6 +57,7 @@ class CalibrationManager {
     return this.runCalibration({
       type: 'extrinsics',
       args: ['calculate-extrinsics', '--cameras', cameraArg, '--rotate', String(rotation)],
+      startDelayMs: 5000,
       timeoutMs: 50000,
       onOutput,
       onComplete,
@@ -65,9 +67,10 @@ class CalibrationManager {
     });
   }
 
-  runCalibration({
+  async runCalibration({
     type,
     args,
+    startDelayMs = 0,
     timeoutMs,
     onOutput,
     onComplete,
@@ -78,7 +81,15 @@ class CalibrationManager {
     this.cancel(type);
 
     const exePath = getIrisCliPath();
-    console.log(`[${type}] spawning: ${exePath} ${args.join(' ')}`);
+    console.log(`[${type}] waiting ${startDelayMs}ms before spawning: ${exePath} ${args.join(' ')}`);
+
+    // Wait in the main process so the OS/MSMF driver has time to fully release
+    // the camera after the Electron renderer stopped its MediaStream tracks.
+    if (startDelayMs > 0) {
+      await new Promise((resolve) => setTimeout(resolve, startDelayMs));
+    }
+
+    console.log(`[${type}] spawning now`);
 
     let child;
     try {
@@ -116,10 +127,7 @@ class CalibrationManager {
     };
 
     const finalize = (payload) => {
-      if (completed) {
-        return;
-      }
-
+      if (completed) return;
       completed = true;
       clearTimeout(inactivityTimer);
       setInactive();
@@ -128,17 +136,13 @@ class CalibrationManager {
 
     const handleLine = (rawLine) => {
       const line = rawLine.trim();
-      if (!line) {
-        return false;
-      }
+      if (!line) return false;
 
       console.log(`[${type}] ${line}`);
       onOutput(line);
 
       const match = matchSuccess(line);
-      if (!match) {
-        return false;
-      }
+      if (!match) return false;
 
       stopChild();
       finalize(buildSuccessPayload(match, line));
@@ -154,25 +158,16 @@ class CalibrationManager {
       buffer = lines.pop() ?? '';
 
       for (const line of lines) {
-        if (handleLine(line)) {
-          return true;
-        }
+        if (handleLine(line)) return true;
       }
-
       return false;
     };
 
     const resetTimer = () => {
-      if (completed) {
-        return;
-      }
-
+      if (completed) return;
       clearTimeout(inactivityTimer);
       inactivityTimer = setTimeout(() => {
-        if (completed) {
-          return;
-        }
-
+        if (completed) return;
         stopChild();
         onOutput(`[timeout] No new data for ${timeoutMs / 1000}s - process killed.`);
         finalize(buildFailurePayload('timeout'));
@@ -183,23 +178,14 @@ class CalibrationManager {
 
     child.onData((data) => {
       buffer += data.toString();
-      if (!flushBuffer()) {
-        resetTimer();
-      }
+      if (!flushBuffer()) resetTimer();
     });
 
     child.onExit(({ exitCode }) => {
       clearTimeout(inactivityTimer);
       setInactive();
-
-      if (completed) {
-        return;
-      }
-
-      if (flushBuffer(true)) {
-        return;
-      }
-
+      if (completed) return;
+      if (flushBuffer(true)) return;
       const reason = exitCode == null ? 'cancelled' : `exited with code ${exitCode}`;
       finalize(buildFailurePayload(reason));
     });
