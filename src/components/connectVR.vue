@@ -5,7 +5,7 @@
 
     <div v-for="(value, type) in trackerConfig">
       <div class="titles">
-        {{type}}: {{ trackerConfig[type] }} 
+        {{trackerMap[type]}}: {{ trackerConfig[type] }} 
       </div>
       <input 
         v-model="trackerConfig[type]" 
@@ -31,6 +31,17 @@ interface Props {
 
 const props = defineProps<Props>()
 
+const trackerMap = {
+  xOffset: "X Offset",
+  yOffset: "y Offset",
+  zOffset: "X Offset",
+  xRotation: "X Offset",
+  yRotation: "y Rotation",
+  zRotation: "X Rotation",
+  xScale: "X Offset",
+  yScale: "y Scale",
+  zScale: "X Scale",
+}
 const trackerConfig = ref({
   xOffset: 0,
   yOffset: 0,

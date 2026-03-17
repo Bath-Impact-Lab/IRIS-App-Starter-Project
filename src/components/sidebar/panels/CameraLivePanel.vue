@@ -381,6 +381,9 @@ async function onCalibrateExtrinsics() {
   props.selectedCameras.forEach((_, i) => stopCameraStream(i));
 
   await window.ipc?.calculateExtrinsics(cameraIndices, localCameraRotation.value[props.selectedCameras[0].deviceId]);
+
+  // Load camera positions from extrisics.json
+  
 }
 
 // ── IRIS engine ──────────────────────────────────────────────────────────────

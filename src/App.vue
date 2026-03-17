@@ -228,7 +228,6 @@
       :rebuild-play-space="rebuildPlaySpace"
       :create-play-space="createPlaySpace"
       :add-scene-cameras="addSceneCameras"
-      :test="test"
       :selected-avatar="selectedAvatar"
       @give-scene="asignScene"
       @give-sphere-mesh="sphereMeshUpdate"
@@ -236,7 +235,7 @@
     />
 
     <connectVR
-      v-if="outputOption=='SteamVR'"
+      v-if="outputOption=='VR Chat'"
       :running="running"
     />
 
@@ -505,7 +504,6 @@ const isPaidLicense = computed(() => {
   return plan === 'creator' || plan === 'studio';
 });
 
-const test = ref<boolean>(false)
 
 // Sync local input with stored key on mount
 watch(storedLicenseKey, (newKey) => {
@@ -562,7 +560,7 @@ const personCountOptions = ['Single Person', 'Multi-Person'];
 const personCount = ref<string | null>('Single Person');
 
 // Output options
-const outputOptions = ['SteamVR', 'Quest', 'Unity', 'Unreal', 'Gadot', 'Filesystem'];
+const outputOptions = ['SteamVR', 'VR Chat', 'Quest', 'Unity', 'Unreal', 'Gadot', 'Filesystem'];
 const outputOption = ref<string | null>(null);
 
 // Avatar options

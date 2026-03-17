@@ -204,7 +204,7 @@ ipcMain.handle('fs-rename-recording', async (event, oldPath, newName) => {
 // - The frontend should clear mock camera gizmos when real cameras connect.
 ipcMain.handle('get-extrinsics', (event) => {
     const runtimeExists = fs.existsSync(
-        path.join(__dirname, '..', 'iris_runtime_bundle', 'exe file')
+        path.join(__dirname, '..', 'IRIS', 'bin', 'iris_cli.exe')
     );
 
     // Mock mode — return the bundled mock extrinsics
@@ -214,7 +214,7 @@ ipcMain.handle('get-extrinsics', (event) => {
     }
 
     // Real runtime — read live calibration file
-    const extrinsicsPath = path.join(os.homedir(), 'AppData', 'Local', 'IRIS', 'extrinsics 1.json');
+    const extrinsicsPath = path.join(os.homedir(), 'AppData', 'Local', 'IRIS', 'calibration_output', 'extrinsics.json');
     try {
         if (!fs.existsSync(extrinsicsPath)) {
             console.warn(`[extrinsics] file not found: ${extrinsicsPath}`);
@@ -253,7 +253,7 @@ ipcMain.handle('connect-VR', (event) => {
     })
 
     ipcMain.handle('disconnect-VR', (event) => {
-        const msg = JSON.stringify({cmd: "stop"})
+        const msg = JSON.stringify({cmd: "stop"}) 
         child.stdin.write(msg + "\n")
     })
 })
