@@ -15,11 +15,23 @@ function getIrisCliPath() {
   return process.env.IRIS_CLI_EXE || path.join(os.homedir(), 'Documents', 'Iris', 'build', 'bin', 'iris_cli.exe');
 }
 
+
+function getModelDir() {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'app.asar.unpacked', 'iris_runtime_bundle', 'models');
+  }
+
+  return process.env.IRIS_MODELS_DIR || path.join(os.homedir(), 'Documents', 'Iris', 'models');
+}
+
+
 function buildConfigFromOptions(opts = {}) {
   const run_id = opts.run_id || `run-${Date.now()}`;
   const width = opts.camera_width ?? 1920;
   const height = opts.camera_height ?? 1080;
   const cameras = opts.cameras || [];
+
+  const modelDir = getModelDir();
 
   return {
     run_id,
@@ -53,7 +65,7 @@ function buildConfigFromOptions(opts = {}) {
       params: {
         device_id: 0,
         batch_size: 4,
-        rtmdet_engine_path: 'models/rtmdet_t_bs4_fp16.trt',
+        rtmdet_engine_path: `${modelDir}/rtmdet_t_bs4_fp16.trt`,
         rtmdet_input_width: 640,
         rtmdet_input_height: 640,
         rtmdet_conf_threshold: 0.7,
@@ -61,7 +73,7 @@ function buildConfigFromOptions(opts = {}) {
         detection_skip_enabled: true,
         detection_skip_frames: 20,
         reid_enabled: true,
-        osnet_engine_path: 'models/osnet_x05_fp16.trt',
+        osnet_engine_path: `${modelDir}/osnet_x05_fp16.trt`,
         reid_min_detection_conf: 0.55,
       },
     },
@@ -82,7 +94,7 @@ function buildConfigFromOptions(opts = {}) {
       params: {
         device_id: 0,
         batch: 16,
-        engine: 'models/rtmpose_bs16_fp16.trt',
+        engine: `${modelDir}/rtmpose_bs16_fp16.trt`,
         input_w: 192,
         input_h: 256,
         split_ratio: 2.0,
