@@ -35,10 +35,10 @@ const trackerMap = {
   xOffset: "X Offset",
   yOffset: "y Offset",
   zOffset: "X Offset",
-  xRotation: "X Offset",
+  xRotation: "X Rotation",
   yRotation: "y Rotation",
   zRotation: "X Rotation",
-  xScale: "X Offset",
+  xScale: "X Scale",
   yScale: "y Scale",
   zScale: "X Scale",
 }

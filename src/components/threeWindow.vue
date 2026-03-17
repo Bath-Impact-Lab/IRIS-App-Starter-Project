@@ -14,15 +14,13 @@ interface Props {
   rebuildPlaySpace: () => void,
   createPlaySpace: (scene: THREE.Scene) => void,
   addSceneCameras: (scene: THREE.Scene) => Promise<void>,
-  spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null,
-	skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null,
   selectedAvatar: string | null,
+  running: boolean,
 }
 
 const props = defineProps<Props>()
 //defining emits for future
 const emit = defineEmits<{
-  giveScene: [THREE.Scene]
   giveSphereMesh: [THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null]
   giveSkeletonMesh: [THREE.LineSegments<THREE.BufferGeometry <THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null]
 }>()
@@ -37,8 +35,8 @@ let resizeObserver: ResizeObserver | null = null;
 let controls: OrbitControls | null = null;
 let modelsRoot: THREE.Object3D[] | null = null;
 
-let spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null = props.spheresMesh;
-let skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null  = props.skeletonLine;
+let spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null = null;
+let skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null  = null;
 const position = new THREE.Object3D()
 
 let avatarRoot: THREE.Object3D | null = null;
@@ -61,6 +59,20 @@ const halpe26_pairs = [
 ]
 
 const linePositions = new Float32Array(halpe26_pairs.length * 3 * 2)
+
+watch(() => props.running, (running) => {
+  if (!running) {
+    if (skeletonLine) {
+      skeletonLine.removeFromParent()
+      skeletonLine = null
+    }
+    if (spheresMesh) {
+      spheresMesh.removeFromParent()
+      spheresMesh = null
+    }
+    
+  }
+})
 
 onMounted(() => {
   if (sceneRef.value) initThree(sceneRef.value);
@@ -152,7 +164,6 @@ async function initThree(container: HTMLElement){
   container.appendChild(renderer.domElement);
 
   scene = new THREE.Scene();
-  emit('giveScene', scene)
   camera = new THREE.PerspectiveCamera(50, width/height, 0.01, 1000);
   camera.position.set(5, 5, 5);
 
@@ -231,8 +242,6 @@ function renderIRISdata(poseInfo: IrisData) {
         const sphereGeometry = new THREE.SphereGeometry(0.025, 8, 8)
         const material = new THREE.MeshBasicMaterial({color: 0xffffff})
         spheresMesh = new THREE.InstancedMesh(sphereGeometry, material, (keypoints.length + person.skeleton.keypoints_3d.length))
-        //passing mesh to main app so mesh can be removed on stop
-        emit('giveSphereMesh', spheresMesh)
         scene.add(spheresMesh)
 
         const lMaterial = new THREE.LineBasicMaterial({color:0xff0000})
@@ -240,8 +249,6 @@ function renderIRISdata(poseInfo: IrisData) {
         lGeometry.setAttribute('position', new THREE.BufferAttribute(linePositions, 3))
 
         skeletonLine = new THREE.LineSegments(lGeometry, lMaterial)
-        //passing mesh to main app so mesh can be removed on stop
-        emit('giveSkeletonMesh', skeletonLine)
         scene.add(skeletonLine)
       }
       const positionAttr = skeletonLine.geometry.attributes.position

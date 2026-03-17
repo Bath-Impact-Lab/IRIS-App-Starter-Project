@@ -201,10 +201,7 @@
 
     <sidebar
       v-if="hasCameraSelected"
-      :spheres-mesh="spheresMesh"
-      :skeleton-line="skeletonLine" 
       :person-count="personCount" 
-      :scene="scene" 
       :iris-data="irisData"
       :selected-cameras="selectedDevices"
       :scene-cameras="sceneCameras"
@@ -213,8 +210,6 @@
       :selected-camera-ids="selectedDeviceId"
       :playback-video-urls="fsPlaybackVideoUrls"
       :is-playing-back="isPlaying"
-      @sphere-update="sphereMeshUpdate"
-      @skeleton-update="skeletonMeshUpdate"
       @iris-data-update="irisDataUpdate"
       @is-running="runningUpdate"
       @reorder-cameras="reorderCameras"
@@ -229,7 +224,7 @@
       :create-play-space="createPlaySpace"
       :add-scene-cameras="addSceneCameras"
       :selected-avatar="selectedAvatar"
-      @give-scene="asignScene"
+      :running="running"
       @give-sphere-mesh="sphereMeshUpdate"
       @give-skeleton-mesh="skeletonMeshUpdate"
     />
@@ -886,7 +881,6 @@ function openIrisDownload() {
 
 let browserMockTimer: ReturnType<typeof setInterval> | null = null;
 
-let scene =  ref<THREE.Scene | null>(null);
 let spheresMesh = ref<THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null>(null);
 let skeletonLine = ref<THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null>(null);
 let irisData = ref<IrisData[] | IrisData | null>(null);
@@ -1130,9 +1124,6 @@ function runningUpdate(value: boolean) {
   running.value = value
 }
 
-function asignScene(value: THREE.Scene) {
-  scene.value = value
-}
 
 function deviceShortCode(deviceId: string): string {
   // Produce a stable 4-char hex code from the deviceId (e.g. "Port #A3F2")
