@@ -368,6 +368,10 @@
         </div>
       </div>
     </div>
+    <div v-if="jointAngles" class="debug" aria-live="polite">
+      <div class="debug-title">Joint Angles</div>
+      <pre class="debug-pre">{{ jointAnglesPretty }}</pre>
+    </div>
     <!-- Settings Modal -->
     <settingsModal
       :show-settings="showSettings"
@@ -851,6 +855,11 @@ const lastSentMsg = ref('');
 
 const running = ref(false);
 const irisDisplayFps = ref(0);
+const jointAngles = computed(() => {
+  const frame = Array.isArray(irisData.value) ? irisData.value[0] : irisData.value;
+  return frame?.entities?.[0]?.analysis?.joint_angles ?? null;
+});
+const jointAnglesPretty = computed(() => jointAngles.value ? JSON.stringify(jointAngles.value, null, 2) : '');
 
 // ── IRIS CLI presence check ─────────────────────────────────────────────────────────────
 const showIrisNotFound = ref(false);

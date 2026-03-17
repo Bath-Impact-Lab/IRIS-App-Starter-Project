@@ -1,5 +1,9 @@
+
+const dotenv = require('dotenv');
+
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 const { app, BrowserWindow, ipcMain, nativeTheme, shell, dialog } = require('electron');
-const { registerIrisIpc, IRIS_CLI_EXE } = require('./iris');
+const { registerIrisIpc, getIrisCliPath } = require('./iris');
 const { MOCK_EXTRINSICS } = require('./mockExtrinsics');
 const path = require('path');
 const fs = require('fs');
@@ -11,29 +15,27 @@ let mainWindow;
 let mockTimer = null;
 
 function startIrisMockProcess() {
-  const runtimeExists = fs.existsSync(
-    path.join(__dirname, '..', 'iris_runtime_bundle', 'exe file')
-  );
-  if (runtimeExists) return;
+    const runtimeExists = fs.existsSync(getIrisCliPath());
+    if (runtimeExists) return;
 
-  const positionsPath = path.join(__dirname, '..', 'public', 'assets', 'mock-halpe26-stream.json');
-  if (!fs.existsSync(positionsPath)) {
-    console.warn('[mock] mock-halpe26-stream.json not found, skipping mock process');
-    return;
-  }
+    const positionsPath = path.join(__dirname, '..', 'public', 'assets', 'mock-halpe26-stream.json');
+    if (!fs.existsSync(positionsPath)) {
+        console.warn('[mock] mock-halpe26-stream.json not found, skipping mock process');
+        return;
+    }
 
-  const positions = JSON.parse(fs.readFileSync(positionsPath, 'utf8'));
-  if (!Array.isArray(positions) || positions.length === 0) return;
+    const positions = JSON.parse(fs.readFileSync(positionsPath, 'utf8'));
+    if (!Array.isArray(positions) || positions.length === 0) return;
 
-  console.log(`[mock] starting mock pose stream (${positions.length} frames @ 30fps)`);
+    console.log(`[mock] starting mock pose stream (${positions.length} frames @ 30fps)`);
 
-  let frame = 0;
-  mockTimer = setInterval(() => {
-    const win = mainWindow || BrowserWindow.getFocusedWindow();
-    if (!win || win.isDestroyed()) return;
-    win.webContents.send('iris-data', positions[frame]);
-    frame = (frame + 1) % positions.length;
-  }, 1000 / 30);
+    let frame = 0;
+    mockTimer = setInterval(() => {
+        const win = mainWindow || BrowserWindow.getFocusedWindow();
+        if (!win || win.isDestroyed()) return;
+        win.webContents.send('iris-data', positions[frame]);
+        frame = (frame + 1) % positions.length;
+    }, 1000 / 30);
 }
 
 function createWindow() {
@@ -99,9 +101,10 @@ ipcMain.handle('open-external', async (event, url) => {
 
 // Check whether iris_cli.exe is present on disk
 ipcMain.handle('check-iris-cli', () => {
-    const found = fs.existsSync(IRIS_CLI_EXE);
-    console.log(`[iris-cli] check: ${found ? 'found' : 'NOT found'} at ${IRIS_CLI_EXE}`);
-    return { found, path: IRIS_CLI_EXE };
+    const irisCliPath = getIrisCliPath();
+    const found = fs.existsSync(irisCliPath);
+    console.log(`[iris-cli] check: ${found ? 'found' : 'NOT found'} at ${irisCliPath}`);
+    return { found, path: irisCliPath };
 });
 
 // ── Filesystem recordings ────────────────────────────────────────────────────
@@ -203,9 +206,7 @@ ipcMain.handle('fs-rename-recording', async (event, oldPath, newName) => {
 // - If a real runtime exists, read the live extrinsics file.
 // - The frontend should clear mock camera gizmos when real cameras connect.
 ipcMain.handle('get-extrinsics', (event) => {
-    const runtimeExists = fs.existsSync(
-        path.join(__dirname, '..', 'IRIS', 'bin', 'iris_cli.exe')
-    );
+    const runtimeExists = fs.existsSync(getIrisCliPath());
 
     // Mock mode — return the bundled mock extrinsics
     if (!runtimeExists) {
@@ -235,8 +236,8 @@ ipcMain.handle('connect-VR', (event) => {
     const irisToVr = path.join(__dirname, "..", "IRIStoVRChat", "rust.exe")
     console.log(irisToVr)
     const child = spawn(irisToVr, {
-        stdio: ['pipe',  'pipe', 'pipe']
-    }) 
+        stdio: ['pipe', 'pipe', 'pipe']
+    })
 
     child.stdout.on('data', (d) => {
         console.log(d.toString().trim())

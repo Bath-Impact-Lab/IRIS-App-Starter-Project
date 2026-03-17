@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('ipc', {
   startIRIS: (options) => ipcRenderer.invoke('start-iris', options),
+  startIRISStream: (options) => ipcRenderer.invoke('start-iris-stream', options),
   getExtrinsics: () => ipcRenderer.invoke('get-extrinsics'),
   stopIRIS: (Id) => ipcRenderer.invoke('stop-iris', Id),
   onIrisData: (callback) => {
@@ -16,7 +17,7 @@ contextBridge.exposeInMainWorld('ipc', {
       callback(data)
     })
   },
-  calculateExtrinsics: (cameraIndices, rotation) => ipcRenderer.invoke('calculate-extrinsics', cameraIndices),
+  calculateExtrinsics: (cameraIndices, rotation) => ipcRenderer.invoke('calculate-extrinsics', cameraIndices, rotation),
   cancelExtrinsics: () => ipcRenderer.invoke('cancel-extrinsics'),
   extrinsicsComplete: (callback) => {
     ipcRenderer.on('extrinsics-complete', (event, data) => {
