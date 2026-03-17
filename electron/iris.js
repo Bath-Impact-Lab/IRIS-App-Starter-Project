@@ -180,23 +180,23 @@ function createPipeServer(event) {
   return new Promise((resolve, reject) => {
     const server = net.createServer((stream) => {
       console.log('[pipe] Client connected to IRIS pipe');
-      
+
       let buffer = '';
 
       stream.on('data', (data) => {
         // Accumulate chunk into the string buffer
         buffer += data.toString('utf8');
-        
+
         // Process line by line
         let boundary = buffer.indexOf('\n');
         while (boundary !== -1) {
           const line = buffer.substring(0, boundary).trim();
           buffer = buffer.substring(boundary + 1);
-          
+
           if (line) {
             try {
               const parsedData = JSON.parse(line);
-              
+
               // Get the frontend window and send the JSON frame
               const targetWindow = getTargetWindow(event);
               if (targetWindow && !targetWindow.isDestroyed()) {
@@ -229,7 +229,7 @@ function createPipeServer(event) {
 
 // Unified process spawner for standard & stream runs
 function spawnIrisWorker(sessionId, args, cfgPath, tmpDir, event, pipeServer = null) {
-  let exePath = app.isPackaged 
+  let exePath = app.isPackaged
     ? path.join(process.resourcesPath, "app.asar.unpacked", "iris_runtime_bundle", "iris_cli.exe") // Fixed literal "exe file" bug here
     : IRIS_CLI_EXE;
 
@@ -272,7 +272,7 @@ function spawnIrisWorker(sessionId, args, cfgPath, tmpDir, event, pipeServer = n
       if (entry.tmpDir && fs.existsSync(entry.tmpDir)) {
         try { fs.rmSync(entry.tmpDir, { recursive: true, force: true }); } catch { }
       }
-      
+
       workers.delete(sessionId);
     };
 
@@ -301,14 +301,14 @@ function sendMockData(event) {
     if (targetWindow && !targetWindow.isDestroyed()) {
       targetWindow.webContents.send('iris-data', positions);
     }
-  } catch(err) {
+  } catch (err) {
     console.error("Failed to load mock data:", err);
   }
 }
 
 // ── Main IPC Registration ─────────────────────────────────────────────────────
 function registerIrisIpc() {
-  
+
   ipcMain.handle('start-iris', (event, options) => {
     const sessionId = crypto.randomUUID();
     if (!fs.existsSync(IRIS_CLI_EXE)) {
@@ -329,7 +329,7 @@ function registerIrisIpc() {
 
     const { tmpDir, cfgPath } = writeTempConfigFile(buildConfigFromOptions(options));
     const args = ["monitor", "--shm-name", 'iris_shm_ipc', '--pipe', PIPE_NAME, '--fps', '30'];
-    
+
     try {
       // Spin up the pipe server just before opening the stream
       const pipeServer = await createPipeServer(event);
@@ -389,15 +389,7 @@ function registerIrisIpc() {
     }
     return { ok: true };
   });
-
-  ipcMain.handle('calculate-intrinsics', async (event, index) => {
-    return handleCalibrationPTY('intrinsics', index, ['calculate-intrinsics', '--camera', String(index)], event, 25000);
-  });
-
-  ipcMain.handle('calculate-extrinsics', async (event, cameraIndices) => {
-    const cameraArg = Array.isArray(cameraIndices) ? cameraIndices.join(',') : String(cameraIndices);
-    return handleCalibrationPTY('extrinsics', null, ['calculate-extrinsics', '--cameras', cameraArg], event, 50000);
-  });
+ 
 
   // ── Monitor (Recording) Endpoints ───────────────────────────────────────────
   ipcMain.handle('start-monitor', async (event, outputDir) => {
@@ -455,7 +447,12 @@ function handleCalibrationPTY(type, index, args, event, timeoutMs) {
     }
   }
 
-  let child;
+  let exePath = IRIS_CLI_EXE
+
+
+  console.log(`[Intrinsics] spawning: ${exePath} ${args.join(' ')}`)
+
+  let child
   try {
     child = pty.spawn(IRIS_CLI_EXE, args, {
       name: 'xterm-color',
@@ -477,23 +474,27 @@ function handleCalibrationPTY(type, index, args, event, timeoutMs) {
     inactivityTimer = setTimeout(() => {
       if (completed) return;
       child.kill();
-      sendOutput(`[timeout] No new data for ${timeoutMs/1000}s — process killed.`);
+      sendOutput(`[timeout] No new data for ${timeoutMs / 1000}s — process killed.`);
       if (targetWindow && !targetWindow.isDestroyed()) {
         targetWindow.webContents.send(`${type}-complete`, { idx: index, path: "None", ok: false, error: 'timeout' });
       }
     }, timeoutMs);
   }
 
-  resetTimer();
-
+  resetTimer()
+  let bufferData = ""
   child.onData((data) => {
-    const str = data.toString();
-    str.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').forEach(line => {
-      if (line.trim()) { console.log(`[${type}] ${line.trim()}`); sendOutput(line.trim()); }
+    bufferData += data.toString().replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    const lines = bufferData.split('\n')
+    bufferData = lines.pop()
+    lines.forEach(line => {
+      if (line.trim()) {
+        console.log("[Intrinsics] " + line.trim());
+        sendOutput(line.trim());
+      }
     });
-
-    if (str.toLowerCase().includes("saved to:")) {
-      completed = true;
+    if (data.includes("Intrinsics saved to:")) {
+      completed = true
       clearTimeout(inactivityTimer);
       child.kill();
       const match = str.match(/saved to:\s*(.+)/i);
@@ -512,12 +513,203 @@ function handleCalibrationPTY(type, index, args, event, timeoutMs) {
     if (!completed) {
       completed = true;
       if (targetWindow && !targetWindow.isDestroyed()) {
-        targetWindow.webContents.send(`${type}-complete`, { idx: index, path: "None", ok: false });
+        targetWindow.webContents.send('intrinsics-complete', { idx: index, path: "None" })
+      }
+    }
+  })
+
+  return { ok: true }
+}
+
+
+function irisCameras(index) {
+  let exePath = IRIS_CLI_EXE
+  let args = ["show-cameras", "-v"]
+  const child = spawn(exePath, args, {
+    stdio: ['pipe', 'pipe', 'pipe'],
+  })
+
+  child.stdout.on('data', (d) => {
+    const data = d.toString().trim()
+
+    const ids = [...data.matchAll(/device_path: ([^}]+})\\global/gm)].map(m => m[1]);
+    console.log(data)
+    console.log(ids, index)
+  })
+}
+
+ipcMain.handle('calculate-intrinsics', async (event, index, rotation) => {
+  let inactivityTimer
+  let completed = false
+
+  const targetWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow();
+
+  function sendOutput(line) {
+    if (targetWindow && !targetWindow.isDestroyed()) {
+      targetWindow.webContents.send('iris-cli-output', { channel: 'intrinsics', cameraIndex: index, line });
+    }
+  }
+
+  let exePath = IRIS_CLI_EXE
+  let args = ["calculate-intrinsics", "--camera", String(index), "--rotate", String(rotation), ]
+
+  console.log(`[Intrinsics] spawning: ${exePath} ${args.join(' ')}`)
+
+  let child
+  try {
+    child = pty.spawn(exePath, args, {
+      name: 'xterm-color',
+      cols: 220,
+      rows: 30,
+      cwd: path.dirname(exePath),
+      env: process.env,
+    })
+    activeIntrinsicsChild = child
+  } catch (err) {
+    console.error('[Intrinsics] pty spawn error:', err)
+    sendOutput('[error] ' + err.message)
+    if (targetWindow && !targetWindow.isDestroyed()) {
+      targetWindow.webContents.send('intrinsics-complete', { idx: index, path: "None" })
+    }
+    return { ok: false }
+  }
+
+  function resetTimer() {
+    if (completed) return
+    clearTimeout(inactivityTimer);
+    inactivityTimer = setTimeout(() => {
+      if (completed) return
+      console.log("No new data for 25s. Killing process...");
+      child.kill();
+      sendOutput('[timeout] No new data for 25s — process killed.');
+      if (targetWindow && !targetWindow.isDestroyed()) {
+        targetWindow.webContents.send('intrinsics-complete', {idx: index, path: "None"});
+      }
+    }, 25000);
+  }
+
+  resetTimer()
+  let bufferData = ""
+  child.onData((data) => {
+    bufferData += data.toString().replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    const lines = bufferData.split('\n')
+    bufferData = lines.pop()
+    lines.forEach(line => {
+      if (line.trim()) {
+        console.log("[Intrinsics] " + line.trim());
+        sendOutput(line.trim()); 
+      } 
+    });
+    if (data.includes("Intrinsics saved to:")) {
+      completed = true
+      clearTimeout(inactivityTimer);
+      child.kill()
+      const match = data.match(/Intrinsics saved to:\s*(.+)/)
+      const savedPath = match ? match[1].trim() : "None"
+      if (targetWindow && !targetWindow.isDestroyed()) {
+        targetWindow.webContents.send('intrinsics-complete', {idx: index, path: savedPath});
+      }
+    } else {
+      resetTimer()
+    }
+  })
+
+  child.onExit(({ exitCode }) => {
+    clearTimeout(inactivityTimer)
+    activeIntrinsicsChild = null
+    console.log(`[Intrinsics] process exited with code ${exitCode}`)
+    if (!completed) {
+      completed = true
+      if (targetWindow && !targetWindow.isDestroyed()) {
+        targetWindow.webContents.send('intrinsics-complete', { idx: index, path: "None" })
+      }
+    }
+  })
+
+  return { ok: true }
+})
+
+ipcMain.handle('calculate-extrinsics', async (event, cameraIndices, rotation) => {
+  const exePath = IRIS_CLI_EXE
+  const cameraArg = Array.isArray(cameraIndices) ? cameraIndices.join(',') : String(cameraIndices)
+  const args = ['calculate-extrinsics', '--cameras', cameraArg, "--rotate", String(rotation),]
+
+  console.log(`[extrinsics] spawning: ${exePath} ${args.join(' ')}`)
+
+  const targetWindow = BrowserWindow.fromWebContents(event.sender) || BrowserWindow.getFocusedWindow()
+
+  function sendOutput(line) {
+    if (targetWindow && !targetWindow.isDestroyed()) {
+      targetWindow.webContents.send('iris-cli-output', { channel: 'extrinsics', line });
+    }
+  }
+
+  let child
+  try {
+    child = pty.spawn(exePath, args, {
+      name: 'xterm-color',
+      cols: 220,
+      rows: 30,
+      cwd: path.dirname(exePath),
+      env: process.env,
+    })
+    activeExtrinsicsChild = child
+  } catch (err) {
+    console.error('[extrinsics] pty spawn error:', err)
+    sendOutput('[error] ' + err.message)
+    if (targetWindow && !targetWindow.isDestroyed()) {
+      targetWindow.webContents.send('extrinsics-complete', { ok: false, error: err.message })
+    }
+    return { ok: false }
+  }
+
+  let inactivityTimer
+  let completed = false
+
+  function resetTimer() {
+    if (completed) return
+    clearTimeout(inactivityTimer)
+    inactivityTimer = setTimeout(() => {
+      if (completed) return
+      console.log('[extrinsics] no new data for 50s, killing process...')
+      child.kill()
+      sendOutput('[timeout] No new data for 50s — process killed.')
+      if (targetWindow && !targetWindow.isDestroyed()) {
+        targetWindow.webContents.send('extrinsics-complete', { ok: false, error: 'timeout' })
+      }
+    }, 50000)
+  }
+
+  resetTimer()
+
+  child.onData((data) => {
+    const lines = data.toString().replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+    lines.split('\n').forEach(line => { if (line.trim()) { console.log('[extrinsics] ' + line.trim()); sendOutput(line.trim()); } });
+    if (data.toLowerCase().includes('extrinsics saved') || data.toLowerCase().includes('saved to:')) {
+      completed = true
+      clearTimeout(inactivityTimer)
+      child.kill()
+      if (targetWindow && !targetWindow.isDestroyed()) {
+        targetWindow.webContents.send('extrinsics-complete', { ok: true, message: data })
+      }
+    } else {
+      resetTimer()
+    }
+  })
+
+  child.onExit(({ exitCode }) => {
+    clearTimeout(inactivityTimer)
+    activeExtrinsicsChild = null
+    console.log(`[extrinsics] process exited with code ${exitCode}`)
+    if (!completed) {
+      completed = true
+      if (targetWindow && !targetWindow.isDestroyed()) {
+        targetWindow.webContents.send('extrinsics-complete', { ok: false, error: `exited with code ${exitCode}` })
       }
     }
   });
 
   return { ok: true };
-}
+});
 
 module.exports = { registerIrisIpc, IRIS_CLI_EXE };

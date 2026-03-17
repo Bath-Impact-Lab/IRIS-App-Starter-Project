@@ -113,8 +113,23 @@
         </svg>
         {{ calibratingExtrinsics ? 'Calibrating…' : 'Calibrate Extrinsics' }}
       </button>
-      <button class="button btn" @click="onStartIris" :disabled="running">Start IRIS</button>
-      <button class="button btn" @click="onStopIris" :disabled="!running">Stop IRIS</button>
+      <div class="parent">
+        <button class="button btn grid1" @click="onStartIris" :disabled="running">Start IRIS</button>
+        <select 
+          v-model.number="irisFps" 
+          name="FPS" 
+          id="fps" 
+          class="button grid2" 
+          style="font-size: 13px; height: 33px; margin: 5px 0;"
+        >
+          <option>15</option>
+          <option>30</option>
+          <option>60</option>
+          <option>100</option>
+        </select>
+
+        <button class="button btn grid3" @click="onStopIris" :disabled="!running">Stop IRIS</button>
+      </div>
     </div>
   </div>
 
@@ -167,6 +182,9 @@ const calibratingIntrinsics = ref<Set<string>>(new Set());
 
 // Track which device/slot is currently being calibrated so we can restart it on cancel
 const intrinsicsCalibDevice = ref<{ device: MediaDeviceInfo; slotIndex: number } | null>(null)
+
+// ── Config Options ─────────────────────────────────────────────────────────────
+const irisFps = ref<number>(30)
 
 // ── Console modal ─────────────────────────────────────────────────────────────
 const consoleModal = reactive({
@@ -362,7 +380,7 @@ async function onCalibrateExtrinsics() {
   // Stop live streams so iris_cli.exe can access the cameras
   props.selectedCameras.forEach((_, i) => stopCameraStream(i));
 
-  await window.ipc?.calculateExtrinsics(cameraIndices);
+  await window.ipc?.calculateExtrinsics(cameraIndices, localCameraRotation.value[props.selectedCameras[0].deviceId]);
 }
 
 // ── IRIS engine ──────────────────────────────────────────────────────────────
@@ -384,7 +402,7 @@ async function onStartIris() {
     cameras,
     camera_width: 1920,
     camera_height: 1080,
-    video_fps: 100,
+    video_fps: irisFps.value,
     output_dir: '',
     stream: true,
   };
@@ -567,5 +585,32 @@ window.ipc?.extrinsicsComplete((data: { ok: boolean; message?: string; error?: s
   flex-shrink: 0;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+
+.parent {
+  margin: 0 auto;
+  width: 190.5px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  column-gap: 10px;
+  /* row-gap: 5px; */
+}
+    
+.grid1 {
+  grid-column: span 2 / span 2;
+  grid-column-start: 2;
+}
+
+.grid2 {
+  grid-column-start: 4;
+}
+
+.grid3 {
+  grid-column: span 2 / span 2;
+  grid-column-start: 2;
+  grid-row-start: 2;
+}
+        
 </style>
 

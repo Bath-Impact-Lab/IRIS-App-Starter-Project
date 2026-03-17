@@ -47,6 +47,8 @@ let spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMateri
 let skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null = props.skeletonLine;
 const position = new THREE.Object3D()
 
+let avatarRoot: THREE.Object3D | null = null;
+
 const manager = new THREE.LoadingManager();
 let mixer: THREE.AnimationMixer[] | null;
 

@@ -28,7 +28,7 @@ interface Window {
     calculateIntrinsics: (index: number, rotation: number) => Promise<{ok: boolean, path?: string}>;
     cancelIntrinsics: () => Promise<{ok: boolean}>;
     intrinsicsComplete: (callback: (data: {idx: number, path: string}) => void) => void;
-    calculateExtrinsics: (cameraIndices: number[]) => Promise<{ok: boolean}>;
+    calculateExtrinsics: (cameraIndices: number[], rotation: number) => Promise<{ok: boolean}>;
     cancelExtrinsics: () => Promise<{ok: boolean}>;
     extrinsicsComplete: (callback: (data: {ok: boolean, message?: string, error?: string}) => void) => void;
     startMonitor: (outputDir: string) => Promise<{ok: boolean, outputDir?: string, error?: string}>;
