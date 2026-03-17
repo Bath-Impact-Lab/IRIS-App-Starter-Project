@@ -38,6 +38,10 @@ contextBridge.exposeInMainWorld('ipc', {
   fsRenameRecording: (oldPath, newName) => ipcRenderer.invoke('fs-rename-recording', oldPath, newName),
   fsGetRecordingData: (recordingPath) => ipcRenderer.invoke('fs-get-recording-data', recordingPath),
   fsGetVideoUrl: (filePath) => ipcRenderer.invoke('fs-get-video-url', filePath),
+
+  connectVR: () => ipcRenderer.invoke('connect-VR'),
+  updatePos: (val) => ipcRenderer.invoke('update-pos', val),
+  disconnectVR: () => ipcRenderer.invoke('disconnect-VR'),
 })
 
 contextBridge.exposeInMainWorld('electronAPI', {

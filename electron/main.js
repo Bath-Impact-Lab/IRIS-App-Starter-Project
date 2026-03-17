@@ -4,6 +4,7 @@ const { MOCK_EXTRINSICS } = require('./mockExtrinsics');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { spawn, execFile, exec } = require('child_process')
 
 
 let mainWindow;
@@ -203,7 +204,7 @@ ipcMain.handle('fs-rename-recording', async (event, oldPath, newName) => {
 // - The frontend should clear mock camera gizmos when real cameras connect.
 ipcMain.handle('get-extrinsics', (event) => {
     const runtimeExists = fs.existsSync(
-        path.join(__dirname, '..', 'iris_runtime_bundle', 'exe file')
+        path.join(__dirname, '..', 'IRIS', 'bin', 'iris_cli.exe')
     );
 
     // Mock mode — return the bundled mock extrinsics
@@ -213,7 +214,7 @@ ipcMain.handle('get-extrinsics', (event) => {
     }
 
     // Real runtime — read live calibration file
-    const extrinsicsPath = path.join(os.homedir(), 'AppData', 'Local', 'IRIS', 'extrinsics 1.json');
+    const extrinsicsPath = path.join(os.homedir(), 'AppData', 'Local', 'IRIS', 'calibration_output', 'extrinsics.json');
     try {
         if (!fs.existsSync(extrinsicsPath)) {
             console.warn(`[extrinsics] file not found: ${extrinsicsPath}`);
@@ -226,3 +227,31 @@ ipcMain.handle('get-extrinsics', (event) => {
         return null;
     }
 });
+
+
+// connecting to steamVR/VRchat
+ipcMain.handle('connect-VR', (event) => {
+    //file path of connector
+    const irisToVr = path.join(__dirname, "..", "IRIStoVRChat", "rust.exe")
+    console.log(irisToVr)
+    const child = spawn(irisToVr, {
+        stdio: ['pipe',  'pipe', 'pipe']
+    }) 
+
+    child.stdout.on('data', (d) => {
+        console.log(d.toString().trim())
+    })
+
+    child.stderr.on('data', (d) => {
+        console.log(d.toString().trim())
+    })
+
+    ipcMain.handle('update-pos', (event, val) => {
+        child.stdin.write(val + "\n")
+    })
+
+    ipcMain.handle('disconnect-VR', (event) => {
+
+        child.stdin.write("stop" + "\n")
+    })
+})
