@@ -48,7 +48,7 @@ function buildConfigFromOptions(opts = {}) {
     capture: cameras.map((c, index) => ({
       name: `cap${index}`,
       params: {
-        camera_id: index,
+        camera_id: parseInt(c.uri),
         width: c.width,
         height: c.height,
         rotate: c.rotation,
@@ -57,7 +57,7 @@ function buildConfigFromOptions(opts = {}) {
         use_camera: true,
         device_id: 0,
         batching: true,
-        batch_cameras: cameras.map((_, idx) => idx),
+        batch_cameras: cameras.map(cam => parseInt(cam.uri)),
       },
     })),
     detection: {
@@ -106,7 +106,7 @@ function buildConfigFromOptions(opts = {}) {
         pose_sources: 'pose0',
         calibration_dir: 'calibration_output',
         extrinsics_file: 'calibration_output/extrinsics.json',
-        camera_ids: [0, 1, 2, 3],
+        camera_ids: cameras.map(c => parseInt(c.uri)),
         compute_reprojection: true,
         store_reprojection_error: true,
         gate_by_reprojection_error: true,

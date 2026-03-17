@@ -309,8 +309,10 @@ async function onCalibrateExtrinsics() {
 async function onStartIris() {
   if (!selectedCameras.value) return;
 
-  const cameras = selectedCameras.value.map((device, index) => ({
-    uri: String(index),
+  const allCameras = (await navigator.mediaDevices.enumerateDevices()).filter((e) => e.kind === 'videoinput');
+
+  const cameras = selectedCameras.value.map((device) => ({
+    uri: String(allCameras.findIndex((e) => e.deviceId === device.deviceId)),
     width: 1920,
     height: 1080,
     fps: 100,
