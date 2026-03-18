@@ -285,7 +285,7 @@ function renderIRISData(poseInfo: IrisData) {
         spheresMesh = new THREE.InstancedMesh(
           sphereGeometry,
           material,
-          keypoints.length + person.skeleton.joint_centers.length,
+          keypoints.length + person.joint_centers.length,
         );
         scene.add(spheresMesh);
 
@@ -361,7 +361,7 @@ function renderIRISData(poseInfo: IrisData) {
         alignBoneFromBindPose('hip_l', person.joint_centers[12], person.joint_centers[14]);
         alignBoneFromBindPose('knee_l', person.joint_centers[14], person.joint_centers[16]);
 
-        skeletonHelper?.update();
+        // skeletonHelper?.update();
       }
     });
   } catch (err) {

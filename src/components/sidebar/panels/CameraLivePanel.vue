@@ -123,22 +123,11 @@
       </div>
     </div>
   </div>
-
-  <Teleport to="body">
-    <ConsoleModal
-      :show="consoleModal.show"
-      :title="consoleModal.title"
-      :lines="consoleModal.lines"
-      :status="consoleModal.status"
-      :can-close="consoleModal.canClose"
-      @close="closeConsoleModal"
-    />
-  </Teleport>
+ 
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue';
-import ConsoleModal from '../../ConsoleModal.vue';
+import { onMounted, reactive, ref, watch } from 'vue'; 
 import { deviceShortCode, applyCameraRotation } from '../useCameraFeedUtils';
 import { useCameraStore } from '../../../stores/useCameraStore';
 import { useIrisStore } from '../../../stores/useIrisStore';
@@ -162,41 +151,12 @@ const calibratingExtrinsics = ref(false);
 const calibratingIntrinsics = ref<Set<string>>(new Set());
 const intrinsicsCalibDevice = ref<{ device: MediaDeviceInfo; slotIndex: number } | null>(null);
 const irisFps = ref(30);
-
-const consoleModal = reactive({
-  show: false,
-  title: '',
-  lines: [] as string[],
-  status: 'idle' as 'idle' | 'running' | 'success' | 'error',
-  canClose: false,
-});
+ 
 
 const deviceColour = ref<Record<string, string>>({});
 const dragSourceIndex = ref<number | null>(null);
 const dragOverIndex = ref<number | null>(null);
-const dragEnterCounters = ref<Record<number, number>>({});
-
-async function closeConsoleModal() {
-  if (consoleModal.status === 'running') {
-    if (consoleModal.title.startsWith('Calibrate Intrinsics')) {
-      await window.ipc?.cancelIntrinsics();
-      if (intrinsicsCalibDevice.value) {
-        const { device, slotIndex } = intrinsicsCalibDevice.value;
-        await startCameraStream(device, slotIndex);
-        const next = new Set(calibratingIntrinsics.value);
-        next.delete(device.deviceId);
-        calibratingIntrinsics.value = next;
-        intrinsicsCalibDevice.value = null;
-      }
-    } else if (consoleModal.title.startsWith('Calibrate Extrinsics')) {
-      await window.ipc?.cancelExtrinsics();
-      await Promise.all((selectedCameras.value ?? []).map((device, index) => startCameraStream(device, index)));
-      calibratingExtrinsics.value = false;
-    }
-  }
-
-  consoleModal.show = false;
-}
+const dragEnterCounters = ref<Record<number, number>>({}); 
 
 function syncDeviceColours() {
   (selectedCameras.value ?? []).forEach((camera, index) => {
@@ -263,13 +223,7 @@ async function onCalibrateIntrinsics(device: MediaDeviceInfo) {
 
   const cameras = (await navigator.mediaDevices.enumerateDevices()).filter((entry) => entry.kind === 'videoinput');
   const cameraIndex = cameras.findIndex((entry) => entry.deviceId === device.deviceId);
-
-  consoleModal.title = `Calibrate Intrinsics — Camera ${cameraIndex}`;
-  consoleModal.lines = [`Starting intrinsics calibration for camera ${cameraIndex}…`];
-  consoleModal.status = 'running';
-  consoleModal.canClose = false;
-  consoleModal.show = true;
-
+ 
   const slotIndex = selectedCameras.value?.findIndex((entry) => entry.deviceId === device.deviceId) ?? -1;
   intrinsicsCalibDevice.value = { device, slotIndex };
   if (slotIndex >= 0) {
@@ -288,13 +242,7 @@ async function onCalibrateExtrinsics() {
   const cameraIndices = selectedCameras.value.map((device) => {
     const index = allCameras.findIndex((entry) => entry.deviceId === device.deviceId);
     return index >= 0 ? index : 0;
-  });
-
-  consoleModal.title = `Calibrate Extrinsics — Cameras [${cameraIndices.join(', ')}]`;
-  consoleModal.lines = [`Starting extrinsics calibration for cameras [${cameraIndices.join(', ')}]…`];
-  consoleModal.status = 'running';
-  consoleModal.canClose = false;
-  consoleModal.show = true;
+  }); 
 
   selectedCameras.value.forEach((_, index) => {
     stopCameraStream(index);
@@ -335,7 +283,7 @@ async function onStartIris() {
   });
 
   setRunning(true);
-  await window.ipc?.startIRIS(options);
+  // await window.ipc?.startIRIS(options);
   if (options.stream) {
     await window.ipc?.startIRISStream?.(options);
   }
@@ -351,22 +299,6 @@ async function onStopIris() {
 
 onMounted(() => {
   void refreshStreams();
-
-  window.ipc?.onIrisCliOutput((data: { channel: string; cameraIndex?: number; line: string }) => {
-    const expectedTitle = data.channel === 'intrinsics'
-      ? `Calibrate Intrinsics — Camera ${data.cameraIndex}`
-      : 'Calibrate Extrinsics';
-
-    if (!consoleModal.show || consoleModal.title !== expectedTitle) {
-      consoleModal.title = expectedTitle;
-      consoleModal.lines = [];
-      consoleModal.status = 'running';
-      consoleModal.canClose = false;
-      consoleModal.show = true;
-    }
-
-    consoleModal.lines.push(data.line);
-  });
 });
 
 watch(selectedCameras, syncDeviceColours, { immediate: true, deep: true });
@@ -382,14 +314,7 @@ window.ipc?.intrinsicsComplete((data: { idx: number; path: string }) => {
   intrinsicsCalibDevice.value = null;
 
   const succeeded = data.path && data.path !== 'None';
-  if (consoleModal.show) {
-    consoleModal.status = succeeded ? 'success' : 'error';
-    consoleModal.canClose = true;
-    consoleModal.lines.push(
-      succeeded ? `✓ Intrinsics saved to: ${data.path}` : '✗ Calibration timed out or failed.',
-    );
-  }
-
+   
   const selectedIndex = selectedDeviceIds.value?.indexOf(device.deviceId) ?? -1;
   if (selectedIndex >= 0) {
     void startCameraStream(device, selectedIndex);
@@ -400,17 +325,7 @@ window.ipc?.extrinsicsComplete((data: { ok: boolean; message?: string; error?: s
   calibratingExtrinsics.value = false;
   (selectedCameras.value ?? []).forEach((device, index) => {
     void startCameraStream(device, index);
-  });
-
-  if (consoleModal.show) {
-    consoleModal.status = data.ok ? 'success' : 'error';
-    consoleModal.canClose = true;
-    consoleModal.lines.push(
-      data.ok
-        ? `✓ ${data.message ?? 'Extrinsics calibration complete.'}`
-        : `✗ ${data.error ?? 'Calibration failed or timed out.'}`,
-    );
-  }
+  }); 
 
   if (data.ok) {
     console.log('[extrinsics] calibration complete:', data.message);
