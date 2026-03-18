@@ -4,9 +4,10 @@ const fs = require('fs');
 const path = require('path');
 const { spawn, execFile } = require('child_process');
 const { promisify } = require('util');
-const { PIPE_NAME, buildConfigFromOptions, getIrisCliPath } = require('./config');
+const { buildConfigFromOptions, getIrisCliPath } = require('./config');
 const { writeTempConfigFile } = require('./utils');
 const { createPipeServer } = require('./pipeServer');
+const { VideoStreamer } = require('./videoStreamer');
 
 const execFileAsync = promisify(execFile);
 
@@ -30,6 +31,11 @@ function waitForChildExit(child, timeoutMs = 2000) {
     child.once('exit', finish);
     child.once('close', finish);
   });
+}
+
+function buildPipeName(prefix, sessionId) {
+  const safeSessionId = String(sessionId).replace(/[^a-zA-Z0-9_-]/g, '_');
+  return `\\\\.\\pipe\\${prefix}_${safeSessionId}`;
 }
 
 class ProcessManager {
@@ -68,13 +74,25 @@ class ProcessManager {
     }
 
     const { tmpDir, cfgPath } = writeTempConfigFile(buildConfigFromOptions(options));
-    const args = ['monitor', '--shm-name', 'iris_shm_ipc', '--pipe', PIPE_NAME, '--fps', '30'];
+    const posePipeName = buildPipeName('iris_pose', sessionId);
+    const videoPipeName = buildPipeName('iris_video', sessionId);
+    const videoStreamer = new VideoStreamer();
+    let pipeServer = null;
 
     try {
-      const pipeServer = await createPipeServer({
-        pipeName: PIPE_NAME,
+      pipeServer = await createPipeServer({
+        pipeName: posePipeName,
         onFrame,
       });
+
+      const wsPort = await videoStreamer.start(videoPipeName);
+      const args = [
+        'monitor',
+        '--shm-name', 'iris_shm_ipc',
+        '--pipe', posePipeName,
+        '--video-pipe', videoPipeName,
+        '--fps', '30',
+      ];
 
       return this.spawnWorker({
         sessionId,
@@ -82,10 +100,16 @@ class ProcessManager {
         cfgPath,
         tmpDir,
         pipeServer,
+        videoStreamer,
+        wsUrl: `ws://127.0.0.1:${wsPort}`,
         onStdout: (data) => onCliOutput({ channel: 'stdout', line: data.toString() }),
       });
     } catch (err) {
-      console.error('Failed to start pipe server', err);
+      console.error('Failed to start stream servers', err);
+      if (pipeServer) {
+        pipeServer.close();
+      }
+      await videoStreamer.stop();
       if (fs.existsSync(tmpDir)) {
         try {
           fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -93,7 +117,7 @@ class ProcessManager {
           // Best-effort cleanup.
         }
       }
-      return { ok: false, error: 'Pipe server failed to start' };
+      return { ok: false, error: 'Stream servers failed to start' };
     }
   }
 
@@ -206,7 +230,7 @@ class ProcessManager {
     return true;
   }
 
-  spawnWorker({ sessionId, args, cfgPath, tmpDir, onStdout, pipeServer = null }) {
+  spawnWorker({ sessionId, args, cfgPath, tmpDir, onStdout, pipeServer = null, videoStreamer = null, wsUrl = null }) {
     const exePath = this.getExecutablePath();
 
     try {
@@ -225,7 +249,7 @@ class ProcessManager {
       child.stderr.on('data', (data) => console.log(`[iris:${sessionId}] stderr: ${data.toString().trim()}`));
       child.on('error', (err) => console.error(`[iris:${sessionId}] PROCESS ERROR`, err));
 
-      this.workers.set(sessionId, { child, tmpDir, cfgPath, pipeServer });
+      this.workers.set(sessionId, { child, tmpDir, cfgPath, pipeServer, videoStreamer, wsUrl });
 
       let cleanedUp = false;
       const cleanup = () => {
@@ -242,6 +266,9 @@ class ProcessManager {
         console.log(`[iris:${sessionId}] cleanup triggered`);
         if (currentEntry.pipeServer) {
           currentEntry.pipeServer.close(() => console.log(`[iris:${sessionId}] pipe server closed`));
+        }
+        if (currentEntry.videoStreamer) {
+          void currentEntry.videoStreamer.stop();
         }
 
         if (currentEntry.tmpDir && fs.existsSync(currentEntry.tmpDir)) {
@@ -265,11 +292,14 @@ class ProcessManager {
         cleanup();
       });
 
-      return { ok: true, sessionId, configPath: cfgPath, pipeStarted: Boolean(pipeServer) };
+      return { ok: true, sessionId, configPath: cfgPath, pipeStarted: Boolean(pipeServer), wsUrl };
     } catch (error) {
       console.error('Failed to start IRIS process:', error);
       if (pipeServer) {
         pipeServer.close();
+      }
+      if (videoStreamer) {
+        void videoStreamer.stop();
       }
       return { ok: false, error: error.message };
     }

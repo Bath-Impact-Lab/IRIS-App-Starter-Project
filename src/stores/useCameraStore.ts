@@ -72,7 +72,9 @@ function stopCameraStream(index: number) {
       track.stop();
     });
 
-    video.srcObject = null;
+    if (video) {
+      video.srcObject = null;
+    }
   } catch {
     console.log('Cameras are gone');
   }

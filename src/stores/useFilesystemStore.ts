@@ -253,13 +253,11 @@ watch(fsSelectedRecording, async (recording) => {
     const files = data.videoFiles as RecordingVideoFile[];
     cameraStore.attachPlaybackDevices(files);
 
-    if (window.ipc.fsGetVideoUrl) {
-      const urls: (string | null)[] = new Array(files.length).fill(null);
-      await Promise.all(files.map(async (file) => {
-        urls[file.index] = await window.ipc!.fsGetVideoUrl(file.path);
-      }));
-      cameraStore.setPlaybackVideoUrls(urls);
-    }
+    const urls: (string | null)[] = new Array(files.length).fill(null);
+    await Promise.all(files.map(async (file) => {
+      urls[file.index] = await window.ipc!.fsGetVideoUrl(file.path);
+    }));
+    cameraStore.setPlaybackVideoUrls(urls);
   }
 });
 

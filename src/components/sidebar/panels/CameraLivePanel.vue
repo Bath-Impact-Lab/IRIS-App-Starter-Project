@@ -1,78 +1,95 @@
 <template>
   <div class="panel-root">
     <div class="cameras">
-      <div
-        v-for="(camera, index) in selectedCameras ?? []"
-        :key="camera.deviceId"
-        style="width: 100%;"
-        draggable="true"
-        :class="['drag-item', { 'drag-over': dragOverIndex === index, dragging: dragSourceIndex === index }]"
-        @dragstart="onDragStart(index)"
-        @dragenter.prevent="onDragEnter(index)"
-        @dragover.prevent
-        @dragleave="onDragLeave(index)"
-        @drop.prevent="onDrop(index)"
-        @dragend="onDragEnd"
-      >
-        <div
-          class="camera-list"
-          :style="{
-            width: '100%',
-            boxShadow: deviceColour[camera.deviceId] ? `inset 4px 0 0 ${deviceColour[camera.deviceId]}` : 'none',
-            paddingLeft: deviceColour[camera.deviceId] ? '8px' : '0',
-          }"
-        >
-          <div class="camera-text">
-            <span class="drag-handle" title="Drag to reorder">⠿</span>
-            {{ camera.label ? camera.label.split(' ')[0] + ' ' : '' }}{{ deviceShortCode(camera.deviceId) }}
-            <button class="button btn" style="padding: 3px 5px;" @click="rotateCamera(camera, index)" :disabled="running">
-              <img style="width: 30px;" src="/assets/anticlockwise-2-line.svg" alt="" />
-            </button>
-          </div>
-
-          <div :id="`camera-box${index}`">
-            <video
-              style="width: 100%;"
-              :id="`cameraFeed${index}`"
-              autoplay
-              playsinline
-              muted
-            />
-          </div>
-
-          <div>
-            <button
-              class="button btn calibrate-intrinsics-btn"
-              style="margin-top: 5px;"
-              @click="onCalibrateIntrinsics(camera)"
-              :disabled="running || calibratingIntrinsics.has(camera.deviceId)"
-              title="Hold ArUco marker in front of this camera, then click"
-            >
-              <span v-if="calibratingIntrinsics.has(camera.deviceId)" class="calib-spinner"></span>
-              <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0; align-self:center; display:block;">
-                <rect x="2" y="2" width="20" height="20" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
-                <rect x="4" y="4" width="6" height="6" fill="currentColor" rx="0.5"/>
-                <rect x="5" y="5" width="4" height="4" fill="var(--sidebar, #111)" rx="0.3"/>
-                <rect x="6" y="6" width="2" height="2" fill="currentColor"/>
-                <rect x="14" y="4" width="6" height="6" fill="currentColor" rx="0.5"/>
-                <rect x="15" y="5" width="4" height="4" fill="var(--sidebar, #111)" rx="0.3"/>
-                <rect x="16" y="6" width="2" height="2" fill="currentColor"/>
-                <rect x="4" y="14" width="6" height="6" fill="currentColor" rx="0.5"/>
-                <rect x="5" y="15" width="4" height="4" fill="var(--sidebar, #111)" rx="0.3"/>
-                <rect x="6" y="16" width="2" height="2" fill="currentColor"/>
-                <rect x="11" y="4" width="2" height="2" fill="currentColor"/>
-                <rect x="14" y="11" width="2" height="2" fill="currentColor"/>
-                <rect x="11" y="11" width="2" height="2" fill="currentColor"/>
-                <rect x="11" y="14" width="2" height="2" fill="currentColor"/>
-                <rect x="14" y="17" width="2" height="2" fill="currentColor"/>
-                <rect x="17" y="11" width="2" height="2" fill="currentColor"/>
-                <rect x="17" y="14" width="2" height="2" fill="currentColor"/>
-              </svg>
-              {{ calibratingIntrinsics.has(camera.deviceId) ? 'Calibrating…' : 'Calibrate Intrinsics' }}
-            </button>
-          </div>
+      <div v-if="running" class="stream-preview">
+        <div class="camera-text stream-preview-title">IRIS Live Stream</div>
+        <video
+          ref="liveStreamVideoRef"
+          class="stream-video"
+          autoplay
+          playsinline
+          muted
+          @click="onLiveStreamVideoClick"
+        />
+        <div v-if="liveStreamStatus" class="stream-status">
+          {{ liveStreamStatus }}
         </div>
       </div>
+
+      <template v-else>
+        <div
+          v-for="(camera, index) in selectedCameras ?? []"
+          :key="camera.deviceId"
+          style="width: 100%;"
+          draggable="true"
+          :class="['drag-item', { 'drag-over': dragOverIndex === index, dragging: dragSourceIndex === index }]"
+          @dragstart="onDragStart(index)"
+          @dragenter.prevent="onDragEnter(index)"
+          @dragover.prevent
+          @dragleave="onDragLeave(index)"
+          @drop.prevent="onDrop(index)"
+          @dragend="onDragEnd"
+        >
+          <div
+            class="camera-list"
+            :style="{
+              width: '100%',
+              boxShadow: deviceColour[camera.deviceId] ? `inset 4px 0 0 ${deviceColour[camera.deviceId]}` : 'none',
+              paddingLeft: deviceColour[camera.deviceId] ? '8px' : '0',
+            }"
+          >
+            <div class="camera-text">
+              <span class="drag-handle" title="Drag to reorder">⠿</span>
+              {{ camera.label ? camera.label.split(' ')[0] + ' ' : '' }}{{ deviceShortCode(camera.deviceId) }}
+              <button class="button btn" style="padding: 3px 5px;" @click="rotateCamera(camera, index)" :disabled="running">
+                <img style="width: 30px;" src="/assets/anticlockwise-2-line.svg" alt="" />
+              </button>
+            </div>
+
+            <div :id="`camera-box${index}`">
+              <video
+                style="width: 100%;"
+                :id="`cameraFeed${index}`"
+                autoplay
+                playsinline
+                muted
+              />
+            </div>
+
+            <div>
+              <button
+                class="button btn calibrate-intrinsics-btn"
+                style="margin-top: 5px;"
+                @click="onCalibrateIntrinsics(camera)"
+                :disabled="running || calibratingIntrinsics.has(camera.deviceId)"
+                title="Hold ArUco marker in front of this camera, then click"
+              >
+                <span v-if="calibratingIntrinsics.has(camera.deviceId)" class="calib-spinner"></span>
+                <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0; align-self:center; display:block;">
+                  <rect x="2" y="2" width="20" height="20" rx="1.5" stroke="currentColor" stroke-width="1.5" fill="none"/>
+                  <rect x="4" y="4" width="6" height="6" fill="currentColor" rx="0.5"/>
+                  <rect x="5" y="5" width="4" height="4" fill="var(--sidebar, #111)" rx="0.3"/>
+                  <rect x="6" y="6" width="2" height="2" fill="currentColor"/>
+                  <rect x="14" y="4" width="6" height="6" fill="currentColor" rx="0.5"/>
+                  <rect x="15" y="5" width="4" height="4" fill="var(--sidebar, #111)" rx="0.3"/>
+                  <rect x="16" y="6" width="2" height="2" fill="currentColor"/>
+                  <rect x="4" y="14" width="6" height="6" fill="currentColor" rx="0.5"/>
+                  <rect x="5" y="15" width="4" height="4" fill="var(--sidebar, #111)" rx="0.3"/>
+                  <rect x="6" y="16" width="2" height="2" fill="currentColor"/>
+                  <rect x="11" y="4" width="2" height="2" fill="currentColor"/>
+                  <rect x="14" y="11" width="2" height="2" fill="currentColor"/>
+                  <rect x="11" y="11" width="2" height="2" fill="currentColor"/>
+                  <rect x="11" y="14" width="2" height="2" fill="currentColor"/>
+                  <rect x="14" y="17" width="2" height="2" fill="currentColor"/>
+                  <rect x="17" y="11" width="2" height="2" fill="currentColor"/>
+                  <rect x="17" y="14" width="2" height="2" fill="currentColor"/>
+                </svg>
+                {{ calibratingIntrinsics.has(camera.deviceId) ? 'Calibrating…' : 'Calibrate Intrinsics' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </template>
     </div>
 
     <div class="iris-controls">
@@ -127,7 +144,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref, watch } from 'vue'; 
+import mpegts from 'mpegts.js';
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { deviceShortCode, applyCameraRotation } from '../useCameraFeedUtils';
 import { useCameraStore } from '../../../stores/useCameraStore';
 import { useIrisStore } from '../../../stores/useIrisStore';
@@ -151,12 +169,117 @@ const calibratingExtrinsics = ref(false);
 const calibratingIntrinsics = ref<Set<string>>(new Set());
 const intrinsicsCalibDevice = ref<{ device: MediaDeviceInfo; slotIndex: number } | null>(null);
 const irisFps = ref(30);
- 
+const liveStreamVideoRef = ref<HTMLVideoElement | null>(null);
+const liveStreamSessionId = ref<string | null>(null);
+const liveStreamUrl = ref<string | null>(null);
+const liveStreamStatus = ref<string | null>(null);
+
+let livePlayer: ReturnType<typeof mpegts.createPlayer> | null = null;
 
 const deviceColour = ref<Record<string, string>>({});
 const dragSourceIndex = ref<number | null>(null);
 const dragOverIndex = ref<number | null>(null);
 const dragEnterCounters = ref<Record<number, number>>({}); 
+
+function destroyLiveStreamPlayer() {
+  if (!livePlayer) return;
+
+  try {
+    livePlayer.pause();
+  } catch {
+    // Ignore pause failures during teardown.
+  }
+
+  try {
+    livePlayer.unload();
+  } catch {
+    // Ignore unload failures during teardown.
+  }
+
+  try {
+    livePlayer.detachMediaElement();
+  } catch {
+    // Ignore detach failures during teardown.
+  }
+
+  try {
+    livePlayer.destroy();
+  } catch {
+    // Ignore destroy failures during teardown.
+  }
+
+  livePlayer = null;
+}
+
+function clearLiveStreamState() {
+  liveStreamSessionId.value = null;
+  liveStreamUrl.value = null;
+  liveStreamStatus.value = null;
+}
+
+async function attachLiveStream(url: string) {
+  destroyLiveStreamPlayer();
+  liveStreamStatus.value = 'Connecting live video feed...';
+
+  await nextTick();
+
+  const videoElement = liveStreamVideoRef.value;
+  if (!videoElement) {
+    liveStreamStatus.value = 'Live video element is unavailable.';
+    return;
+  }
+
+  if (!mpegts.isSupported() || !mpegts.getFeatureList().mseLivePlayback) {
+    liveStreamStatus.value = 'This device does not support MPEG-TS live playback.';
+    return;
+  }
+
+  livePlayer = mpegts.createPlayer(
+    {
+      type: 'mse',
+      isLive: true,
+      hasAudio: false,
+      hasVideo: true,
+      url,
+    },
+    {
+      enableStashBuffer: false,
+      liveSync: true,
+      liveSyncMaxLatency: 1.5,
+      liveSyncTargetLatency: 0.8,
+    },
+  );
+
+  livePlayer.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string) => {
+    liveStreamStatus.value = `Live video error: ${errorType} (${errorDetail})`;
+  });
+
+  livePlayer.on(mpegts.Events.MEDIA_INFO, () => {
+    liveStreamStatus.value = null;
+  });
+
+  livePlayer.attachMediaElement(videoElement);
+  livePlayer.load();
+
+  try {
+    await Promise.resolve(livePlayer.play());
+    liveStreamStatus.value = 'Waiting for live video frames...';
+  } catch (err) {
+    console.warn('[iris] live stream autoplay blocked', err);
+    liveStreamStatus.value = 'Click the video area to start playback.';
+  }
+}
+
+async function onLiveStreamVideoClick() {
+  if (!livePlayer) return;
+
+  try {
+    await Promise.resolve(livePlayer.play());
+    liveStreamStatus.value = null;
+  } catch (err) {
+    console.warn('[iris] live stream play failed', err);
+  }
+}
 
 function syncDeviceColours() {
   (selectedCameras.value ?? []).forEach((camera, index) => {
@@ -255,7 +378,7 @@ async function onCalibrateExtrinsics() {
 }
 
 async function onStartIris() {
-  if (!selectedCameras.value) return;
+  if (!selectedCameras.value || running.value) return;
 
   const allCameras = (await navigator.mediaDevices.enumerateDevices()).filter((e) => e.kind === 'videoinput');
 
@@ -283,15 +406,47 @@ async function onStartIris() {
   });
 
   setRunning(true);
-  // await window.ipc?.startIRIS(options);
-  if (options.stream) {
-    await window.ipc?.startIRISStream?.(options);
+  liveStreamStatus.value = 'Starting IRIS...';
+
+  try {
+    if (!options.stream) {
+      return;
+    }
+
+    const response = await window.ipc?.startIRISStream?.(options);
+
+    if (!response?.ok) {
+      console.warn('[iris] failed to start live stream:', response?.error);
+      setRunning(false);
+      clearLiveStreamState();
+      await Promise.all((selectedCameras.value ?? []).map((device, index) => startCameraStream(device, index)));
+      return;
+    }
+
+    liveStreamSessionId.value = response.sessionId ?? null;
+    liveStreamUrl.value = response.wsUrl ?? null;
+
+    if (response.wsUrl) {
+      await attachLiveStream(response.wsUrl);
+    } else {
+      liveStreamStatus.value = 'Pose streaming is active, but no live video URL was returned.';
+    }
+  } catch (err) {
+    console.error('[iris] failed to start stream', err);
+    setRunning(false);
+    destroyLiveStreamPlayer();
+    clearLiveStreamState();
+    await Promise.all((selectedCameras.value ?? []).map((device, index) => startCameraStream(device, index)));
   }
 }
 
 async function onStopIris() {
+  const sessionId = liveStreamSessionId.value;
+
+  destroyLiveStreamPlayer();
+  clearLiveStreamState();
   setRunning(false);
-  await window.ipc?.stopIRIS('example');
+  await window.ipc?.stopIRIS(sessionId);
 
   await Promise.all((selectedCameras.value ?? []).map((device, index) => startCameraStream(device, index)));
   setIrisData(null);
@@ -299,6 +454,14 @@ async function onStopIris() {
 
 onMounted(() => {
   void refreshStreams();
+});
+
+onBeforeUnmount(() => {
+  destroyLiveStreamPlayer();
+
+  if (liveStreamSessionId.value) {
+    void window.ipc?.stopIRIS(liveStreamSessionId.value);
+  }
 });
 
 watch(selectedCameras, syncDeviceColours, { immediate: true, deep: true });
@@ -363,6 +526,31 @@ window.ipc?.extrinsicsComplete((data: { ok: boolean; message?: string; error?: s
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 10px;
   margin: 5px 0;
+}
+
+.stream-preview {
+  padding: 8px;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  margin: 5px 0;
+}
+
+.stream-preview-title {
+  justify-content: flex-start;
+}
+
+.stream-video {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.35);
+  object-fit: contain;
+}
+
+.stream-status {
+  margin-top: 8px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.65);
 }
 
 .camera-text {

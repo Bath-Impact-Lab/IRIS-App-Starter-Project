@@ -19,9 +19,11 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.97.0",
     "dotenv": "^17.3.1",
+    "mpegts.js": "^1.8.0",
     "node-pty": "^1.1.0",
     "three": "0.169.0",
-    "vue": "3.5.10"
+    "vue": "3.5.10",
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "@electron/notarize": "^2.3.0",

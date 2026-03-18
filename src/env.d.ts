@@ -38,14 +38,23 @@ interface IrisData {
   entities?: IrisEntity[];
 }
 
+interface IrisStartResult {
+  ok: boolean;
+  error?: string;
+  sessionId?: string;
+  configPath?: string;
+  pipeStarted?: boolean;
+  wsUrl?: string;
+}
+
 interface Window {
   electronAPI?: {
     openExternal: (url: string) => {ok: boolean, error?: string},
   }
   ipc?: {
-    startIRIS: (options: any) => Promise<any>;
-    startIRISStream: (options: any) => Promise<any>;
-    stopIRIS: (Id: any) => Promise<any>;
+    startIRIS: (options: any) => Promise<IrisStartResult>;
+    startIRISStream: (options: any) => Promise<IrisStartResult>;
+    stopIRIS: (Id: string | null) => Promise<{ ok: boolean; error?: string; sessionId?: string }>;
     getExtrinsics: () => Promise<any>;
     onIrisData: (callback: (data: IrisData[] | IrisData) => void) => void;
     calculateIntrinsics: (index: number, rotation: number) => Promise<{ok: boolean, path?: string}>;
