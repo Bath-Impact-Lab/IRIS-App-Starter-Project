@@ -1,7 +1,6 @@
 
 const dotenv = require('dotenv');
 
-dotenv.config({ path: path.join(__dirname, '..', '.env') });
 const { app, BrowserWindow, ipcMain, nativeTheme, shell, dialog } = require('electron');
 const { registerIrisIpc, getIrisCliPath } = require('./iris');
 const { MOCK_EXTRINSICS } = require('./mockExtrinsics');
@@ -9,6 +8,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { spawn, execFile, exec } = require('child_process')
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 
 let mainWindow;
