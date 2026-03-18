@@ -18,6 +18,7 @@ interface Props {
   disposeCameras: () => void,
   spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null,
   skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null,
+  running: boolean,
 }
 
 const props = defineProps<Props>()
@@ -175,7 +176,7 @@ async function initThree(container: HTMLElement) {
   renderer.setClearColor('#0b0f14');
   container.appendChild(renderer.domElement);
 
-  scene = new THREE.Scene(); 
+  scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(50, width / height, 0.01, 1000);
   camera.position.set(5, 5, 5);
 
