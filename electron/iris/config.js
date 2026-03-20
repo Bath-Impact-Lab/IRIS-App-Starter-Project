@@ -104,9 +104,14 @@ function buildConfigFromOptions(opts = {}) {
       name: 'tri0',
       params: {
         pose_sources: 'pose0',
-        calibration_dir: 'calibration_output',
-        extrinsics_file: 'calibration_output/extrinsics.json',
-        camera_ids: [0, 1, 2, 3],
+        camera_ids: cameras.map((_, idx) => idx),
+        da3_startup_calibration: {
+          engine: "models/DA3-LARGE-1.1.engine",
+          output_dir: "output/triangulation_da3_startup",
+          frame_source: "ingestion",
+          viewer_align: true,
+          save_ply: "scene.ply"
+        },
         compute_reprojection: true,
         store_reprojection_error: true,
         gate_by_reprojection_error: true,
@@ -119,18 +124,6 @@ function buildConfigFromOptions(opts = {}) {
           d_cutoff: 1.0,
           cleanup_interval: 300,
         },
-      },
-    },
-    online_calibration: {
-      name: 'online_calib',
-      type: 'OnlineCalibration',
-      inputs: { PoseBatch: 'triangulation.PoseBatch' },
-      params: {
-        window_size: 300,
-        min_joint_conf: 0.6,
-        learning_rate: 0.01,
-        num_epochs: 100,
-        huber_delta: 10.0,
       },
     },
     output: {

@@ -10,20 +10,6 @@ contextBridge.exposeInMainWorld('ipc', {
       callback(data)
     })
   },
-  calculateIntrinsics: (index, rotation) => ipcRenderer.invoke('calculate-intrinsics', index, rotation),
-  cancelIntrinsics: () => ipcRenderer.invoke('cancel-intrinsics'),
-  intrinsicsComplete: (callback) => {
-    ipcRenderer.on('intrinsics-complete', (event, data) => {
-      callback(data)
-    })
-  },
-  calculateExtrinsics: (cameraIndices, rotation) => ipcRenderer.invoke('calculate-extrinsics', cameraIndices, rotation),
-  cancelExtrinsics: () => ipcRenderer.invoke('cancel-extrinsics'),
-  extrinsicsComplete: (callback) => {
-    ipcRenderer.on('extrinsics-complete', (event, data) => {
-      callback(data)
-    })
-  },
   onIrisCliOutput: (callback) => {
     ipcRenderer.on('iris-cli-output', (event, data) => {
       callback(data)
