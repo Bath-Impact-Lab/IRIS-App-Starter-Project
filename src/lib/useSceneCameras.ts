@@ -1,7 +1,7 @@
 import { ref, watch, type Ref } from 'vue';
 import * as THREE from 'three';
 import mockExtrinsicsFallback from './../../public/assets/mockExtrinsics.json';
-
+import { PLYLoader } from 'three/examples/jsm/Addons.js';
 export interface SceneCameraDef {
   name: string;
   position: { x: number; y: number; z: number };
@@ -113,8 +113,6 @@ function createCameraGizmo(
 
   group.position.set(position.x, position.y, position.z);
 
-  const axisSwap = new THREE.Matrix4().makeRotationX(Math.PI / 2);
-  const axisSwapInv = new THREE.Matrix4().makeRotationY(-Math.PI / 2);
   const Rotation = new THREE.Matrix4()
   Rotation.set(
     rotation[0], rotation[1], rotation[2], 0,
@@ -122,9 +120,9 @@ function createCameraGizmo(
     rotation[6], rotation[7], rotation[8], 0,
     0, 0, 0, 1,
   )
-  const formatedRotation = new THREE.Matrix4().multiplyMatrices(axisSwap, Rotation)//.multiply(axisSwapInv)
-  group.setRotationFromMatrix(Rotation);
 
+  group.setRotationFromMatrix(Rotation);
+  
   return group;
 }
 
@@ -280,7 +278,7 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
       isMockExtrinsics = extrinsics?._isMock === true;
       if (extrinsics?.cameras?.length) {
         const unit = (extrinsics.unit_of_measurement ?? 'm').replace(/[^a-z]/gi, '').toLowerCase();
-        const scale = unit === 'mm' ? 0.001 : unit === 'cm' ? 0.01 : 1;
+        const scale = unit === 'mm' ? 0.001 : unit === 'cm' ? 0.01 : 4.5;
         defs = extrinsics.cameras
           .filter((c: any) => c.success !== false)
           .map((c: any, i: number) => extrinsicsToDef(c, i, scale));
@@ -312,11 +310,23 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
         def.rotation[6], def.rotation[7], def.rotation[8], 0,
         0, 0, 0, 1,
       )
-      const align = rotation.multiply(swap)
-      const axisSwap = new THREE.Matrix4().makeRotationX(Math.PI / 2);
+      rotation.multiply(swap)
 
       cam.setRotationFromMatrix(rotation);
 
+      const loader = new PLYLoader()
+      loader.load('C:\\Users\\Kavi\\AppData\\Local\\IRIS\\calibration_output\\scene.ply', (geometry) => {
+        geometry.computeVertexNormals()
+        geometry.scale(4.5, 4.5, 4.5)
+
+        const material = new THREE.PointsMaterial({
+          size: 0.01,
+          vertexColors: geometry.hasAttribute('color')
+        })
+
+        const points = new THREE.Points(geometry, material)
+        scene.add(points)
+      })
 
       cam.name = def.name;
       cam.updateProjectionMatrix();
@@ -342,7 +352,7 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
         visible: false,
       };
 
-      updateFrustumLines(entry);
+      // updateFrustumLines(entry);
       sceneCameras.value.push(entry);
     }
 
@@ -475,13 +485,16 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
       return outputList;
     };
 
-    const resultPolygons: THREE.Vector3[][] = [];
-    for (let i = 0; i < footprints.length; i++) {
-      for (let j = i + 1; j < footprints.length; j++) {
-        const overlap = clipPoly(footprints[i], footprints[j]);
-        if (overlap.length >= 3) resultPolygons.push(overlap);
-      }
+    // Compute intersection across ALL camera footprints
+    let intersection = footprints[0];
+
+    for (let i = 1; i < footprints.length; i++) {
+      intersection = clipPoly(intersection, footprints[i]);
+      if (intersection.length === 0) break;
     }
+
+    const resultPolygons: THREE.Vector3[][] =
+      intersection.length >= 3 ? [intersection] : [];
 
     if (resultPolygons.length === 0) return { ...emptyBounds, cameraFootprints };
 
