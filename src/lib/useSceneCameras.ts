@@ -79,7 +79,7 @@ function createCameraGizmo(
   const lines = new THREE.LineSegments(lineGeo, lineMat);
 
   // Apply camera body rotation around the local Z axis (the viewing direction)
-  const rotRad = (rotationDeg * Math.PI) / 180;
+  const rotRad = ((rotationDeg+180) * Math.PI) / 180;
   lines.rotation.z = rotRad;
 
   const gap = s * 0.08;
@@ -255,7 +255,6 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
 
     // Forward direction = third row of R = [R[6], R[7], R[8]] (world Z axis of camera)
 
-    console.log(posX, posY, posZ)
     return {
       name: `Camera ${entry.cam_id}`,
       position: { x: posX, y: posY, z: posZ }, //invert y and z since z is vertical axis in IRIS
@@ -293,6 +292,26 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
         .map((c: any, i: number) => extrinsicsToDef(c, i, 1));
     }
 
+    function loadScenePoints(path: string) {
+      const loader = new PLYLoader()
+        loader.load(path, (geometry) => {
+          geometry.computeVertexNormals()
+          geometry.scale(4.5, 4.5, 4.5)
+
+          const material = new THREE.PointsMaterial({
+            size: 0.02,
+            vertexColors: geometry.hasAttribute('color')
+          })
+
+          const points = new THREE.Points(geometry, material)
+          scene.add(points)
+        })
+    }
+    const scenePath = await window.ipc?.getScene()
+    if (scenePath) {
+      loadScenePoints(scenePath)
+    }
+
     for (const def of defs) {
       const cam = new THREE.PerspectiveCamera(45, 16 / 9, 0.01, 100);
       cam.position.set(def.position.x, def.position.y, def.position.z);
@@ -312,21 +331,6 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
       )
       rotation.multiply(swap)
 
-      cam.setRotationFromMatrix(rotation);
-
-      const loader = new PLYLoader()
-      loader.load('C:\\Users\\Kavi\\AppData\\Local\\IRIS\\calibration_output\\scene.ply', (geometry) => {
-        geometry.computeVertexNormals()
-        geometry.scale(4.5, 4.5, 4.5)
-
-        const material = new THREE.PointsMaterial({
-          size: 0.01,
-          vertexColors: geometry.hasAttribute('color')
-        })
-
-        const points = new THREE.Points(geometry, material)
-        scene.add(points)
-      })
 
       cam.name = def.name;
       cam.updateProjectionMatrix();

@@ -38,7 +38,7 @@
               autoplay
               playsinline
               muted
-            />
+            ></video>
           </div>
 
           <div>

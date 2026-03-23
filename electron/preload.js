@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('ipc', {
   startIRIS: (options) => ipcRenderer.invoke('start-iris', options),
   startIRISStream: (options) => ipcRenderer.invoke('start-iris-stream', options),
   getExtrinsics: () => ipcRenderer.invoke('get-extrinsics'),
+  getScene: () => ipcRenderer.invoke('get-scene'),
   stopIRIS: (Id) => ipcRenderer.invoke('stop-iris', Id),
   onIrisData: (callback) => {
     ipcRenderer.on('iris-data', (event, data,) => {

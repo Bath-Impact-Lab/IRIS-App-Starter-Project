@@ -229,6 +229,28 @@ ipcMain.handle('get-extrinsics', (event) => {
     }
 });
 
+ipcMain.handle('get-scene', (event) => {
+    const runtimeExists = fs.existsSync(getIrisCliPath());
+
+    // Mock mode — return the bundled mock extrinsics
+    if (!runtimeExists) {
+        console.log('[extrinsics] mock mode — returning mock extrinsics');
+        return MOCK_EXTRINSICS;
+    }
+
+    // Real runtime — read live calibration file
+    const extrinsicsPath = path.join(os.homedir(), 'AppData', 'Local', 'IRIS', 'calibration_output', 'scene.ply');
+    try {
+        if (!fs.existsSync(extrinsicsPath)) {
+            console.warn(`[extrinsics] file not found: ${extrinsicsPath}`);
+            return null;
+        }
+        return extrinsicsPath;
+    } catch (err) {
+        console.error('[extrinsics] failed to read:', err);
+        return null;
+    }
+})
 
 // connecting to steamVR/VRchat
 ipcMain.handle('connect-VR', (event) => {

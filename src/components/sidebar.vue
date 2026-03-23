@@ -27,7 +27,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { SceneCameraEntry } from '../lib/useSceneCameras';
-import * as THREE from 'three';
 import CameraLivePanel from './sidebar/panels/CameraLivePanel.vue';
 import PlaybackPanel from './sidebar/panels/PlaybackPanel.vue';
 
