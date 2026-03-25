@@ -26,7 +26,7 @@
           <div class="camera-text">
             <span class="drag-handle" title="Drag to reorder">⠿</span>
             {{ d.label ? d.label.split(' ')[0] + ' ' : '' }}{{ deviceShortCode(d.deviceId) }}
-            <button class="button btn" style="padding: 3px 5px;" @click="rotateCamera(d, i)" :disabled="running">
+            <button class="button btn" style="padding: 3px 5px;" @click="rotateCamera(d, i)" :disabled="IrisState.running">
               <img style="width: 30px;" src="/assets/anticlockwise-2-line.svg" alt="" />
             </button>
           </div>
@@ -52,7 +52,7 @@
     <div class="iris-controls">
 
       <div class="parent">
-        <button class="button btn grid1" @click="onStartIris" :disabled="running">Start IRIS</button>
+        <button class="button btn grid1" @click="onStartIris" :disabled="IrisState.running">Start IRIS</button>
         <select 
           v-model.number="irisFps" 
           name="FPS" 
@@ -66,7 +66,7 @@
           <option>100</option>
         </select>
 
-        <button class="button btn grid3" @click="onStopIris" :disabled="!running">Stop IRIS</button>
+        <button class="button btn grid3" @click="onStopIris" :disabled="!IrisState.running">Stop IRIS</button>
       </div>
     </div>
   </div>
@@ -77,8 +77,7 @@
 import { ref, watch, computed, reactive, onMounted } from 'vue';
 import { useSceneCameras, SceneCameraEntry } from '../../../lib/useSceneCameras';
 import { deviceShortCode, applyCameraRotation } from '../useCameraFeedUtils';
-import * as THREE from 'three';
-import ConsoleModal from '../../ConsoleModal.vue';
+import { useIrisStore } from '@/Stores/irisStore';
 
 interface Props {
   selectedCameras: MediaDeviceInfo[];
@@ -93,12 +92,11 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<{
   irisDataUpdate: [IrisData[] | IrisData | null];
-  isRunning: [boolean];
   reorderCameras: [MediaDeviceInfo[]];
 }>();
 
-// ── Running state ────────────────────────────────────────────────────────────
-const running = ref(false);
+// ── IRIS state ────────────────────────────────────────────────────────────
+const IrisState = useIrisStore()
 
 // ── Config Options ─────────────────────────────────────────────────────────────
 const irisFps = ref<number>(30)
@@ -224,15 +222,13 @@ async function onStartIris() {
   };
 
   props.selectedCameras.forEach((_, i) => stopCameraStream(i));
-  running.value = true;
-  emit('isRunning', true);
+  IrisState.setRunningState(true)
   await window.ipc?.startIRIS(options);
   if (options.stream) await window.ipc?.startIRISStream?.(options);
 }
 
 async function onStopIris() {
-  running.value = false;
-  emit('isRunning', false);
+  IrisState.setRunningState(false)
 
   await window.ipc?.stopIRIS('example');
 

@@ -1,7 +1,7 @@
 <template>
   <div class="sidenav">
     Tracker Config:
-    <div v-if="!props.running">Start IRIS first</div>
+    <div v-if="!IrisState.running">Start IRIS first</div>
 
     <div v-for="(value, type) in trackerConfig">
       <div class="titles">
@@ -15,7 +15,7 @@
         step="0.01"
         :id="type"
         v-on:mouseup="passConfig"
-        :disabled="!props.running"
+        :disabled="!IrisState.running"
       >
     </div>
     
@@ -23,13 +23,10 @@
 </template>
 
 <script setup lang="ts">
+import { useIrisStore } from '@/Stores/irisStore';
 import { ref, watch, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
-interface Props {
-  running: boolean
-}
-
-const props = defineProps<Props>()
+const IrisState = useIrisStore()
 
 const trackerMap = {
   xOffset: "X Offset",
@@ -57,17 +54,17 @@ function passConfig() {
     scale: trackerConfig.value.Scale
   }
   const data = JSON.stringify(formatedData)
-  // console.log(data)
+  // console.log("[VR Chat]", data)
   window.ipc?.updatePos(data)
 }
 
 onMounted(() => {
   window.ipc?.connectVR();
-  console.log("connected to VR")
+  console.log("[VR Chat] connected to VR")
 })
 
 onUnmounted(() => {
-  console.log("switching")
+  console.log("[VR Chat] switching")
   window.ipc?.disconnectVR()
 })
 

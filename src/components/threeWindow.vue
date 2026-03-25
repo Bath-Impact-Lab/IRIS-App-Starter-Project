@@ -7,6 +7,7 @@ import { onMounted, onBeforeUnmount, ref, watch, nextTick, computed, ComputedRef
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { FBXLoader } from 'three/examples/jsm/Addons.js';
+import { useIrisStore } from '@/Stores/irisStore';
 
 interface Props {
   selectedCameraCount: number,
@@ -27,6 +28,8 @@ const emit = defineEmits<{
 
 const selectedCameraCount = computed(() => props.selectedCameraCount)
 const sceneRef = ref<HTMLElement | null>(null);
+const IrisState = useIrisStore()
+
 
 let renderer: THREE.WebGLRenderer | null = null;
 let scene: THREE.Scene;
@@ -66,7 +69,7 @@ const halpe26_pairs = [
 
 const linePositions = new Float32Array(halpe26_pairs.length * 3 * 2)
 
-watch(() => props.running, (running) => {
+watch(() => IrisState.running, (running) => {
   if (!running) {
     if (skeletonLine) {
       skeletonLine.removeFromParent()
@@ -163,8 +166,7 @@ async function initThree(container: HTMLElement) {
   renderer.setClearColor('#0b0f14');
   container.appendChild(renderer.domElement);
 
-  scene = new THREE.Scene();
-  emit('giveScene', scene)
+  scene = new THREE.Scene(); 
   camera = new THREE.PerspectiveCamera(50, width / height, 0.01, 1000);
   camera.position.set(5, 5, 5);
 
@@ -190,7 +192,9 @@ async function initThree(container: HTMLElement) {
 
 
   // Add scene cameras from extrinsics
-  await props.addSceneCameras(scene);
+  watch(() => IrisState.running, (running) => {
+    if (window.ipc?.getExtrinsics()) props.addSceneCameras(scene);
+  })
 
   // Build play space from loaded camera frustums
   props.createPlaySpace(scene);
@@ -274,7 +278,7 @@ function renderIRISdata(poseInfo: IrisData) {
       if (!(spheresMesh && skeletonLine)) {
         const sphereGeometry = new THREE.SphereGeometry(0.025, 8, 8)
         const material = new THREE.MeshBasicMaterial({color: 0xffffff})
-        spheresMesh = new THREE.InstancedMesh(sphereGeometry, material, (keypoints.length + person.skeleton.joint_centers.length))
+        spheresMesh = new THREE.InstancedMesh(sphereGeometry, material, (keypoints.length + person.joint_centers.length))
         scene.add(spheresMesh)
 
         const lMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 })

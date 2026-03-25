@@ -29,7 +29,7 @@
               aria-haspopup="listbox"
               :aria-expanded="openCamera"
               aria-controls="camera-listbox"
-              :disabled="running"
+              :disabled="IrisState.running"
           >
             <div class="btn-content">
               <svg class="btn-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -77,7 +77,7 @@
 
         <!-- Person count dropdown -->
         <div class="dropdown" :class="{ open: openPersonCount }" style="margin-left: 12px;">
-          <button class="btn" @click="togglePersonCount" :disabled="running">
+          <button class="btn" @click="togglePersonCount" :disabled="IrisState.running">
             <div class="btn-content">
               <svg class="btn-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
@@ -97,7 +97,7 @@
 
         <!-- Tracking type dropdown -->
         <div class="dropdown" :class="{ open: openTrack }" style="margin-left: 12px;">
-          <button class="btn" @click="toggleTrack" :disabled="running">
+          <button class="btn" @click="toggleTrack" :disabled="IrisState.running">
             <div class="btn-content">
               <svg class="btn-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="8" y1="12" x2="16" y2="12"/>
@@ -117,7 +117,7 @@
 
         <!-- Output option dropdown -->
         <div class="dropdown" :class="{ open: openOutput }" style="margin-left: 12px;">
-          <button class="btn" @click="toggleOutput" :disabled="running">
+          <button class="btn" @click="toggleOutput" :disabled="IrisState.running">
             <div class="btn-content">
               <svg class="btn-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
@@ -166,7 +166,7 @@
           v-if="outputOption === 'Filesystem'"
           class="btn fs-recordings-select"
           style="margin-left: 12px;"
-          :disabled="running"
+          :disabled="IrisState.running"
           :value="fsSelectedRecording?.path ?? ''"
           @change="onRecordingSelectChange"
         >
@@ -191,7 +191,7 @@
       <!-- Right side: sign-in area -->
       <div class="nav-right">
         <div class="menu-right">
-          <button class="btn btn-icon" @click="toggleSignIn" aria-label="Settings" :disabled="running">
+          <button class="btn btn-icon" @click="toggleSignIn" aria-label="Settings" :disabled="IrisState.running">
             <img src="/assets/settings.svg" alt="">
           </button>
         </div>
@@ -211,7 +211,6 @@
       :playback-video-urls="fsPlaybackVideoUrls"
       :is-playing-back="isPlaying"
       @iris-data-update="irisDataUpdate"
-      @is-running="runningUpdate"
       @reorder-cameras="reorderCameras"
     />
 
@@ -224,14 +223,12 @@
       :create-play-space="createPlaySpace"
       :add-scene-cameras="addSceneCameras"
       :selected-avatar="selectedAvatar"
-      :running="running"
       @give-sphere-mesh="sphereMeshUpdate"
       @give-skeleton-mesh="skeletonMeshUpdate"
     />
 
     <connectVR
       v-if="outputOption=='VR Chat'"
-      :running="running"
     />
 
 
@@ -339,7 +336,7 @@
         </svg>
       </button>
     </div>
-    <div class="hud hud-center" v-if="running">
+    <div class="hud hud-center" v-if="IrisState.running">
       <span class="activity-blinker"></span>
       <span class="hud-item">IRIS Engine</span>
       <div class="hud-sep"></div>
@@ -459,9 +456,12 @@ import sidebar from './components/sidebar.vue';
 import ThreeWindow from './components/threeWindow.vue';
 import settingsModal from './components/settingsModal.vue';
 import connectVR from './components/connectVR.vue';
+import { useIrisStore } from './Stores/irisStore';
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 const logoError = ref(false);
+
+const IrisState = useIrisStore()
 
 const splitRef = ref<HTMLElement | null>(null);
 // Individual dropdown open flags
@@ -853,11 +853,10 @@ function stopFsTimer() {
 
 const lastSentMsg = ref('');
 
-const running = ref(false);
 const irisDisplayFps = ref(0);
 const jointAngles = computed(() => {
   const frame = Array.isArray(irisData.value) ? irisData.value[0] : irisData.value;
-  return frame?.entities?.[0]?.analysis?.joint_angles ?? null;
+  return frame?.people?.[0]?.joint_angles ?? null;
 });
 const jointAnglesPretty = computed(() => jointAngles.value ? JSON.stringify(jointAngles.value, null, 2) : '');
 
@@ -1127,10 +1126,6 @@ function skeletonMeshUpdate(value: THREE.LineSegments<THREE.BufferGeometry<THREE
 
 function irisDataUpdate(value: IrisData[] | IrisData | null) {
   irisData.value = value
-}
-
-function runningUpdate(value: boolean) {
-  running.value = value
 }
 
 

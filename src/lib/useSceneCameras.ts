@@ -33,6 +33,24 @@ export interface PlaySpaceBounds {
   cameraFootprints: CameraFootprint[]; // per-camera floor polygons
 }
 
+interface Extrinsics {
+  cameras: cameras[],
+  frames_used: number,
+  mean_reprojection_error: number,
+  success: boolean,
+}
+
+interface cameras {
+    cam_id: number,
+    extrinsics: {
+      R: number[],
+      cam_id: number,
+      t: number[],
+    },
+    reprojection_error: number,
+    success: boolean,
+}
+
 const GIZMO_SCALE = 0.2;
 
 function createCameraGizmo(
@@ -241,17 +259,14 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
    * So camera position in world space = -R^T * t
    * And the forward axis (look direction) = third row of R (Z column of R^T).
    */
-  function extrinsicsToDef(entry: any, index: number, scale = 1): SceneCameraDef {
+  function extrinsicsToDef(entry: cameras, index: number, scale = 1): SceneCameraDef {
     // Support both field name variants
-    const R: number[] = entry.extrinsics.rotation_matrix ?? entry.extrinsics.R;
-    const t: number[] = entry.extrinsics.translation_matrix ?? entry.extrinsics.t;
+    const R: number[] = entry.extrinsics.R;
+    const t: number[] = entry.extrinsics.t;
 
-    // R as rows: R[0..2]=row0, R[3..5]=row1, R[6..8]=row2
-    // R^T columns become rows, so:
-    // pos = -R^T * t
-    const posX = t[0]* scale//-(R[0] * t[0] + R[3] * t[1] + R[6] * t[2]) * scale;
-    const posY = t[1]* scale//-(R[1] * t[0] + R[4] * t[1] + R[7] * t[2]) * scale;
-    const posZ = t[2]* scale//-(R[2] * t[0] + R[5] * t[1] + R[8] * t[2]) * scale;
+    const posX = t[0]* scale
+    const posY = t[1]* scale
+    const posZ = t[2]* scale
 
     // Forward direction = third row of R = [R[6], R[7], R[8]] (world Z axis of camera)
 
@@ -273,14 +288,13 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
     // Try loading live extrinsics via IPC; fall back to bundled mock
     try {
       const result = await window.ipc?.getExtrinsics();
-      const extrinsics = result ?? mockExtrinsicsFallback;
-      isMockExtrinsics = extrinsics?._isMock === true;
+      const extrinsics: Extrinsics = result ?? mockExtrinsicsFallback;
       if (extrinsics?.cameras?.length) {
-        const unit = (extrinsics.unit_of_measurement ?? 'm').replace(/[^a-z]/gi, '').toLowerCase();
-        const scale = unit === 'mm' ? 0.001 : unit === 'cm' ? 0.01 : 4.5;
+        const unit = ('m').replace(/[^a-z]/gi, '').toLowerCase();
+        const scale = unit === 'mm' ? 0.001 : unit === 'cm' ? 0.01 : 4.5; // 4.5 instead of 1 for unscaled data
         defs = extrinsics.cameras
-          .filter((c: any) => c.success !== false)
-          .map((c: any, i: number) => extrinsicsToDef(c, i, scale));
+          .filter((c) => c.success !== false)
+          .map((c, i: number) => extrinsicsToDef(c, i, scale));
         console.log(`[cameras] loaded ${defs.length} cameras from extrinsics (mock=${isMockExtrinsics}, unit=${unit}, scale=${scale})`);
       }
     } catch (err) {
@@ -331,7 +345,7 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
       )
       rotation.multiply(swap)
 
-
+      cam.setRotationFromMatrix(rotation);
       cam.name = def.name;
       cam.updateProjectionMatrix();
 

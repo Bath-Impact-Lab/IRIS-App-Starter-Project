@@ -18,7 +18,6 @@
       :devices="props.devices"
       :person-count="props.personCount"
       @iris-data-update="emit('irisDataUpdate', $event)"
-      @is-running="emit('isRunning', $event)"
       @reorder-cameras="emit('reorderCameras', $event)"
     />
   </div>
@@ -47,7 +46,6 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<{
   irisDataUpdate: [IrisData[] | IrisData | null];
-  isRunning: [boolean];
   reorderCameras: [MediaDeviceInfo[]];
 }>();
 
