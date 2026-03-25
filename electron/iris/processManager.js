@@ -249,7 +249,7 @@ class ProcessManager {
     console.log(`[iris:${sessionId}] stop requested`);
     const { child } = entry;
 
-    if (child.stdin && !child.stdin.destroyed) {
+    if (child.stdin && !child.stdin.destroyed && !child.stdin.writableEnded) {
       try {
         child.stdin.write('\n');
         child.stdin.end();
