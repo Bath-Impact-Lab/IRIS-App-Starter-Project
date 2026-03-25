@@ -38,7 +38,22 @@ function registerIrisIpc() {
     });
   });
 
+  ipcMain.handle('start-iris-full', async (event, options) => {
+    const sessionId = crypto.randomUUID();
+    const targetWindow = getTargetWindow(event);
+
+    return processManager.startFull({
+      sessionId,
+      options,
+      onMockData: () => sendMockData(targetWindow),
+      onFrame: (frame) => sendToWindow(targetWindow, 'iris-data', frame),
+      onCliOutput: (payload) => sendToWindow(targetWindow, 'iris-cli-output', payload),
+    });
+  });
+
   ipcMain.handle('stop-iris', (_event, sessionId) => processManager.stop(sessionId));
+
+  ipcMain.handle('stop-iris-full', (_event, baseSessionId) => processManager.stopFull(baseSessionId));
 
   ipcMain.handle('cancel-intrinsics', () => calibrationManager.cancelIntrinsics());
   ipcMain.handle('cancel-extrinsics', () => calibrationManager.cancelExtrinsics());
@@ -78,6 +93,7 @@ function registerIrisIpc() {
 
 module.exports = {
   registerIrisIpc,
+  processManager,
   IRIS_CLI_EXE: getIrisCliPath(),
   getIrisCliPath,
 };

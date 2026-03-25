@@ -1,7 +1,7 @@
 
 const dotenv = require('dotenv');
 const { app, BrowserWindow, ipcMain, nativeTheme, shell, dialog } = require('electron');
-const { registerIrisIpc, getIrisCliPath } = require('./iris');
+const { registerIrisIpc, processManager, getIrisCliPath } = require('./iris');
 const { MOCK_EXTRINSICS } = require('./mockExtrinsics');
 const path = require('path');
 const fs = require('fs');
@@ -77,6 +77,12 @@ app.whenReady().then(() => {
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+});
+
+app.on('before-quit', () => {
+    processManager.stopAll().catch((err) => {
+        console.error('[main] failed to stop IRIS processes on quit:', err);
     });
 });
 

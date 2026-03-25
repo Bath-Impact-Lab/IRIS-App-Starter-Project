@@ -121,6 +121,106 @@ class ProcessManager {
     }
   }
 
+  async startFull({ sessionId, options, onMockData, onFrame, onCliOutput }) {
+    if (!this.hasExecutable()) {
+      onMockData();
+      return { ok: false, error: 'Executable not found, using mock data' };
+    }
+
+    const { tmpDir, cfgPath } = writeTempConfigFile(buildConfigFromOptions(options));
+    const posePipeName = buildPipeName('iris_pose', sessionId);
+    const videoPipeName = buildPipeName('iris_video', sessionId);
+
+    const engineSessionId = `${sessionId}_engine`;
+    const monitorSessionId = `${sessionId}_monitor`;
+
+    // 1. Spawn the Engine (producer)
+    const engineResult = this.spawnWorker({
+      sessionId: engineSessionId,
+      args: ['run', cfgPath],
+      cfgPath,
+      tmpDir,
+      onStdout: (data) => onCliOutput({ channel: 'engine', line: data.toString() }),
+    });
+
+    if (!engineResult.ok) {
+      return engineResult;
+    }
+
+    // 2. Spawn the Monitor (consumer) — it waits for SHM automatically
+    const videoStreamer = new VideoStreamer();
+    let pipeServer = null;
+
+    try {
+      pipeServer = await createPipeServer({
+        pipeName: posePipeName,
+        onFrame,
+      });
+
+      const wsPort = await videoStreamer.start(videoPipeName);
+
+      const monitorResult = this.spawnWorker({
+        sessionId: monitorSessionId,
+        args: [
+          'monitor',
+          '--shm-name', 'iris_shm_ipc',
+          '--pipe', posePipeName,
+          '--video-pipe', videoPipeName,
+          '--fps', '30',
+        ],
+        cfgPath,
+        tmpDir: null,
+        pipeServer,
+        videoStreamer,
+        wsUrl: `ws://127.0.0.1:${wsPort}`,
+        onStdout: (data) => onCliOutput({ channel: 'monitor', line: data.toString() }),
+      });
+
+      // Link lifecycle: if engine dies, kill monitor
+      const engineEntry = this.workers.get(engineSessionId);
+      if (engineEntry) {
+        engineEntry.child.once('exit', () => {
+          console.log(`[iris:${engineSessionId}] engine exited, stopping monitor`);
+          this.stop(monitorSessionId).catch(() => {});
+        });
+      }
+
+      return {
+        ...monitorResult,
+        engineSessionId,
+        monitorSessionId,
+        baseSessionId: sessionId,
+      };
+    } catch (err) {
+      console.error('Failed to start full pipeline', err);
+      await this.stop(engineSessionId).catch(() => {});
+      if (pipeServer) {
+        pipeServer.close();
+      }
+      await videoStreamer.stop();
+      return { ok: false, error: err.message };
+    }
+  }
+
+  async stopFull(baseSessionId) {
+    const engineId = `${baseSessionId}_engine`;
+    const monitorId = `${baseSessionId}_monitor`;
+
+    const results = await Promise.allSettled([
+      this.workers.has(monitorId) ? this.stop(monitorId) : Promise.resolve({ ok: true }),
+      this.workers.has(engineId) ? this.stop(engineId) : Promise.resolve({ ok: true }),
+    ]);
+
+    console.log(`[ProcessManager] stopFull(${baseSessionId}) complete`);
+    return { ok: true, baseSessionId, results: results.map((r) => r.value || r.reason) };
+  }
+
+  async stopAll() {
+    const sessionIds = [...this.workers.keys()];
+    console.log(`[ProcessManager] stopAll — killing ${sessionIds.length} workers`);
+    await Promise.allSettled(sessionIds.map((id) => this.stop(id)));
+  }
+
   resolveSessionId(requestedSessionId) {
     const sessionId = requestedSessionId == null ? '' : String(requestedSessionId);
 
