@@ -413,7 +413,7 @@ async function onStartIris() {
       return;
     }
 
-    const response = await window.ipc?.startIRISStream?.(options);
+    const response = await window.ipc?.startIRISFull?.(options);
 
     if (!response?.ok) {
       console.warn('[iris] failed to start live stream:', response?.error);
@@ -423,7 +423,7 @@ async function onStartIris() {
       return;
     }
 
-    liveStreamSessionId.value = response.sessionId ?? null;
+    liveStreamSessionId.value = response.baseSessionId ?? response.sessionId ?? null;
     liveStreamUrl.value = response.wsUrl ?? null;
 
     if (response.wsUrl) {
@@ -446,7 +446,7 @@ async function onStopIris() {
   destroyLiveStreamPlayer();
   clearLiveStreamState();
   setRunning(false);
-  await window.ipc?.stopIRIS(sessionId);
+  await window.ipc?.stopIRISFull(sessionId);
 
   await Promise.all((selectedCameras.value ?? []).map((device, index) => startCameraStream(device, index)));
   setIrisData(null);
@@ -460,7 +460,7 @@ onBeforeUnmount(() => {
   destroyLiveStreamPlayer();
 
   if (liveStreamSessionId.value) {
-    void window.ipc?.stopIRIS(liveStreamSessionId.value);
+    void window.ipc?.stopIRISFull(liveStreamSessionId.value);
   }
 });
 
