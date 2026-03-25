@@ -21,8 +21,7 @@ function getModelDir() {
     return path.join(process.resourcesPath, 'app.asar.unpacked', 'iris_runtime_bundle', 'models');
   }
 
-  return process.env.IRIS_MODELS_DIR || path.join(os.homedir(), 'Documents', 'Iris', 'models');
-}
+  return process.env.IRIS_MODELS_DIR || path.join(os.homedir(), 'Documents', 'Iris', 'models');}
 
 
 function buildConfigFromOptions(opts = {}) {
@@ -66,7 +65,7 @@ function buildConfigFromOptions(opts = {}) {
         detection: {
           rtmdet_people: {
             type: 'rtmdet',
-            rtmdet_engine_path: `${modelDir}/rtmdet_t_bs4_fp16.trt`,
+            rtmdet_engine_path: path.join(modelDir, 'rtmdet_t_bs4_fp16.trt'),
             rtmdet_input_width: 640,
             rtmdet_input_height: 640,
             rtmdet_conf_threshold: 0.7,
@@ -76,13 +75,13 @@ function buildConfigFromOptions(opts = {}) {
         reid: {
           osnet_x05: {
             enabled: true,
-            engine_path: `${modelDir}/osnet_x05_fp16.trt`,
+            engine_path: path.join(modelDir, 'osnet_x05_fp16.trt'),
             min_detection_confidence: 0.55,
           },
         },
         pose: {
           rtmpose_people: {
-            engine: `${modelDir}/rtmpose_bs16_fp16.trt`,
+            engine: path.join(modelDir, 'rtmpose_bs16_fp16.trt'),
             batch: 16,
             input_w: 192,
             input_h: 256,
@@ -130,7 +129,7 @@ function buildConfigFromOptions(opts = {}) {
         pose_source: 'pose0',
         camera_group: 'main',
         da3_startup_calibration: {
-          engine: `${modelDir}/DA3-LARGE-1.1.engine`,
+          engine: path.join(modelDir, 'DA3-LARGE-1.1.engine'),
           output_dir: 'output/triangulation_da3_startup',
           frame_source: 'frame_batch',
           viewer_align: true,
