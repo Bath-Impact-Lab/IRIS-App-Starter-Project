@@ -30,83 +30,112 @@ function buildConfigFromOptions(opts = {}) {
   const width = opts.camera_width ?? 1920;
   const height = opts.camera_height ?? 1080;
   const cameras = opts.cameras || [];
-
   const modelDir = getModelDir();
+
+  const cameraIds = cameras.map((c) => parseInt(c.uri));
+  const fps = cameras[0]?.fps ?? 30;
+  const rotation = cameras[0]?.rotation ?? 0;
 
   return {
     run_id,
-    devices: { gpu: 0, cuda_streams: 2, nvenc: false },
-    buffers: {
-      frame_capacity: 256,
-      pose_capacity: 256,
-      export_shm: false,
-      camera_count: cameras.length,
-      camera_slots: 1,
-      camera_width: width,
-      camera_height: height,
-    },
-    capture: cameras.map((c, index) => ({
-      name: `cap${index}`,
-      params: {
-        camera_id: parseInt(c.uri),
-        width: c.width,
-        height: c.height,
-        rotate: c.rotation,
-        format: 'BGR8',
-        fps: c.fps,
-        use_camera: true,
-        device_id: 0,
-        batching: true,
-        batch_cameras: cameras.map(cam => parseInt(cam.uri)),
-      },
-    })),
-    detection: {
-      name: 'det0',
-      params: {
-        device_id: 0,
-        batch_size: 4,
-        rtmdet_engine_path: `${modelDir}/rtmdet_t_bs4_fp16.trt`,
-        rtmdet_input_width: 640,
-        rtmdet_input_height: 640,
-        rtmdet_conf_threshold: 0.7,
-        rtmdet_iou_threshold: 0.45,
-        detection_skip_enabled: true,
-        detection_skip_frames: 20,
-        reid_enabled: true,
-        osnet_engine_path: `${modelDir}/osnet_x05_fp16.trt`,
-        reid_min_detection_conf: 0.55,
+    runtime: {
+      devices: { gpu: 0, cuda_streams: 2, nvenc: false },
+      buffers: {
+        frame_capacity: 256,
+        pose_capacity: 256,
+        export_shm: true,
+        camera_count: cameras.length,
+        camera_slots: 32,
+        camera_width: width,
+        camera_height: height,
       },
     },
-    global_reid_tracking: {
-      name: 'global_track',
-      params: {
+    shared: {
+      execution: { device_id: 0 },
+      camera_groups: {
+        main: {
+          camera_ids: cameraIds,
+          width,
+          height,
+          fps,
+          rotate: rotation,
+          batching: true,
+        },
+      },
+      models: {
+        detection: {
+          rtmdet_people: {
+            type: 'rtmdet',
+            rtmdet_engine_path: `${modelDir}/rtmdet_t_bs4_fp16.trt`,
+            rtmdet_input_width: 640,
+            rtmdet_input_height: 640,
+            rtmdet_conf_threshold: 0.7,
+            rtmdet_iou_threshold: 0.45,
+          },
+        },
+        reid: {
+          osnet_x05: {
+            enabled: true,
+            engine_path: `${modelDir}/osnet_x05_fp16.trt`,
+            min_detection_confidence: 0.55,
+          },
+        },
+        pose: {
+          rtmpose_people: {
+            engine: `${modelDir}/rtmpose_bs16_fp16.trt`,
+            batch: 16,
+            input_w: 192,
+            input_h: 256,
+            split_ratio: 2.0,
+          },
+        },
+      },
+      defaults: {
+        detection: {
+          batch_size: 4,
+          detection_skip_enabled: true,
+          detection_skip_frames: 20,
+        },
+        output: {
+          shm_name: 'iris_shm_ipc',
+          capacity: 120,
+        },
+      },
+    },
+    pipeline: {
+      capture: {
+        camera_group: 'main',
+        id_prefix: 'cap',
+      },
+      detection: {
+        id: 'det0',
+        model: 'rtmdet_people',
+        reid_model: 'osnet_x05',
+      },
+      global_reid_tracking: {
+        id: 'global_track',
         single_person_mode: false,
         max_age: 200,
         min_hits: 1,
         min_detection_confidence: 0.5,
         appearance_threshold: 0.45,
         cross_camera_unconfirmed_threshold: 0.55,
-        use_motion_prediction: false,
       },
-    },
-    pose_estimation: {
-      name: 'pose0',
-      params: {
-        device_id: 0,
-        batch: 16,
-        engine: `${modelDir}/rtmpose_bs16_fp16.trt`,
-        input_w: 192,
-        input_h: 256,
-        split_ratio: 2.0,
+      pose_estimation: {
+        id: 'pose0',
+        model: 'rtmpose_people',
       },
-    },
-    triangulation: {
-      name: 'tri0',
-      params: {
-        pose_sources: 'pose0',
-        calibration_dir: 'calibration_output',
-        extrinsics_file: 'calibration_output/extrinsics.json',
-        camera_ids: cameras.map(c => parseInt(c.uri)),
+      triangulation: {
+        id: 'tri0',
+        pose_source: 'pose0',
+        camera_group: 'main',
+        da3_startup_calibration: {
+          engine: `${modelDir}/DA3-LARGE-1.1.engine`,
+          output_dir: 'output/triangulation_da3_startup',
+          frame_source: 'frame_batch',
+          viewer_align: true,
+          save_ply: 'scene.ply',
+        },
         compute_reprojection: true,
         store_reprojection_error: true,
         gate_by_reprojection_error: true,
@@ -120,27 +149,9 @@ function buildConfigFromOptions(opts = {}) {
           cleanup_interval: 300,
         },
       },
-    },
-    online_calibration: {
-      name: 'online_calib',
-      type: 'OnlineCalibration',
-      inputs: { PoseBatch: 'triangulation.PoseBatch' },
-      params: {
-        window_size: 300,
-        min_joint_conf: 0.6,
-        learning_rate: 0.01,
-        num_epochs: 100,
-        huber_delta: 10.0,
-      },
-    },
-    output: {
-      name: 'output',
-      params: {
-        shm_name: 'iris_shm_ipc',
-        capacity: 120,
-        frame_width: width,
-        frame_height: height,
-        num_cameras: cameras.length,
+      output: {
+        id: 'output',
+        camera_group: 'main',
       },
     },
   };
