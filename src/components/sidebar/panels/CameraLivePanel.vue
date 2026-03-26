@@ -3,14 +3,22 @@
     <div class="cameras">
       <div v-if="running" class="stream-preview">
         <div class="camera-text stream-preview-title">IRIS Live Stream</div>
-        <video
-          ref="liveStreamVideoRef"
-          class="stream-video"
-          autoplay
-          playsinline
-          muted
-          @click="onLiveStreamVideoClick"
-        />
+        <div class="camera-grid" :class="`grid-cols-${Math.min(liveCameraCount, 2)}`">
+          <div
+            v-for="camIdx in liveCameraCount"
+            :key="camIdx - 1"
+            class="camera-video-wrapper"
+          >
+            <div class="camera-video-label">Camera {{ camIdx - 1 }}</div>
+            <video
+              :ref="(el) => setVideoRef(camIdx - 1, el as HTMLVideoElement | null)"
+              class="camera-video"
+              autoplay
+              playsinline
+              muted
+            />
+          </div>
+        </div>
         <div v-if="liveStreamStatus" class="stream-status">
           {{ liveStreamStatus }}
         </div>
@@ -169,63 +177,49 @@ const calibratingExtrinsics = ref(false);
 const calibratingIntrinsics = ref<Set<string>>(new Set());
 const intrinsicsCalibDevice = ref<{ device: MediaDeviceInfo; slotIndex: number } | null>(null);
 const irisFps = ref(30);
-const liveStreamVideoRef = ref<HTMLVideoElement | null>(null);
 const liveStreamSessionId = ref<string | null>(null);
-const liveStreamUrl = ref<string | null>(null);
 const liveStreamStatus = ref<string | null>(null);
 
-let livePlayer: ReturnType<typeof mpegts.createPlayer> | null = null;
+// --- Multi-camera MPEG-TS live stream state ---
+const liveCameraCount = ref(0);
+const videoRefs = new Map<number, HTMLVideoElement>();
+const livePlayers = new Map<number, ReturnType<typeof mpegts.createPlayer>>();
 
-const deviceColour = ref<Record<string, string>>({});
-const dragSourceIndex = ref<number | null>(null);
-const dragOverIndex = ref<number | null>(null);
-const dragEnterCounters = ref<Record<number, number>>({}); 
-
-function destroyLiveStreamPlayer() {
-  if (!livePlayer) return;
-
-  try {
-    livePlayer.pause();
-  } catch {
-    // Ignore pause failures during teardown.
+function setVideoRef(cameraId: number, el: HTMLVideoElement | null) {
+  if (el) {
+    videoRefs.set(cameraId, el);
+  } else {
+    videoRefs.delete(cameraId);
   }
-
-  try {
-    livePlayer.unload();
-  } catch {
-    // Ignore unload failures during teardown.
-  }
-
-  try {
-    livePlayer.detachMediaElement();
-  } catch {
-    // Ignore detach failures during teardown.
-  }
-
-  try {
-    livePlayer.destroy();
-  } catch {
-    // Ignore destroy failures during teardown.
-  }
-
-  livePlayer = null;
 }
 
-function clearLiveStreamState() {
-  liveStreamSessionId.value = null;
-  liveStreamUrl.value = null;
-  liveStreamStatus.value = null;
+function destroyPlayer(cameraId: number) {
+  const player = livePlayers.get(cameraId);
+  if (!player) return;
+
+  try { player.pause(); } catch { /* teardown */ }
+  try { player.unload(); } catch { /* teardown */ }
+  try { player.detachMediaElement(); } catch { /* teardown */ }
+  try { player.destroy(); } catch { /* teardown */ }
+  livePlayers.delete(cameraId);
 }
 
-async function attachLiveStream(url: string) {
-  destroyLiveStreamPlayer();
-  liveStreamStatus.value = 'Connecting live video feed...';
+function destroyAllPlayers() {
+  for (const id of [...livePlayers.keys()]) {
+    destroyPlayer(id);
+  }
+  videoRefs.clear();
+  liveCameraCount.value = 0;
+}
+
+async function attachCameraPlayer(cameraId: number, baseWsUrl: string) {
+  destroyPlayer(cameraId);
 
   await nextTick();
 
-  const videoElement = liveStreamVideoRef.value;
+  const videoElement = videoRefs.get(cameraId);
   if (!videoElement) {
-    liveStreamStatus.value = 'Live video element is unavailable.';
+    console.warn(`[iris] video element not ready for camera ${cameraId}`);
     return;
   }
 
@@ -234,13 +228,14 @@ async function attachLiveStream(url: string) {
     return;
   }
 
-  livePlayer = mpegts.createPlayer(
+  const wsUrl = `${baseWsUrl}/camera/${cameraId}`;
+  const player = mpegts.createPlayer(
     {
       type: 'mse',
       isLive: true,
       hasAudio: false,
       hasVideo: true,
-      url,
+      url: wsUrl,
     },
     {
       enableStashBuffer: false,
@@ -250,36 +245,50 @@ async function attachLiveStream(url: string) {
     },
   );
 
-  livePlayer.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string) => {
-    liveStreamStatus.value = `Live video error: ${errorType} (${errorDetail})`;
+  player.on(mpegts.Events.ERROR, (errorType: string, errorDetail: string) => {
+    console.error(`[iris] camera ${cameraId} video error: ${errorType} (${errorDetail})`);
   });
 
-  livePlayer.on(mpegts.Events.MEDIA_INFO, () => {
-    liveStreamStatus.value = null;
-  });
+  livePlayers.set(cameraId, player);
 
-  livePlayer.attachMediaElement(videoElement);
-  livePlayer.load();
+  player.attachMediaElement(videoElement);
+  player.load();
 
   try {
-    await Promise.resolve(livePlayer.play());
-    liveStreamStatus.value = 'Waiting for live video frames...';
+    await Promise.resolve(player.play());
   } catch (err) {
-    console.warn('[iris] live stream autoplay blocked', err);
-    liveStreamStatus.value = 'Click the video area to start playback.';
+    console.warn(`[iris] camera ${cameraId} autoplay blocked`, err);
   }
 }
 
-async function onLiveStreamVideoClick() {
-  if (!livePlayer) return;
+async function connectLiveStreams(baseWsUrl: string, cameraCount: number) {
+  destroyAllPlayers();
+  liveCameraCount.value = cameraCount;
+  liveStreamStatus.value = 'Connecting live video feeds...';
 
-  try {
-    await Promise.resolve(livePlayer.play());
-    liveStreamStatus.value = null;
-  } catch (err) {
-    console.warn('[iris] live stream play failed', err);
+  // Wait for Vue to render the video elements
+  await nextTick();
+
+  for (let i = 0; i < cameraCount; i++) {
+    await attachCameraPlayer(i, baseWsUrl);
   }
+
+  liveStreamStatus.value = null;
 }
+
+function disconnectLiveStreams() {
+  destroyAllPlayers();
+}
+
+function clearLiveStreamState() {
+  liveStreamSessionId.value = null;
+  liveStreamStatus.value = null;
+}
+
+const deviceColour = ref<Record<string, string>>({});
+const dragSourceIndex = ref<number | null>(null);
+const dragOverIndex = ref<number | null>(null);
+const dragEnterCounters = ref<Record<number, number>>({});
 
 function syncDeviceColours() {
   (selectedCameras.value ?? []).forEach((camera, index) => {
@@ -424,17 +433,16 @@ async function onStartIris() {
     }
 
     liveStreamSessionId.value = response.baseSessionId ?? response.sessionId ?? null;
-    liveStreamUrl.value = response.wsUrl ?? null;
 
     if (response.wsUrl) {
-      await attachLiveStream(response.wsUrl);
+      await connectLiveStreams(response.wsUrl, cameras.length);
     } else {
       liveStreamStatus.value = 'Pose streaming is active, but no live video URL was returned.';
     }
   } catch (err) {
     console.error('[iris] failed to start stream', err);
     setRunning(false);
-    destroyLiveStreamPlayer();
+    disconnectLiveStreams();
     clearLiveStreamState();
     await Promise.all((selectedCameras.value ?? []).map((device, index) => startCameraStream(device, index)));
   }
@@ -443,7 +451,7 @@ async function onStartIris() {
 async function onStopIris() {
   const sessionId = liveStreamSessionId.value;
 
-  destroyLiveStreamPlayer();
+  disconnectLiveStreams();
   clearLiveStreamState();
   setRunning(false);
   await window.ipc?.stopIRISFull(sessionId);
@@ -457,7 +465,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
-  destroyLiveStreamPlayer();
+  disconnectLiveStreams();
 
   if (liveStreamSessionId.value) {
     void window.ipc?.stopIRISFull(liveStreamSessionId.value);
@@ -539,11 +547,38 @@ window.ipc?.extrinsicsComplete((data: { ok: boolean; message?: string; error?: s
   justify-content: flex-start;
 }
 
-.stream-video {
+.camera-grid {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+}
+.camera-grid.grid-cols-1 {
+  grid-template-columns: 1fr;
+}
+.camera-grid.grid-cols-2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+.camera-video-wrapper {
+  display: flex;
+  flex-direction: column;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.camera-video-label {
+  font-size: 11px;
+  padding: 3px 6px;
+  color: rgba(255, 255, 255, 0.6);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.camera-video {
   width: 100%;
   aspect-ratio: 16 / 9;
-  border-radius: 10px;
-  background: rgba(0, 0, 0, 0.35);
+  display: block;
+  background: black;
   object-fit: contain;
 }
 

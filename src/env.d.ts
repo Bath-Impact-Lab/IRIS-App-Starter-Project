@@ -42,6 +42,9 @@ interface IrisStartResult {
   ok: boolean;
   error?: string;
   sessionId?: string;
+  baseSessionId?: string;
+  engineSessionId?: string;
+  monitorSessionId?: string;
   configPath?: string;
   pipeStarted?: boolean;
   wsUrl?: string;
@@ -54,7 +57,9 @@ interface Window {
   ipc?: {
     startIRIS: (options: any) => Promise<IrisStartResult>;
     startIRISStream: (options: any) => Promise<IrisStartResult>;
+    startIRISFull: (options: any) => Promise<IrisStartResult>;
     stopIRIS: (Id: string | null) => Promise<{ ok: boolean; error?: string; sessionId?: string }>;
+    stopIRISFull: (baseSessionId: string | null) => Promise<{ ok: boolean }>;
     getExtrinsics: () => Promise<any>;
     onIrisData: (callback: (data: IrisData[] | IrisData) => void) => void;
     calculateIntrinsics: (index: number, rotation: number) => Promise<{ok: boolean, path?: string}>;

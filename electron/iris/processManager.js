@@ -41,6 +41,7 @@ function buildPipeName(prefix, sessionId) {
 class ProcessManager {
   constructor() {
     this.workers = new Map();
+    this._lastStopTimestamp = 0;
   }
 
   getExecutablePath() {
@@ -122,6 +123,14 @@ class ProcessManager {
   }
 
   async startFull({ sessionId, options, onMockData, onFrame, onCliOutput }) {
+    // Guard against rapid stop→start cycles that cause Windows camera driver lockouts
+    if (this._lastStopTimestamp) {
+      const elapsed = Date.now() - this._lastStopTimestamp;
+      if (elapsed < 500) {
+        await new Promise((r) => setTimeout(r, 500 - elapsed));
+      }
+    }
+
     if (!this.hasExecutable()) {
       onMockData();
       return { ok: false, error: 'Executable not found, using mock data' };
@@ -211,6 +220,7 @@ class ProcessManager {
       this.workers.has(engineId) ? this.stop(engineId) : Promise.resolve({ ok: true }),
     ]);
 
+    this._lastStopTimestamp = Date.now();
     console.log(`[ProcessManager] stopFull(${baseSessionId}) complete`);
     return { ok: true, baseSessionId, results: results.map((r) => r.value || r.reason) };
   }
@@ -274,6 +284,7 @@ class ProcessManager {
       }
     }, 10000);
 
+    this._lastStopTimestamp = Date.now();
     return { ok: true, sessionId };
   }
 
