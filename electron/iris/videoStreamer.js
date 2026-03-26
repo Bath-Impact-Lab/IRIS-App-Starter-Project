@@ -25,7 +25,8 @@ function closeServer(server) {
 
 class VideoStreamer {
   constructor() {
-    this.pipeServer = null;
+    // Array of net.Server — one per camera pipe
+    this.pipeServers = [];
     this.wsServer = null;
     this.pipeStreams = new Set();
     // Map<cameraId, Set<WebSocket>> — per-camera subscriber lists
@@ -50,7 +51,7 @@ class VideoStreamer {
         continue;
       }
 
-      if (client.bufferedAmount > 8 * 1024 * 1024) {
+      if (client.bufferedAmount > 512 * 1024) {
         client.terminate();
         continue;
       }
@@ -64,8 +65,11 @@ class VideoStreamer {
     }
   }
 
-  async start(pipeName) {
+  async start(pipeNames) {
     await this.stop();
+
+    // Normalize to array for backward compat (single string → array of one)
+    const pipes = Array.isArray(pipeNames) ? pipeNames : [pipeNames];
 
     const wsServer = await new Promise((resolve, reject) => {
       const server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
@@ -110,87 +114,10 @@ class VideoStreamer {
     });
 
     try {
-      const pipeServer = await new Promise((resolve, reject) => {
-        const server = net.createServer((stream) => {
-          this.pipeStreams.add(stream);
-          console.log(`[video-streamer] IRIS video pipe connected: ${pipeName}`);
-
-          let accumulator = Buffer.alloc(0);
-
-          stream.on('data', (chunk) => {
-            accumulator = Buffer.concat([accumulator, chunk]);
-
-            while (accumulator.length >= HEADER_SIZE) {
-              const magic = accumulator.readUInt32LE(0);
-              if (magic !== IPC_MAGIC) {
-                // Lost sync — scan forward for next magic marker
-                let found = false;
-                for (let i = 1; i <= accumulator.length - 4; i++) {
-                  if (accumulator.readUInt32LE(i) === IPC_MAGIC) {
-                    console.warn(`[video-streamer] resync: skipped ${i} bytes`);
-                    accumulator = accumulator.subarray(i);
-                    found = true;
-                    break;
-                  }
-                }
-                if (!found) {
-                  accumulator = accumulator.subarray(accumulator.length - 3);
-                  break;
-                }
-                continue;
-              }
-
-              const cameraId = accumulator.readUInt32LE(4);
-              const payloadSize = accumulator.readUInt32LE(36);
-              const frameSize = HEADER_SIZE + payloadSize;
-
-              if (payloadSize > MAX_PAYLOAD_SIZE) {
-                console.error(`[video-streamer] payload too large (${payloadSize} bytes), resyncing`);
-                accumulator = accumulator.subarray(4);
-                continue;
-              }
-
-              if (accumulator.length < frameSize) {
-                break; // Wait for more data
-              }
-
-              // Extract MPEG-TS payload (skip header) and route to camera subscribers
-              const tsPayload = accumulator.subarray(HEADER_SIZE, frameSize);
-              accumulator = accumulator.subarray(frameSize);
-
-              this._broadcastToCamera(cameraId, tsPayload);
-            }
-          });
-
-          const cleanupStream = () => {
-            this.pipeStreams.delete(stream);
-          };
-
-          stream.on('end', cleanupStream);
-          stream.on('close', cleanupStream);
-          stream.on('error', (err) => {
-            cleanupStream();
-            console.error('[video-streamer] pipe stream error:', err.message);
-          });
-        });
-
-        const handleError = (err) => {
-          server.off('listening', handleListening);
-          reject(err);
-        };
-
-        const handleListening = () => {
-          server.off('error', handleError);
-          resolve(server);
-        };
-
-        server.once('error', handleError);
-        server.once('listening', handleListening);
-        server.listen(pipeName);
-      });
+      const pipeServers = await Promise.all(pipes.map((pipeName) => this._createPipeServer(pipeName)));
 
       this.wsServer = wsServer;
-      this.pipeServer = pipeServer;
+      this.pipeServers = pipeServers;
 
       const address = wsServer.address();
       if (!address || typeof address === 'string') {
@@ -198,13 +125,96 @@ class VideoStreamer {
       }
 
       console.log(`[video-streamer] websocket listening on ws://127.0.0.1:${address.port}`);
-      console.log(`[video-streamer] waiting for IRIS video pipe on ${pipeName}`);
+      for (const p of pipes) {
+        console.log(`[video-streamer] waiting for IRIS video pipe on ${p}`);
+      }
 
       return address.port;
     } catch (err) {
       await closeServer(wsServer);
       throw err;
     }
+  }
+
+  _createPipeServer(pipeName) {
+    return new Promise((resolve, reject) => {
+      const server = net.createServer((stream) => {
+        this.pipeStreams.add(stream);
+        console.log(`[video-streamer] IRIS video pipe connected: ${pipeName}`);
+
+        let accumulator = Buffer.alloc(0);
+
+        stream.on('data', (chunk) => {
+          accumulator = Buffer.concat([accumulator, chunk]);
+
+          while (accumulator.length >= HEADER_SIZE) {
+            const magic = accumulator.readUInt32LE(0);
+            if (magic !== IPC_MAGIC) {
+              // Lost sync — scan forward for next magic marker
+              let found = false;
+              for (let i = 1; i <= accumulator.length - 4; i++) {
+                if (accumulator.readUInt32LE(i) === IPC_MAGIC) {
+                  console.warn(`[video-streamer] resync: skipped ${i} bytes`);
+                  accumulator = accumulator.subarray(i);
+                  found = true;
+                  break;
+                }
+              }
+              if (!found) {
+                accumulator = accumulator.subarray(accumulator.length - 3);
+                break;
+              }
+              continue;
+            }
+
+            const cameraId = accumulator.readUInt32LE(4);
+            const payloadSize = accumulator.readUInt32LE(36);
+            const frameSize = HEADER_SIZE + payloadSize;
+
+            if (payloadSize > MAX_PAYLOAD_SIZE) {
+              console.error(`[video-streamer] payload too large (${payloadSize} bytes), resyncing`);
+              accumulator = accumulator.subarray(4);
+              continue;
+            }
+
+            if (accumulator.length < frameSize) {
+              break; // Wait for more data
+            }
+
+            // Extract MPEG-TS payload (skip header) and route to camera subscribers
+            const tsPayload = accumulator.subarray(HEADER_SIZE, frameSize);
+            accumulator = accumulator.subarray(frameSize);
+
+            this._broadcastToCamera(cameraId, tsPayload);
+          }
+        });
+
+        const cleanupStream = () => {
+          this.pipeStreams.delete(stream);
+        };
+
+        stream.on('end', cleanupStream);
+        stream.on('close', cleanupStream);
+        stream.on('error', (err) => {
+          cleanupStream();
+          console.error('[video-streamer] pipe stream error:', err.message);
+        });
+      });
+
+      const handleError = (err) => {
+        server.off('listening', handleListening);
+        reject(err);
+      };
+
+      const handleListening = () => {
+        server.off('error', handleError);
+        resolve(server);
+      };
+
+      server.once('error', handleError);
+      server.once('listening', handleListening);
+      server.listen(pipeName);
+    });
   }
 
   async stop() {
@@ -229,14 +239,14 @@ class VideoStreamer {
 
     this.cameraClients.clear();
 
-    const pipeServer = this.pipeServer;
+    const pipeServers = this.pipeServers;
     const wsServer = this.wsServer;
 
-    this.pipeServer = null;
+    this.pipeServers = [];
     this.wsServer = null;
 
     await Promise.all([
-      closeServer(pipeServer),
+      ...pipeServers.map((s) => closeServer(s)),
       closeServer(wsServer),
     ]);
   }

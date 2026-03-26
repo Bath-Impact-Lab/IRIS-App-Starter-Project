@@ -76,7 +76,11 @@ class ProcessManager {
 
     const { tmpDir, cfgPath } = writeTempConfigFile(buildConfigFromOptions(options));
     const posePipeName = buildPipeName('iris_pose', sessionId);
-    const videoPipeName = buildPipeName('iris_video', sessionId);
+    const cameraCount = options.cameras?.length ?? 1;
+    const videoPipeNames = [];
+    for (let i = 0; i < cameraCount; i++) {
+      videoPipeNames.push(buildPipeName(`iris_video_cam${i}`, sessionId));
+    }
     const videoStreamer = new VideoStreamer();
     let pipeServer = null;
 
@@ -86,14 +90,18 @@ class ProcessManager {
         onFrame,
       });
 
-      const wsPort = await videoStreamer.start(videoPipeName);
+      const wsPort = await videoStreamer.start(videoPipeNames);
+      const fps = String(options.video_fps ?? 30);
       const args = [
         'monitor',
         '--shm-name', 'iris_shm_ipc',
         '--pipe', posePipeName,
-        '--video-pipe', videoPipeName,
-        '--fps', '30',
+        '--fps', fps,
       ];
+
+      for (let i = 0; i < cameraCount; i++) {
+        args.push('--video-pipe', `${i}:${videoPipeNames[i]}`);
+      }
 
       return this.spawnWorker({
         sessionId,
@@ -123,7 +131,6 @@ class ProcessManager {
   }
 
   async startFull({ sessionId, options, onMockData, onFrame, onCliOutput }) {
-    // Guard against rapid stop→start cycles that cause Windows camera driver lockouts
     if (this._lastStopTimestamp) {
       const elapsed = Date.now() - this._lastStopTimestamp;
       if (elapsed < 500) {
@@ -138,7 +145,11 @@ class ProcessManager {
 
     const { tmpDir, cfgPath } = writeTempConfigFile(buildConfigFromOptions(options));
     const posePipeName = buildPipeName('iris_pose', sessionId);
-    const videoPipeName = buildPipeName('iris_video', sessionId);
+    const cameraCount = options.cameras?.length ?? 1;
+    const videoPipeNames = [];
+    for (let i = 0; i < cameraCount; i++) {
+      videoPipeNames.push(buildPipeName(`iris_video_cam${i}`, sessionId));
+    }
 
     const engineSessionId = `${sessionId}_engine`;
     const monitorSessionId = `${sessionId}_monitor`;
@@ -166,17 +177,22 @@ class ProcessManager {
         onFrame,
       });
 
-      const wsPort = await videoStreamer.start(videoPipeName);
+      const wsPort = await videoStreamer.start(videoPipeNames);
+      const fps = String(options.video_fps ?? 30);
+      const monitorArgs = [
+        'monitor',
+        '--shm-name', 'iris_shm_ipc',
+        '--pipe', posePipeName,
+        '--fps', fps,
+      ];
+
+      for (let i = 0; i < cameraCount; i++) {
+        monitorArgs.push('--video-pipe', `${i}:${videoPipeNames[i]}`);
+      }
 
       const monitorResult = this.spawnWorker({
         sessionId: monitorSessionId,
-        args: [
-          'monitor',
-          '--shm-name', 'iris_shm_ipc',
-          '--pipe', posePipeName,
-          '--video-pipe', videoPipeName,
-          '--fps', '30',
-        ],
+        args: monitorArgs,
         cfgPath,
         tmpDir: null,
         pipeServer,
