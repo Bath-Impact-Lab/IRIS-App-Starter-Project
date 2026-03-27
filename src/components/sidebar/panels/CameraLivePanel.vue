@@ -269,9 +269,11 @@ async function connectLiveStreams(baseWsUrl: string, cameraCount: number) {
   // Wait for Vue to render the video elements
   await nextTick();
 
-  for (let i = 0; i < cameraCount; i++) {
-    await attachCameraPlayer(i, baseWsUrl);
-  }
+  // Connect all cameras in parallel so every WS client subscribes before
+  // any early-buffered MPEG-TS data (PAT/PMT/IDR) is dropped.
+  await Promise.all(
+    Array.from({ length: cameraCount }, (_, i) => attachCameraPlayer(i, baseWsUrl)),
+  );
 
   liveStreamStatus.value = null;
 }

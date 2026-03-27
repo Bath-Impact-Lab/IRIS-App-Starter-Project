@@ -23,6 +23,9 @@ function closeServer(server) {
   });
 }
 
+// Max bytes to buffer per camera before any WS client subscribes.
+const EARLY_BUFFER_CAP = 2 * 1024 * 1024; // 2 MB
+
 class VideoStreamer {
   constructor() {
     // Array of net.Server — one per camera pipe
@@ -31,6 +34,11 @@ class VideoStreamer {
     this.pipeStreams = new Set();
     // Map<cameraId, Set<WebSocket>> — per-camera subscriber lists
     this.cameraClients = new Map();
+    // Per-camera early-data buffers: MPEG-TS chunks that arrive before any
+    // WS client subscribes.  Flushed to the first subscriber so it receives
+    // the init segment (PAT / PMT / SPS / PPS / IDR) required for decoding.
+    this._earlyBuffers = new Map();     // Map<cameraId, Buffer[]>
+    this._earlyBufferBytes = new Map(); // Map<cameraId, number>
   }
 
   _getOrCreateCameraSet(cameraId) {
@@ -44,7 +52,23 @@ class VideoStreamer {
 
   _broadcastToCamera(cameraId, payload) {
     const clients = this.cameraClients.get(cameraId);
-    if (!clients || clients.size === 0) return;
+
+    // No WS subscribers yet — buffer early data so the first subscriber
+    // receives the MPEG-TS init segment it needs to start decoding.
+    if (!clients || clients.size === 0) {
+      const totalBytes = this._earlyBufferBytes.get(cameraId) || 0;
+      if (totalBytes < EARLY_BUFFER_CAP) {
+        let buf = this._earlyBuffers.get(cameraId);
+        if (!buf) {
+          buf = [];
+          this._earlyBuffers.set(cameraId, buf);
+          console.log(`[video-streamer] camera ${cameraId}: buffering early frames (no WS subscribers yet)`);
+        }
+        buf.push(Buffer.from(payload));
+        this._earlyBufferBytes.set(cameraId, totalBytes + payload.length);
+      }
+      return;
+    }
 
     for (const client of clients) {
       if (client.readyState !== OPEN) {
@@ -103,6 +127,24 @@ class VideoStreamer {
       const clients = this._getOrCreateCameraSet(cameraId);
       clients.add(socket);
       console.log(`[video-streamer] WS client subscribed to camera ${cameraId}`);
+
+      // Flush any early-buffered MPEG-TS data so this client receives the
+      // init segment (PAT/PMT/IDR) even if the monitor started before it.
+      const earlyBuf = this._earlyBuffers.get(cameraId);
+      if (earlyBuf && earlyBuf.length > 0) {
+        const totalBytes = this._earlyBufferBytes.get(cameraId) || 0;
+        console.log(`[video-streamer] camera ${cameraId}: flushing ${earlyBuf.length} buffered chunks (${(totalBytes / 1024).toFixed(1)} KB) to new subscriber`);
+        for (const chunk of earlyBuf) {
+          try {
+            socket.send(chunk, { binary: true, compress: false });
+          } catch (err) {
+            console.error('[video-streamer] early-buffer flush failed:', err.message);
+            break;
+          }
+        }
+        this._earlyBuffers.delete(cameraId);
+        this._earlyBufferBytes.delete(cameraId);
+      }
 
       socket.on('error', (err) => {
         console.error('[video-streamer] websocket client error:', err.message);
@@ -238,6 +280,8 @@ class VideoStreamer {
     }
 
     this.cameraClients.clear();
+    this._earlyBuffers.clear();
+    this._earlyBufferBytes.clear();
 
     const pipeServers = this.pipeServers;
     const wsServer = this.wsServer;
