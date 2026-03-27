@@ -129,8 +129,12 @@
         </svg>
         {{ calibratingExtrinsics ? 'Calibrating…' : 'Calibrate Extrinsics' }}
       </button>
+      <div v-if="!running && !allCamerasReady && (selectedCameras?.length ?? 0) > 0" class="warming-up">
+        <span class="calib-spinner warming-spinner"></span>
+        Warming up cameras…
+      </div>
       <div class="parent">
-        <button class="button btn grid1" @click="onStartIris" :disabled="running">Start IRIS</button>
+        <button class="button btn grid1" @click="onStartIris" :disabled="running || !allCamerasReady">Start IRIS</button>
         <select
           v-model.number="irisFps"
           name="FPS"
@@ -168,6 +172,7 @@ const {
   startCameraStream,
   stopCameraStream,
   refreshStreams,
+  allCamerasReady,
 } = useCameraStore();
 
 const { personCount, running, setIrisData, setRunning } = useIrisStore();
@@ -640,6 +645,19 @@ window.ipc?.extrinsicsComplete((data: { ok: boolean; message?: string; error?: s
   gap: 6px;
 }
 .calibrate-extrinsics-btn:disabled { opacity: 0.4; }
+
+.warming-up {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  margin: 6px 0 2px;
+}
+.warming-spinner {
+  border-color: rgba(255, 255, 255, 0.2);
+  border-top-color: rgba(255, 255, 255, 0.7);
+}
 
 .calibrate-intrinsics-btn {
   width: 100%;

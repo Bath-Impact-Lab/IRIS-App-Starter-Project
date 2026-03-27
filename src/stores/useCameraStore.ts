@@ -11,6 +11,7 @@ export interface RecordingVideoFile {
 const cameraRotation = ref<Record<string, number>>({});
 const fsVideoFiles = ref<RecordingVideoFile[]>([]);
 const fsPlaybackVideoUrls = ref<(string | null)[]>([]);
+const connectedCameraIds = ref<Set<string>>(new Set());
 
 const cameraService = useCameras({ autoReselect: true });
 
@@ -32,6 +33,12 @@ const hasCameraSelected = computed(() => (
   hasSelectedCameras.value ||
   (outputOption.value === 'Filesystem' && fsVideoFiles.value.length > 0)
 ));
+const allCamerasReady = computed(() => {
+  if (!selectedDevices.value || selectedDevices.value.length === 0) return false;
+  return selectedDevices.value.every(
+    (d) => isPlaybackDevice(d) || connectedCameraIds.value.has(d.deviceId),
+  );
+});
 
 function isPlaybackDevice(device: MediaDeviceInfo) {
   return device.deviceId.startsWith('fs-playback-');
@@ -55,7 +62,12 @@ async function startCameraStream(camera: MediaDeviceInfo, index: number) {
     });
 
     const video = document.getElementById(`cameraFeed${index}`) as HTMLVideoElement | null;
-    if (video) video.srcObject = stream;
+    if (video) {
+      video.srcObject = stream;
+      video.addEventListener('playing', () => {
+        connectedCameraIds.value = new Set(connectedCameraIds.value).add(camera.deviceId);
+      }, { once: true });
+    }
   } catch (err) {
     console.error('Camera access failed:', err);
   }
@@ -67,6 +79,14 @@ function stopCameraStream(index: number) {
     const video = document.getElementById(`cameraFeed${index}`) as HTMLVideoElement | null;
     const stream = video?.srcObject as MediaStream | null;
     if (!stream) return;
+
+    // Remove from connected set
+    const device = selectedDevices.value?.[index];
+    if (device) {
+      const next = new Set(connectedCameraIds.value);
+      next.delete(device.deviceId);
+      connectedCameraIds.value = next;
+    }
 
     stream.getTracks().forEach((track) => {
       track.stop();
@@ -156,6 +176,7 @@ export function useCameraStore() {
     selectedCameraCount,
     hasSelectedCameras,
     hasCameraSelected,
+    allCamerasReady,
     enumerateCameras,
     init: initCameras,
     dispose: disposeCameras,
