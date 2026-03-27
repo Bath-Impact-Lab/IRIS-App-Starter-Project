@@ -34,6 +34,7 @@ function buildConfigFromOptions(opts = {}) {
   const cameraIds = cameras.map((c) => parseInt(c.uri));
   const fps = cameras[0]?.fps ?? 30;
   const rotation = cameras[0]?.rotation ?? 0;
+  const openDelayMs = opts.open_delay_ms ?? (cameras.length > 1 ? 750 : 0);
 
   return {
     run_id,
@@ -105,6 +106,7 @@ function buildConfigFromOptions(opts = {}) {
       capture: {
         camera_group: 'main',
         id_prefix: 'cap',
+        open_delay_ms: openDelayMs,
       },
       detection: {
         id: 'det0',
