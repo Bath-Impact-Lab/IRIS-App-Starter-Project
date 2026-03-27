@@ -611,6 +611,7 @@ window.ipc?.extrinsicsComplete((data: { ok: boolean; message?: string; error?: s
 }
 .button:hover { background: rgba(18,27,36,0.72); }
 .button:active { background: rgba(12,18,25,0.808); }
+.button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .cameras {
   height: 75%;
