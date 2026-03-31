@@ -1,6 +1,5 @@
 <template>
-  <aside class="session-sidenav">
-    
+  <aside class="session-sidenav">   
     <div class="session-sidenav-section">
       <button 
         class="dropdown-toggle" 
@@ -72,7 +71,18 @@
 
     <div class="session-sidenav-divider"></div>
 
+    
+
     <div class="session-sidenav-bottom">
+      <button 
+        class="session-sidenav-action" 
+        :class="{ active: activeView === 'calibrate' }"
+        @click="emit('calibrate-rig')"
+        type="button"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><line x1="12" y1="5" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="19"></line><line x1="5" y1="12" x2="2" y2="12"></line><line x1="22" y1="12" x2="19" y2="12"></line></svg>
+        Calibrate Rig
+      </button>
       <button 
         class="session-sidenav-action" 
         :class="{ active: activeView === 'capture' }"
@@ -93,6 +103,13 @@
       </button>
     </div>
 
+    <div class="session-sidenav-brand">
+      <img
+        src="/assets/RecaptureGraphic.png"
+        alt="ReCapture"
+        class="session-sidenav-brand-image"
+      />
+    </div>
   </aside>
 </template>
 
@@ -100,7 +117,7 @@
 import { ref } from 'vue';
 
 interface Props {
-  activeView: 'capture' | 'analysis';
+  activeView: 'capture' | 'analysis' | 'calibrate';
 }
 
 defineProps<Props>();
@@ -108,6 +125,7 @@ defineProps<Props>();
 const emit = defineEmits<{
   'open-capture': [];
   'open-analysis': [];
+  'calibrate-rig': [];
 }>();
 
 // State for the main cameras dropdown
@@ -158,6 +176,21 @@ const toggleSession = (index: number) => {
 
 .session-sidenav::-webkit-scrollbar {
   display: none;
+}
+
+.session-sidenav-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px 8px;
+}
+
+.session-sidenav-brand-image {
+  display: block;
+  width: 100%;
+  max-width: 200px;
+  height: auto;
+  object-fit: contain;
 }
 
 .session-sidenav-section {
