@@ -10,16 +10,8 @@
       >
         <h2 class="session-sidenav-title">Connected Cameras</h2>
         <svg 
-          xmlns="http://www.w3.org/2000/svg" 
-          width="16" height="16" 
-          viewBox="0 0 24 24" 
-          fill="none" 
-          stroke="currentColor" 
-          stroke-width="2" 
-          stroke-linecap="round" 
-          stroke-linejoin="round"
-          class="chevron"
-          :class="{ 'open': isCamerasOpen }"
+          xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+          class="chevron" :class="{ 'open': isCamerasOpen }"
         >
           <polyline points="6 9 12 15 18 9"></polyline>
         </svg>
@@ -39,17 +31,42 @@
     </div>
 
     <div class="session-sidenav-section">
-      <h2 class="session-sidenav-title">Sessions</h2>
+      <h2 class="session-sidenav-title">Participant 1</h2>
       <div class="session-sidenav-list">
-        <button 
-          v-for="(session, index) in sessions" 
-          :key="`session-${index}`" 
-          class="session-sidenav-link"
-          type="button"
-        >
-          <span class="indicator"></span>
-          {{ session }}
-        </button>
+        
+        <div v-for="(session, index) in participantSessions" :key="session.id" class="session-group">
+          
+          <button 
+            class="session-sidenav-link date-toggle"
+            @click="toggleSession(index)"
+            type="button"
+          >
+            <div class="link-left">
+              <span class="indicator"></span>
+              {{ session.date }}
+            </div>
+            <svg 
+              xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+              class="chevron small-chevron" :class="{ 'open': session.isOpen }"
+            >
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
+
+          <div v-show="session.isOpen" class="nested-list">
+            <button 
+              v-for="(exercise, eIndex) in session.exercises" 
+              :key="`ex-${index}-${eIndex}`"
+              class="session-sidenav-link nested-link"
+              type="button"
+            >
+              <span class="nested-dash">-</span>
+              {{ exercise }}
+            </button>
+          </div>
+
+        </div>
+
       </div>
     </div>
 
@@ -93,20 +110,40 @@ const emit = defineEmits<{
   'open-analysis': [];
 }>();
 
-// State for the camera dropdown (defaults to open so it's visible initially)
+// State for the main cameras dropdown
 const isCamerasOpen = ref(true);
-
-const sessions = ['16/4/2026', '16/4/2026', '16/4/2026', '16/4/2026'];
 const cameras = ['Camera 1', 'Camera 2', 'Camera 3', 'Camera 4'];
+
+// Helper to generate random exercises
+const availableExercises = ['Squat', 'Bench Press', 'Deadlift', 'Overhead Press', 'Barbell Row', 'Lunge', 'Plank'];
+const getRandomExercises = () => {
+  // Pick between 2 to 4 random exercises
+  const count = Math.floor(Math.random() * 3) + 2; 
+  const shuffled = [...availableExercises].sort(() => 0.5 - Math.random());
+  return shuffled.slice(0, count);
+};
+
+// State for Participant Sessions with nested randomized exercises
+const participantSessions = ref([
+  { id: 1, date: '16/4/2026', isOpen: false, exercises: getRandomExercises() },
+  { id: 2, date: '14/4/2026', isOpen: false, exercises: getRandomExercises() },
+  { id: 3, date: '12/4/2026', isOpen: false, exercises: getRandomExercises() },
+  { id: 4, date: '10/4/2026', isOpen: false, exercises: getRandomExercises() },
+]);
+
+// Toggle function for individual date dropdowns
+const toggleSession = (index: number) => {
+  participantSessions.value[index].isOpen = !participantSessions.value[index].isOpen;
+};
 </script>
 
 <style scoped>
 .session-sidenav {
   position: absolute;
-  top: 63px;
+  top: var(--app-topbar-height, 63px);
+  bottom: 0;
   left: 0;
-  width: 240px;
-  height: calc(100% - 63px);
+  width: var(--app-session-sidenav-width, 240px);
   padding: 20px 12px;
   display: flex;
   flex-direction: column;
@@ -135,7 +172,7 @@ const cameras = ['Camera 1', 'Camera 2', 'Camera 3', 'Camera 4'];
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  padding: 4px 12px; /* Matched padding to align with links */
+  padding: 4px 12px;
   background: transparent;
   border: none;
   border-radius: 6px;
@@ -148,7 +185,7 @@ const cameras = ['Camera 1', 'Camera 2', 'Camera 3', 'Camera 4'];
 }
 
 .dropdown-toggle .session-sidenav-title {
-  padding-left: 0; /* Reset padding since it's now on the button */
+  padding-left: 0;
 }
 
 .chevron {
@@ -160,9 +197,13 @@ const cameras = ['Camera 1', 'Camera 2', 'Camera 3', 'Camera 4'];
   transform: rotate(180deg);
 }
 
+.small-chevron {
+  opacity: 0.6;
+}
+
 .session-sidenav-title {
   margin: 0;
-  padding-left: 12px; /* Applies to standard titles like "Sessions" */
+  padding-left: 12px;
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
@@ -175,6 +216,13 @@ const cameras = ['Camera 1', 'Camera 2', 'Camera 3', 'Camera 4'];
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+/* Group container for dates + nested items */
+.session-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .session-sidenav-link {
@@ -197,6 +245,16 @@ const cameras = ['Camera 1', 'Camera 2', 'Camera 3', 'Camera 4'];
   transition: all 0.2s ease;
 }
 
+.date-toggle {
+  justify-content: space-between;
+}
+
+.link-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .indicator {
   width: 6px;
   height: 6px;
@@ -205,7 +263,6 @@ const cameras = ['Camera 1', 'Camera 2', 'Camera 3', 'Camera 4'];
   transition: background-color 0.2s ease;
 }
 
-/* Optional: Give camera indicators a specific active color like green */
 .camera-indicator {
   background-color: var(--success, #10b981); 
 }
@@ -217,6 +274,26 @@ const cameras = ['Camera 1', 'Camera 2', 'Camera 3', 'Camera 4'];
 
 .session-sidenav-link:hover .indicator:not(.camera-indicator) {
   background-color: var(--accent, #3b82f6);
+}
+
+/* Nested List Styles */
+.nested-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 18px; /* Indent child items */
+  margin-top: 2px;
+}
+
+.nested-link {
+  font-size: 0.85rem;
+  padding: 6px 12px;
+  color: var(--sidenav-link-muted, #6b7280);
+}
+
+.nested-dash {
+  opacity: 0.5;
+  font-weight: bold;
 }
 
 .session-sidenav-divider {

@@ -51,19 +51,51 @@ function isLightTheme() {
 
 function applyThemeToScene() {
   if (!renderer) return;
-  if (isLightTheme()) {
-    renderer.setClearColor(LIGHT_BG);
-    if (grid) {
-      (grid.material as THREE.LineBasicMaterial).color.set(0x99ccee);
-    }
+  
+  const isLight = isLightTheme();
+  const bgColor = isLight ? LIGHT_BG : DARK_BG;
+  
+  renderer.setClearColor(bgColor);
+
+  // Update Fog Color to match background
+  if (scene && scene.fog) {
+    (scene.fog as THREE.Fog).color.set(bgColor);
+  }
+
+  if (isLight) {
+    if (grid) (grid.material as THREE.LineBasicMaterial).color.set(0x99ccee);
     if (hemi) { hemi.groundColor.set(0xddeef8); hemi.intensity = 1.2; }
   } else {
-    renderer.setClearColor(DARK_BG);
-    if (grid) {
-      (grid.material as THREE.LineBasicMaterial).color.set(0x5a7a99);
-    }
+    if (grid) (grid.material as THREE.LineBasicMaterial).color.set(0x5a7a99);
     if (hemi) { hemi.groundColor.set(0x223344); hemi.intensity = 0.9; }
   }
+}
+
+function createAxisLabelSprite(text: string): THREE.Sprite {
+  const canvas = document.createElement('canvas');
+  canvas.width = 128;
+  canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  
+  if (ctx) {
+    ctx.font = 'bold 36px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    
+    // Universal visibility: white text with a black outline
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#000000';
+    ctx.strokeText(text, 64, 32);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(text, 64, 32);
+  }
+  
+  const texture = new THREE.CanvasTexture(canvas);
+  const material = new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true });
+  const sprite = new THREE.Sprite(material);
+  sprite.scale.set(1.5, 0.75, 1); // Adjust aspect ratio to match canvas
+  
+  return sprite;
 }
 
 // Store discovered bones to drive them with joint_angles
@@ -116,6 +148,8 @@ function resizeScene(width = sceneRef.value?.clientWidth ?? 0, height = sceneRef
 
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(width, height, false);
+  renderer.domElement.style.width = '100%';
+  renderer.domElement.style.height = '100%';
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
 }
@@ -180,19 +214,52 @@ async function initThree(container: HTMLElement) {
   const height = Math.max(container.clientHeight, 1);
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(width, height);
+  renderer.setSize(width, height, false);
+  renderer.domElement.style.display = 'block';
+  renderer.domElement.style.width = '100%';
+  renderer.domElement.style.height = '100%';
   container.appendChild(renderer.domElement);
 
   scene = new THREE.Scene(); 
+  
+  // 1. ADD FOG
+  // Using linear fog: color, near distance, far distance
+  scene.fog = new THREE.Fog(isLightTheme() ? LIGHT_BG : DARK_BG, 5, 20);
+
   camera = new THREE.PerspectiveCamera(50, width / height, 0.01, 1000);
   camera.position.set(5, 5, 5);
   resizeScene(width, height);
 
   hemi = new THREE.HemisphereLight(0xffffff, 0x223344, 0.9);
   scene.add(hemi);
-  const dir = new THREE.DirectionalLight(0xffffff, 0.9); dir.position.set(2, 3, 2); dir.castShadow = true; scene.add(dir);
+  const dir = new THREE.DirectionalLight(0xffffff, 0.9); 
+  dir.position.set(2, 3, 2); 
+  dir.castShadow = true; 
+  scene.add(dir);
 
-  grid = new THREE.GridHelper(10, 20, 0x5a7a99, 0x3d5a73); scene.add(grid);
+  // 2. PALER GRID
+  grid = new THREE.GridHelper(100, 200, 0x5a7a99, 0x3d5a73); 
+  (grid.material as THREE.LineBasicMaterial).transparent = true;
+  (grid.material as THREE.LineBasicMaterial).opacity = 0.2; 
+  scene.add(grid);
+
+  // 3. ADD AXIS LABELS
+  // Placed slightly outside the 10x10 grid (which goes from -5 to 5)
+  const labelX = createAxisLabelSprite('+X');
+  labelX.position.set(5.5, 0, 0);
+  scene.add(labelX);
+
+  const labelMinusX = createAxisLabelSprite('-X');
+  labelMinusX.position.set(-5.5, 0, 0);
+  scene.add(labelMinusX);
+
+  const labelZ = createAxisLabelSprite('+Z');
+  labelZ.position.set(0, 0, 5.5);
+  scene.add(labelZ);
+
+  const labelMinusZ = createAxisLabelSprite('-Z');
+  labelMinusZ.position.set(0, 0, -5.5);
+  scene.add(labelMinusZ);
 
   // Apply theme immediately and watch for future changes
   applyThemeToScene();
