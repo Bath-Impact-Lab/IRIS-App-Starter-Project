@@ -121,8 +121,10 @@ body{
 .device{ padding:8px 10px; border-radius:8px; display:flex; align-items:center; gap:10px; cursor:pointer; color: var(--fg); }
 .device:hover{ background:var(--device-hover); }
 .device small{ color:var(--muted) }
-.scene{ position: absolute; inset: 63px 250px 0 220px; }
+.scene{ position: absolute; inset: 63px 0 0 220px; }
+.sidebar-open .scene{ inset: 63px 250px 0 220px; }
 @media (max-width: 768px) {
+  .scene,
   .sidebar-open .scene {
     inset: 63px 0 0 0;
   }

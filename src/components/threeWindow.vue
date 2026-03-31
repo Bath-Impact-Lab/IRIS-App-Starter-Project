@@ -40,6 +40,7 @@ let modelsRoot: THREE.Object3D[] | null = null;
 let grid: THREE.GridHelper | null = null;
 let hemi: THREE.HemisphereLight | null = null;
 let themeObserver: MutationObserver | null = null;
+let animationFrameId: number | null = null;
 
 const DARK_BG  = '#0b0f14';
 const LIGHT_BG = '#ddeef8';
@@ -109,14 +110,40 @@ watch(() => IrisState.running, (running) => {
   }
 })
 
+function resizeScene(width = sceneRef.value?.clientWidth ?? 0, height = sceneRef.value?.clientHeight ?? 0) {
+  if (!renderer || !camera) return;
+  if (width <= 0 || height <= 0) return;
+
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(width, height, false);
+  camera.aspect = width / height;
+  camera.updateProjectionMatrix();
+}
+
+function handleWindowResize() {
+  resizeScene();
+}
+
 onMounted(() => {
   if (sceneRef.value) initThree(sceneRef.value);
-  if (resizeObserver && sceneRef.value) resizeObserver.unobserve(sceneRef.value);
+  window.addEventListener('resize', handleWindowResize);
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleWindowResize);
+  resizeObserver?.disconnect();
+  resizeObserver = null;
   themeObserver?.disconnect();
   themeObserver = null;
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
+  controls?.dispose();
+  controls = null;
+  renderer?.dispose();
+  renderer?.domElement.remove();
+  renderer = null;
 })
 
 async function loadModel(scene: THREE.Scene, type: string) {
@@ -149,8 +176,8 @@ async function loadModel(scene: THREE.Scene, type: string) {
 }
 
 async function initThree(container: HTMLElement) {
-  const width = container.clientWidth;
-  const height = container.clientHeight;
+  const width = Math.max(container.clientWidth, 1);
+  const height = Math.max(container.clientHeight, 1);
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(width, height);
@@ -159,6 +186,7 @@ async function initThree(container: HTMLElement) {
   scene = new THREE.Scene(); 
   camera = new THREE.PerspectiveCamera(50, width / height, 0.01, 1000);
   camera.position.set(5, 5, 5);
+  resizeScene(width, height);
 
   hemi = new THREE.HemisphereLight(0xffffff, 0x223344, 0.9);
   scene.add(hemi);
@@ -201,7 +229,7 @@ async function initThree(container: HTMLElement) {
   let lastTime = 0
   let currentFrame = 0
   const animate = (time: number) => {
-    requestAnimationFrame(animate)
+    animationFrameId = requestAnimationFrame(animate)
 
     if (props.irisData) {
       //used for data from position json file
@@ -219,16 +247,16 @@ async function initThree(container: HTMLElement) {
     controls?.update()
     renderer?.render(scene, camera)
   };
-  animate(lastTime)
+  animationFrameId = requestAnimationFrame(animate)
 
-  resizeObserver = new ResizeObserver(entries => {
-    for (const entry of entries) {
-      const w = entry.contentRect.width; const h = entry.contentRect.height;
-      renderer!.setSize(w, h);
-      camera.aspect = w / h; camera.updateProjectionMatrix();
-    }
-  });
-  resizeObserver.observe(container);
+  if (typeof ResizeObserver !== 'undefined') {
+    resizeObserver = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        resizeScene(entry.contentRect.width, entry.contentRect.height);
+      }
+    });
+    resizeObserver.observe(container);
+  }
 }
 
 const tmpParentWorldQuat = new THREE.Quaternion();

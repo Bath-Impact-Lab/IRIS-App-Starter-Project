@@ -371,10 +371,14 @@ onBeforeUnmount(() => {
 /* ── Analysis Window — theme-aware ── */
 .analysis-window {
   position: absolute;
-  inset: 63px 250px 0 220px;
+  inset: 63px 0 0 220px;
   padding: 20px;
   overflow: auto;
   background: radial-gradient(120% 120% at 15% 0%, rgba(45, 87, 138, 0.15) 0%, rgba(8, 13, 20, 0.95) 62%);
+}
+
+.sidebar-open .analysis-window {
+  inset: 63px 250px 0 220px;
 }
 
 [data-theme="light"] .analysis-window {
