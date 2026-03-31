@@ -4,57 +4,16 @@ declare module '*.vue' {
   const component: DefineComponent<{}, {}, any>
   export default component
 }
-
-interface IrisData {  
-  entities: {
-      analysis: {
-        centers: {
-          neck: {
-            conf: number,
-            x: number,
-            y: number,
-            z: number,
-          },
-          pelvis: {
-            conf: number,
-            x: number,
-            y: number,
-            z: number,
-          }
-          spine_mid: {
-            conf: number,
-            x: number,
-            y: number,
-            z: number,
-          }
-        }
-        joint_angles: {
-          elbow_l: number,
-          elbow_r: number,
-          hip_l: number,
-          hip_r: number,
-          knee_l: number,
-          knee_r: number,
-          shoulder_l: number,
-          shoulder_r: number,
-          torso_tilt: number,
-        }
-      }
-      id: number,
-      skeleton: {
-        keypoints_3d: {
-          conf: number,
-          joint_idx: number,
-          x: number,
-          y: number,
-          z: number,
-        }[]
-      },
-      seq: number,
-      t_end: number,
-      t_start: number,
-    }[]
+  
+  interface IrisData {  
+  people: {
+    person_id: number;
+    joint_angles: [number, number, number, number][];
+    joint_centers: [number, number, number][]; // Array of 3D coordinates: [x, y, z]
+    points_2d: [number, number][];
+  }[];
 }
+
 
 interface Window {
   electronAPI?: {
@@ -62,18 +21,17 @@ interface Window {
   }
   ipc?: {
     startIRIS: (options: any) => Promise<any>;
+    startIRISStream: (options: any) => Promise<any>;
     stopIRIS: (Id: any) => Promise<any>;
     getExtrinsics: () => Promise<any>;
+    getScene: () => Promise<string | null>;
     onIrisData: (callback: (data: IrisData[] | IrisData) => void) => void;
-    calculateIntrinsics: (index: number, rotation: number) => Promise<{ok: boolean, path?: string}>;
-    cancelIntrinsics: () => Promise<{ok: boolean}>;
-    intrinsicsComplete: (callback: (data: {idx: number, path: string}) => void) => void;
-    calculateExtrinsics: (cameraIndices: number[], rotation: number) => Promise<{ok: boolean}>;
-    cancelExtrinsics: () => Promise<{ok: boolean}>;
-    extrinsicsComplete: (callback: (data: {ok: boolean, message?: string, error?: string}) => void) => void;
     startMonitor: (outputDir: string) => Promise<{ok: boolean, outputDir?: string, error?: string}>;
     stopMonitor: () => Promise<{ok: boolean}>;
     checkIrisCli: () => Promise<{found: boolean, path: string}>;
     onIrisCliOutput: (callback: (data: {channel: string; cameraIndex?: number; line: string}) => void) => void;
+    connectVR: () => void;
+    updatePos: (val: string) => void;
+    disconnectVR: () => void;
   }
 } 

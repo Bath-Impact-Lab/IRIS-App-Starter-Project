@@ -1,11 +1,11 @@
 import { ref, watch, type Ref } from 'vue';
 import * as THREE from 'three';
 import mockExtrinsicsFallback from './../../public/assets/mockExtrinsics.json';
-
+import { PLYLoader } from 'three/examples/jsm/Addons.js';
 export interface SceneCameraDef {
   name: string;
   position: { x: number; y: number; z: number };
-  lookAt: { x: number; y: number; z: number };
+  rotation: number[];
   color: string;
 }
 
@@ -33,11 +33,29 @@ export interface PlaySpaceBounds {
   cameraFootprints: CameraFootprint[]; // per-camera floor polygons
 }
 
+interface Extrinsics {
+  cameras: cameras[],
+  frames_used: number,
+  mean_reprojection_error: number,
+  success: boolean,
+}
+
+interface cameras {
+    cam_id: number,
+    extrinsics: {
+      R: number[],
+      cam_id: number,
+      t: number[],
+    },
+    reprojection_error: number,
+    success: boolean,
+}
+
 const GIZMO_SCALE = 0.2;
 
 function createCameraGizmo(
   position: { x: number; y: number; z: number },
-  lookAt: { x: number; y: number; z: number },
+  rotation: number[],
   color: string,
   rotationDeg: number = 0,
 ): THREE.Group {
@@ -79,7 +97,7 @@ function createCameraGizmo(
   const lines = new THREE.LineSegments(lineGeo, lineMat);
 
   // Apply camera body rotation around the local Z axis (the viewing direction)
-  const rotRad = (rotationDeg * Math.PI) / 180;
+  const rotRad = ((rotationDeg+180) * Math.PI) / 180;
   lines.rotation.z = rotRad;
 
   const gap = s * 0.08;
@@ -113,8 +131,16 @@ function createCameraGizmo(
 
   group.position.set(position.x, position.y, position.z);
 
-  group.lookAt(lookAt.x, lookAt.y, lookAt.z);
+  const Rotation = new THREE.Matrix4()
+  Rotation.set(
+    rotation[0], rotation[1], rotation[2], 0,
+    rotation[3], rotation[4], rotation[5], 0,    
+    rotation[6], rotation[7], rotation[8], 0,
+    0, 0, 0, 1,
+  )
 
+  group.setRotationFromMatrix(Rotation);
+  
   return group;
 }
 
@@ -233,27 +259,21 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
    * So camera position in world space = -R^T * t
    * And the forward axis (look direction) = third row of R (Z column of R^T).
    */
-  function extrinsicsToDef(entry: any, index: number, scale = 1): SceneCameraDef {
+  function extrinsicsToDef(entry: cameras, index: number, scale = 1): SceneCameraDef {
     // Support both field name variants
-    const R: number[] = entry.extrinsics.rotation_matrix ?? entry.extrinsics.R;
-    const t: number[] = entry.extrinsics.translation_matrix ?? entry.extrinsics.t;
+    const R: number[] = entry.extrinsics.R;
+    const t: number[] = entry.extrinsics.t;
 
-    // R as rows: R[0..2]=row0, R[3..5]=row1, R[6..8]=row2
-    // R^T columns become rows, so:
-    // pos = -R^T * t
-    const posX = -(R[0] * t[0] + R[3] * t[1] + R[6] * t[2]) * scale;
-    const posY = -(R[1] * t[0] + R[4] * t[1] + R[7] * t[2]) * scale;
-    const posZ = -(R[2] * t[0] + R[5] * t[1] + R[8] * t[2]) * scale;
+    const posX = t[0]* scale
+    const posY = t[1]* scale
+    const posZ = t[2]* scale
 
     // Forward direction = third row of R = [R[6], R[7], R[8]] (world Z axis of camera)
-    const fwdX = R[6];
-    const fwdY = R[7];
-    const fwdZ = R[8];
 
     return {
       name: `Camera ${entry.cam_id}`,
-      position: { x: posX, y: posY, z: posZ },
-      lookAt: { x: posX + fwdX, y: posY + fwdY, z: posZ + fwdZ },
+      position: { x: posX, y: posY, z: posZ }, //invert y and z since z is vertical axis in IRIS
+      rotation: R,
       color: COLORS[index % COLORS.length],
     };
   }
@@ -268,14 +288,13 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
     // Try loading live extrinsics via IPC; fall back to bundled mock
     try {
       const result = await window.ipc?.getExtrinsics();
-      const extrinsics = result ?? mockExtrinsicsFallback;
-      isMockExtrinsics = extrinsics?._isMock === true;
+      const extrinsics: Extrinsics = result ?? mockExtrinsicsFallback;
       if (extrinsics?.cameras?.length) {
-        const unit = (extrinsics.unit_of_measurement ?? 'm').replace(/[^a-z]/gi, '').toLowerCase();
-        const scale = unit === 'mm' ? 0.001 : unit === 'cm' ? 0.01 : 1;
+        const unit = ('m').replace(/[^a-z]/gi, '').toLowerCase();
+        const scale = unit === 'mm' ? 0.001 : unit === 'cm' ? 0.01 : 4.5; // 4.5 instead of 1 for unscaled data
         defs = extrinsics.cameras
-          .filter((c: any) => c.success !== false)
-          .map((c: any, i: number) => extrinsicsToDef(c, i, scale));
+          .filter((c) => c.success !== false)
+          .map((c, i: number) => extrinsicsToDef(c, i, scale));
         console.log(`[cameras] loaded ${defs.length} cameras from extrinsics (mock=${isMockExtrinsics}, unit=${unit}, scale=${scale})`);
       }
     } catch (err) {
@@ -287,14 +306,50 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
         .map((c: any, i: number) => extrinsicsToDef(c, i, 1));
     }
 
+    function loadScenePoints(path: string) {
+      const loader = new PLYLoader()
+        loader.load(path, (geometry) => {
+          geometry.computeVertexNormals()
+          geometry.scale(4.5, 4.5, 4.5)
+
+          const material = new THREE.PointsMaterial({
+            size: 0.02,
+            vertexColors: geometry.hasAttribute('color')
+          })
+
+          const points = new THREE.Points(geometry, material)
+          scene.add(points)
+        })
+    }
+    const scenePath = await window.ipc?.getScene()
+    if (scenePath) {
+      loadScenePoints(scenePath)
+    }
+
     for (const def of defs) {
       const cam = new THREE.PerspectiveCamera(45, 16 / 9, 0.01, 100);
       cam.position.set(def.position.x, def.position.y, def.position.z);
-      cam.lookAt(def.lookAt.x, def.lookAt.y, def.lookAt.z);
+      const swap = new THREE.Matrix4()
+      swap.set(
+        1, 0, 0, 0,
+        0, -1, 0, 0, 
+        0, 0, -1, 0, 
+        0, 0, 0, 1,
+      )
+      const rotation = new THREE.Matrix4()
+      rotation.set(
+        def.rotation[0], def.rotation[1], def.rotation[2], 0,
+        def.rotation[3], def.rotation[4], def.rotation[5], 0,
+        def.rotation[6], def.rotation[7], def.rotation[8], 0,
+        0, 0, 0, 1,
+      )
+      rotation.multiply(swap)
+
+      cam.setRotationFromMatrix(rotation);
       cam.name = def.name;
       cam.updateProjectionMatrix();
 
-      const gizmoMesh = createCameraGizmo(def.position, def.lookAt, def.color);
+      const gizmoMesh = createCameraGizmo(def.position, def.rotation, def.color);
       gizmoMesh.name = `${def.name}_gizmo`;
       gizmoMesh.visible = false;
 
@@ -315,7 +370,7 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
         visible: false,
       };
 
-      updateFrustumLines(entry);
+      // updateFrustumLines(entry);
       sceneCameras.value.push(entry);
     }
 
@@ -325,7 +380,7 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
   /** Show all cameras in mock mode; otherwise show only the first N matching selected physical cameras. */
   function syncVisibility(forceShowFrustums?: boolean, forceShowGizmos?: boolean) {
     const count = selectedCount?.value ?? 0;
-    const showAll = isMockExtrinsics && count === 0;
+    const showAll = true//isMockExtrinsics && count === 0;
     const frustumVis = forceShowFrustums !== undefined ? forceShowFrustums : (showFrustums?.value ?? true);
     const gizmoVis = forceShowGizmos !== undefined ? forceShowGizmos : (showGizmos?.value ?? true);
 
@@ -448,13 +503,16 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
       return outputList;
     };
 
-    const resultPolygons: THREE.Vector3[][] = [];
-    for (let i = 0; i < footprints.length; i++) {
-      for (let j = i + 1; j < footprints.length; j++) {
-        const overlap = clipPoly(footprints[i], footprints[j]);
-        if (overlap.length >= 3) resultPolygons.push(overlap);
-      }
+    // Compute intersection across ALL camera footprints
+    let intersection = footprints[0];
+
+    for (let i = 1; i < footprints.length; i++) {
+      intersection = clipPoly(intersection, footprints[i]);
+      if (intersection.length === 0) break;
     }
+
+    const resultPolygons: THREE.Vector3[][] =
+      intersection.length >= 3 ? [intersection] : [];
 
     if (resultPolygons.length === 0) return { ...emptyBounds, cameraFootprints };
 

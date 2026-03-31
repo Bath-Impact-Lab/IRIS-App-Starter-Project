@@ -17,13 +17,7 @@
       :camera-rotation="props.cameraRotation"
       :devices="props.devices"
       :person-count="props.personCount"
-      :spheres-mesh="props.spheresMesh"
-      :skeleton-line="props.skeletonLine"
-      :scene="props.scene"
-      @sphere-update="emit('sphereUpdate', $event)"
-      @skeleton-update="emit('skeletonUpdate', $event)"
       @iris-data-update="emit('irisDataUpdate', $event)"
-      @is-running="emit('isRunning', $event)"
       @reorder-cameras="emit('reorderCameras', $event)"
     />
   </div>
@@ -32,16 +26,12 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { SceneCameraEntry } from '../lib/useSceneCameras';
-import * as THREE from 'three';
 import CameraLivePanel from './sidebar/panels/CameraLivePanel.vue';
 import PlaybackPanel from './sidebar/panels/PlaybackPanel.vue';
 
 // ── Props — identical public API as before ───────────────────────────────────
 interface Props {
-  spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null;
-  skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null;
   personCount: string | null;
-  scene: THREE.Scene | null;
   irisData: IrisData[] | IrisData | null;
   selectedCameras: MediaDeviceInfo[] | null;
   selectedCameraIds: string[] | null;
@@ -55,10 +45,7 @@ interface Props {
 const props = defineProps<Props>();
 
 const emit = defineEmits<{
-  sphereUpdate: [THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null];
-  skeletonUpdate: [THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null];
   irisDataUpdate: [IrisData[] | IrisData | null];
-  isRunning: [boolean];
   reorderCameras: [MediaDeviceInfo[]];
 }>();
 

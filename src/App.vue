@@ -29,7 +29,7 @@
               aria-haspopup="listbox"
               :aria-expanded="openCamera"
               aria-controls="camera-listbox"
-              :disabled="running"
+              :disabled="IrisState.running"
           >
             <div class="btn-content">
               <svg class="btn-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -77,7 +77,7 @@
 
         <!-- Person count dropdown -->
         <div class="dropdown" :class="{ open: openPersonCount }" style="margin-left: 12px;">
-          <button class="btn" @click="togglePersonCount" :disabled="running">
+          <button class="btn" @click="togglePersonCount" :disabled="IrisState.running">
             <div class="btn-content">
               <svg class="btn-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>
@@ -97,7 +97,7 @@
 
         <!-- Tracking type dropdown -->
         <div class="dropdown" :class="{ open: openTrack }" style="margin-left: 12px;">
-          <button class="btn" @click="toggleTrack" :disabled="running">
+          <button class="btn" @click="toggleTrack" :disabled="IrisState.running">
             <div class="btn-content">
               <svg class="btn-icon-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="8" y1="12" x2="16" y2="12"/>
@@ -119,7 +119,7 @@
         <select
           class="btn fs-recordings-select"
           style="margin-left: 12px;"
-          :disabled="running"
+          :disabled="IrisState.running"
           :value="fsSelectedRecording?.path ?? ''"
           @change="onRecordingSelectChange"
         >
@@ -144,7 +144,7 @@
       <!-- Right side: sign-in area -->
       <div class="nav-right">
         <div class="menu-right">
-          <button class="btn btn-icon" @click="toggleSignIn" aria-label="Settings" :disabled="running">
+          <button class="btn btn-icon" @click="toggleSignIn" aria-label="Settings" :disabled="IrisState.running">
             <img src="/assets/settings.svg" alt="">
           </button>
         </div>
@@ -175,10 +175,7 @@
 
     <sidebar
       v-if="hasCameraSelected"
-      :spheres-mesh="spheresMesh"
-      :skeleton-line="skeletonLine" 
       :person-count="personCount" 
-      :scene="scene" 
       :iris-data="irisData"
       :selected-cameras="selectedDevices"
       :scene-cameras="sceneCameras"
@@ -187,10 +184,7 @@
       :selected-camera-ids="selectedDeviceId"
       :playback-video-urls="fsPlaybackVideoUrls"
       :is-playing-back="isPlaying"
-      @sphere-update="sphereMeshUpdate"
-      @skeleton-update="skeletonMeshUpdate"
       @iris-data-update="irisDataUpdate"
-      @is-running="runningUpdate"
       @reorder-cameras="reorderCameras"
     />
 
@@ -203,8 +197,7 @@
       :rebuild-play-space="rebuildPlaySpace"
       :create-play-space="createPlaySpace"
       :add-scene-cameras="addSceneCameras"
-      :test="test"
-      @give-scene="asignScene"
+      :selected-avatar="selectedAvatar"
       @give-sphere-mesh="sphereMeshUpdate"
       @give-skeleton-mesh="skeletonMeshUpdate"
     >
@@ -261,6 +254,10 @@
           <span class="badge-text">{{ planType || 'Trial' }} License</span>
         </div>
       </div>
+    </div>
+    <div v-if="jointAngles" class="debug" aria-live="polite">
+      <div class="debug-title">Joint Angles</div>
+      <pre class="debug-pre">{{ jointAnglesPretty }}</pre>
     </div>
     <!-- Settings Modal -->
     <settingsModal
@@ -350,9 +347,13 @@ import sidebar from './components/sidebar.vue';
 import ThreeWindow from './components/threeWindow.vue';
 import AnalysisWindow from './components/analysisWindow.vue';
 import settingsModal from './components/settingsModal.vue';
+import connectVR from './components/connectVR.vue';
+import { useIrisStore } from './Stores/irisStore';
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 const logoError = ref(false);
+
+const IrisState = useIrisStore()
 
 // ── Theme ──
 const currentTheme = ref<'dark' | 'light'>('light');
@@ -368,17 +369,19 @@ const openCamera = ref(false);
 const openPersonCount = ref(false);
 const openTrack = ref(false);
 const openOutput = ref(false);
+const openAvatar = ref(false);
 // Camera menu focus + ARIA state
 const cameraButtonRef = ref<HTMLButtonElement | null>(null);
 const cameraListRef = ref<HTMLElement | null>(null);
 const cameraActiveIndex = ref(0);
 // Dropdown management
-const anyDropdownOpen = computed(() => openCamera.value || openPersonCount.value || openTrack.value || openOutput.value);
+const anyDropdownOpen = computed(() => openCamera.value || openPersonCount.value || openTrack.value || openOutput.value || openAvatar.value);
 function closeAllDropdowns() {
   openCamera.value = false;
   openPersonCount.value = false;
   openTrack.value = false;
   openOutput.value = false;
+  openAvatar.value = false;
 }
 
 // Sign-in state
@@ -744,10 +747,14 @@ function stopFsTimer() {
 
 const lastSentMsg = ref('');
 
-const running = ref(false);
 const irisDisplayFps = ref(0);
+const jointAngles = computed(() => {
+  const frame = Array.isArray(irisData.value) ? irisData.value[0] : irisData.value;
+  return frame?.people?.[0]?.joint_angles ?? null;
+});
+const jointAnglesPretty = computed(() => jointAngles.value ? JSON.stringify(jointAngles.value, null, 2) : '');
 
-// â”€â”€ IRIS CLI presence check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── IRIS CLI presence check ─────────────────────────────────────────────────────────────
 const showIrisNotFound = ref(false);
 let irisPollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -776,7 +783,6 @@ function openIrisDownload() {
 
 let browserMockTimer: ReturnType<typeof setInterval> | null = null;
 
-let scene =  ref<THREE.Scene | null>(null);
 let spheresMesh = ref<THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null>(null);
 let skeletonLine = ref<THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null>(null);
 let irisData = ref<IrisData[] | IrisData | null>(null);
@@ -851,13 +857,18 @@ function toggleTrack() {
 function toggleOutput() {
   const willOpen = !openOutput.value;
   openOutput.value = willOpen;
-  if (willOpen) { openCamera.value = false; openPersonCount.value = false; openTrack.value = false; }
+  if (willOpen) { openCamera.value = false; openPersonCount.value = false; openTrack.value = false; openAvatar.value = false; }
+}
+function toggleAvatar() {
+  const willOpen = !openAvatar.value;
+  openAvatar.value = willOpen;
+  if (willOpen) { openCamera.value = false; openPersonCount.value = false; openTrack.value = false; openOutput.value = false; }
 }
 function onClickOutside(e: MouseEvent) {
   // close any open dropdown if click outside
-  if (!openCamera.value && !openPersonCount.value && !openTrack.value && !openOutput.value) return;
+  if (!openCamera.value && !openPersonCount.value && !openTrack.value && !openOutput.value && !openAvatar.value) return;
   const dd = (e.target as HTMLElement)?.closest('.dropdown');
-  if (!dd) { openCamera.value = false; openPersonCount.value = false; openTrack.value = false; openOutput.value = false; }
+  if (!dd) { openCamera.value = false; openPersonCount.value = false; openTrack.value = false; openOutput.value = false; openAvatar.value = false; }
 }
 
 function reorderCameras(newOrder: MediaDeviceInfo[]) {
@@ -1003,6 +1014,11 @@ function selectOutput(o: string) {
   openOutput.value = false;
 }
 
+function selectAvatar(file: string | null) {
+  selectedAvatar.value = file;
+  openAvatar.value = false;
+}
+
 function toggleSignIn() {
   showSettings.value = !showSettings.value;
 }
@@ -1019,13 +1035,6 @@ function irisDataUpdate(value: IrisData[] | IrisData | null) {
   irisData.value = value
 }
 
-function runningUpdate(value: boolean) {
-  running.value = value
-}
-
-function asignScene(value: THREE.Scene) {
-  scene.value = value
-}
 
 function deviceShortCode(deviceId: string): string {
   // Produce a stable 4-char hex code from the deviceId (e.g. "Port #A3F2")

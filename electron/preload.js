@@ -2,24 +2,12 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('ipc', {
   startIRIS: (options) => ipcRenderer.invoke('start-iris', options),
+  startIRISStream: (options) => ipcRenderer.invoke('start-iris-stream', options),
   getExtrinsics: () => ipcRenderer.invoke('get-extrinsics'),
+  getScene: () => ipcRenderer.invoke('get-scene'),
   stopIRIS: (Id) => ipcRenderer.invoke('stop-iris', Id),
   onIrisData: (callback) => {
     ipcRenderer.on('iris-data', (event, data,) => {
-      callback(data)
-    })
-  },
-  calculateIntrinsics: (index, rotation) => ipcRenderer.invoke('calculate-intrinsics', index, rotation),
-  cancelIntrinsics: () => ipcRenderer.invoke('cancel-intrinsics'),
-  intrinsicsComplete: (callback) => {
-    ipcRenderer.on('intrinsics-complete', (event, data) => {
-      callback(data)
-    })
-  },
-  calculateExtrinsics: (cameraIndices, rotation) => ipcRenderer.invoke('calculate-extrinsics', cameraIndices),
-  cancelExtrinsics: () => ipcRenderer.invoke('cancel-extrinsics'),
-  extrinsicsComplete: (callback) => {
-    ipcRenderer.on('extrinsics-complete', (event, data) => {
       callback(data)
     })
   },
@@ -38,6 +26,10 @@ contextBridge.exposeInMainWorld('ipc', {
   fsRenameRecording: (oldPath, newName) => ipcRenderer.invoke('fs-rename-recording', oldPath, newName),
   fsGetRecordingData: (recordingPath) => ipcRenderer.invoke('fs-get-recording-data', recordingPath),
   fsGetVideoUrl: (filePath) => ipcRenderer.invoke('fs-get-video-url', filePath),
+
+  connectVR: () => ipcRenderer.invoke('connect-VR'),
+  updatePos: (val) => ipcRenderer.invoke('update-pos', val),
+  disconnectVR: () => ipcRenderer.invoke('disconnect-VR'),
 })
 
 contextBridge.exposeInMainWorld('electronAPI', {

@@ -1,9 +1,5 @@
 <template>
-    <section class="scene" ref="sceneRef">
-      <div class="scene-overlay">
-        <slot />
-      </div>
-    </section>
+  <section class="scene" ref="sceneRef"></section>
 </template>
 
 <script setup lang="ts">
@@ -11,6 +7,7 @@ import { onMounted, onBeforeUnmount, ref, watch, nextTick, computed, ComputedRef
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { FBXLoader } from 'three/examples/jsm/Addons.js';
+import { useIrisStore } from '@/Stores/irisStore';
 
 interface Props {
   selectedCameraCount: number,
@@ -19,20 +16,20 @@ interface Props {
   createPlaySpace: (scene: THREE.Scene) => void,
   addSceneCameras: (scene: THREE.Scene) => Promise<void>,
   spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null,
-	skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null,
-  test: boolean
+  skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null,
 }
 
 const props = defineProps<Props>()
 //defining emits for future
 const emit = defineEmits<{
-  giveScene: [THREE.Scene]
   giveSphereMesh: [THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null]
-  giveSkeletonMesh: [THREE.LineSegments<THREE.BufferGeometry <THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null]
+  giveSkeletonMesh: [THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null]
 }>()
 
 const selectedCameraCount = computed(() => props.selectedCameraCount)
 const sceneRef = ref<HTMLElement | null>(null);
+const IrisState = useIrisStore()
+
 
 let renderer: THREE.WebGLRenderer | null = null;
 let scene: THREE.Scene;
@@ -68,28 +65,49 @@ function applyThemeToScene() {
   }
 }
 
-let spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null = props.spheresMesh;
-let skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null  = props.skeletonLine;
+// Store discovered bones to drive them with joint_angles
+let activeBones: Record<string, THREE.Object3D> = {};
+let boneBindQuats: Record<string, THREE.Quaternion> = {};
+let bindPelvisWorldOffset: THREE.Vector3 | null = null;
+
+let spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null = null;
+let skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null  = null;
 const position = new THREE.Object3D()
+
+let avatarRoot: THREE.Object3D | null = null;
 
 const manager = new THREE.LoadingManager();
 let mixer: THREE.AnimationMixer[] | null;
 
 const halpe26_pairs = [
-  [0,1], [0,2], [1,3], [2,4],
-  [17,18], [18,5], [18,6],
-  [5,7], [7,9],
-  [6,8], [8,10],
-  [5,6],
-  [11,12],
-  [11,13], [13,15],
-  [12,14], [14,16],
-  [18,19], [19,11], [19,12],
-  [15,20], [15,22], [15,24],
-  [16,21], [16,23], [16,25]
+  [0, 1], [0, 2], [1, 3], [2, 4],
+  [17, 18], [18, 5], [18, 6],
+  [5, 7], [7, 9],
+  [6, 8], [8, 10],
+  [5, 6],
+  [11, 12],
+  [11, 13], [13, 15],
+  [12, 14], [14, 16],
+  [18, 19], [19, 11], [19, 12],
+  [15, 20], [15, 22], [15, 24],
+  [16, 21], [16, 23], [16, 25]
 ]
 
 const linePositions = new Float32Array(halpe26_pairs.length * 3 * 2)
+
+watch(() => IrisState.running, (running) => {
+  if (!running) {
+    if (skeletonLine) {
+      skeletonLine.removeFromParent()
+      skeletonLine = null
+    }
+    if (spheresMesh) {
+      spheresMesh.removeFromParent()
+      spheresMesh = null
+    }
+    
+  }
+})
 
 onMounted(() => {
   if (sceneRef.value) initThree(sceneRef.value);
@@ -102,7 +120,7 @@ onBeforeUnmount(() => {
 })
 
 async function loadModel(scene: THREE.Scene, type: string) {
-  const loader = new FBXLoader( manager );
+  const loader = new FBXLoader(manager);
   const file = `assets/${type}`
 
   try {
@@ -113,29 +131,14 @@ async function loadModel(scene: THREE.Scene, type: string) {
       else {
         modelsRoot = [group]
       }
-      const modelRoot = modelsRoot[modelsRoot.length-1]
+      const modelRoot = modelsRoot[modelsRoot.length - 1]
       modelRoot.castShadow = true
       modelRoot.receiveShadow = true
       modelRoot.scale.set(0.01, 0.01, 0.01)
-      if (type === "Idle.fbx") {
-        modelRoot.position.set(-1.5, 0, -1.5)
-        modelRoot.setRotationFromAxisAngle(new THREE.Vector3(0, 1, 0), 45*(Math.PI/180))
-      }
-      if (modelRoot.animations && modelRoot.animations.length) {
-        if (mixer){
-          mixer.push(new THREE.AnimationMixer(modelRoot))
-        }
-        else{
-          mixer = [new THREE.AnimationMixer(modelRoot)]
-        }
-        const mix = mixer[mixer.length-1] 
-        const action = mix.clipAction(modelRoot.animations[0])
-        action.play()
-      }
-      else {
-        mixer = null
-      }
       scene.add(modelRoot)
+      modelRoot.updateMatrixWorld(true)
+
+      collectBonesFromSkinnedMesh(modelRoot)
 
     })
   }
@@ -145,7 +148,7 @@ async function loadModel(scene: THREE.Scene, type: string) {
   }
 }
 
-async function initThree(container: HTMLElement){
+async function initThree(container: HTMLElement) {
   const width = container.clientWidth;
   const height = container.clientHeight;
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -153,9 +156,8 @@ async function initThree(container: HTMLElement){
   renderer.setSize(width, height);
   container.appendChild(renderer.domElement);
 
-  scene = new THREE.Scene();
-  emit('giveScene', scene)
-  camera = new THREE.PerspectiveCamera(50, width/height, 0.01, 1000);
+  scene = new THREE.Scene(); 
+  camera = new THREE.PerspectiveCamera(50, width / height, 0.01, 1000);
   camera.position.set(5, 5, 5);
 
   hemi = new THREE.HemisphereLight(0xffffff, 0x223344, 0.9);
@@ -169,6 +171,11 @@ async function initThree(container: HTMLElement){
   themeObserver = new MutationObserver(() => applyThemeToScene());
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
+  // Load the mesh so it exists in the scene
+  loadModel(scene, "Idle.fbx");
+
+
+
   watch(selectedCameraCount, () => { nextTick(() => props.rebuildPlaySpace()); });
 
   controls = new OrbitControls(camera, renderer.domElement);
@@ -180,26 +187,23 @@ async function initThree(container: HTMLElement){
 
 
   // Add scene cameras from extrinsics
-  await props.addSceneCameras(scene);
+  watch(() => IrisState.running, (running) => {
+    if (window.ipc?.getExtrinsics()) props.addSceneCameras(scene);
+  })
 
   // Build play space from loaded camera frustums
   props.createPlaySpace(scene);
 
-  const clock = new THREE.Clock();
-
   //if using a positions json
   const fps = 30
-  const frameDuration = 1000/fps
+  const frameDuration = 1000 / fps
 
   let lastTime = 0
   let currentFrame = 0
   const animate = (time: number) => {
     requestAnimationFrame(animate)
-    const delta = clock.getDelta()
-    if (mixer) mixer.forEach((mix) => mix.update(delta))
 
     if (props.irisData) {
-
       //used for data from position json file
       if (time - lastTime >= frameDuration && Array.isArray(props.irisData)) {
         renderIRISdata(props.irisData[currentFrame])
@@ -218,37 +222,65 @@ async function initThree(container: HTMLElement){
   animate(lastTime)
 
   resizeObserver = new ResizeObserver(entries => {
-    for (const entry of entries){
+    for (const entry of entries) {
       const w = entry.contentRect.width; const h = entry.contentRect.height;
       renderer!.setSize(w, h);
-      camera.aspect = w/h; camera.updateProjectionMatrix();
+      camera.aspect = w / h; camera.updateProjectionMatrix();
     }
   });
   resizeObserver.observe(container);
 }
 
+const tmpParentWorldQuat = new THREE.Quaternion();
+const tmpParentWorldQuatInv = new THREE.Quaternion();
+const tmpBoneAxis = new THREE.Vector3(0, 1, 0); // Mixamo bones typically point along Y 
+const tmpTargetDirWorld = new THREE.Vector3();
+const tmpDeltaLocal = new THREE.Quaternion();
+const tmpTargetDirLocal = new THREE.Vector3();
+const tmpBindDirLocal = new THREE.Vector3();
+
+function alignBoneFromBindPose(
+  boneKey: string,
+  p1: [number, number, number],
+  p2: [number, number, number]
+) {
+  const bone = activeBones[boneKey];
+  const bindQuat = boneBindQuats[boneKey];
+  if (!bone || !bindQuat || !bone.parent || !p1 || !p2) return;
+
+  const worldStart = new THREE.Vector3(p1[0], p1[2], p1[1]);
+  const worldEnd = new THREE.Vector3(p2[0], p2[2], p2[1]);
+  tmpTargetDirWorld.subVectors(worldEnd, worldStart).normalize();
+
+  if (tmpTargetDirWorld.lengthSq() < 1e-8) return;
+
+  bone.parent.getWorldQuaternion(tmpParentWorldQuat);
+  tmpParentWorldQuatInv.copy(tmpParentWorldQuat).invert();
+  tmpTargetDirLocal.copy(tmpTargetDirWorld).applyQuaternion(tmpParentWorldQuatInv).normalize();
+  tmpBindDirLocal.copy(tmpBoneAxis).applyQuaternion(bindQuat).normalize();
+  tmpDeltaLocal.setFromUnitVectors(tmpBindDirLocal, tmpTargetDirLocal);
+  bone.quaternion.copy(tmpDeltaLocal).multiply(bindQuat).normalize();
+  bone.updateMatrixWorld(true);
+}
+
 function renderIRISdata(poseInfo: IrisData) {
   try {
-    poseInfo.entities.forEach((person, i) => {
-      const neck = person.analysis.centers.neck
-      const pelvis = person.analysis.centers.pelvis
-      const spine_mid = person.analysis.centers.spine_mid
-      const keypoints = [[neck.x, neck.y, neck.z], [pelvis.x, pelvis.y, pelvis.z], [spine_mid.x, spine_mid.y, spine_mid.z]]
+    poseInfo.people.forEach((person, i) => {
+      const neck = person.joint_centers[0]
+      const pelvis = person.joint_centers[1]
+      const spine_mid = person.joint_centers[2]
+      const keypoints = [[neck[0], neck[1], neck[2]], [pelvis[0], pelvis[1], pelvis[2]], [spine_mid[0], spine_mid[1], spine_mid[2]]]
       if (!(spheresMesh && skeletonLine)) {
         const sphereGeometry = new THREE.SphereGeometry(0.025, 8, 8)
         const material = new THREE.MeshBasicMaterial({color: 0xffffff})
-        spheresMesh = new THREE.InstancedMesh(sphereGeometry, material, (keypoints.length + person.skeleton.keypoints_3d.length))
-        //passing mesh to main app so mesh can be removed on stop
-        emit('giveSphereMesh', spheresMesh)
+        spheresMesh = new THREE.InstancedMesh(sphereGeometry, material, (keypoints.length + person.joint_centers.length))
         scene.add(spheresMesh)
 
-        const lMaterial = new THREE.LineBasicMaterial({color:0xff0000})
+        const lMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 })
         const lGeometry = new THREE.BufferGeometry()
         lGeometry.setAttribute('position', new THREE.BufferAttribute(linePositions, 3))
 
         skeletonLine = new THREE.LineSegments(lGeometry, lMaterial)
-        //passing mesh to main app so mesh can be removed on stop
-        emit('giveSkeletonMesh', skeletonLine)
         scene.add(skeletonLine)
       }
       const positionAttr = skeletonLine.geometry.attributes.position
@@ -259,31 +291,90 @@ function renderIRISdata(poseInfo: IrisData) {
         position.updateMatrix()
         spheresMesh?.setMatrixAt(i, position.matrix)
       })
-      person.skeleton.keypoints_3d.forEach((points, i) => {
-        position.position.set(points.x, points.z, points.y)
+      person.joint_centers.forEach((points, i) => {
+        position.position.set(points[0], points[2], points[1])
         position.updateMatrix()
-        spheresMesh?.setMatrixAt(i+3, position.matrix)
+        spheresMesh?.setMatrixAt(i + 3, position.matrix)
       })
 
       halpe26_pairs.forEach(([a, b]) => {
-        const pos1 = person.skeleton.keypoints_3d[a]
-        const pos2 = person.skeleton.keypoints_3d[b]
+        const pos1 = person.joint_centers[a]
+        const pos2 = person.joint_centers[b]
 
-        positionAttr.array[idx++] = pos1.x
-        positionAttr.array[idx++] = pos1.z
-        positionAttr.array[idx++] = pos1.y
+        positionAttr.array[idx++] = pos1[0]
+        positionAttr.array[idx++] = pos1[2]
+        positionAttr.array[idx++] = pos1[1]
 
-        positionAttr.array[idx++] = pos2.x
-        positionAttr.array[idx++] = pos2.z
-        positionAttr.array[idx++] = pos2.y
+        positionAttr.array[idx++] = pos2[0]
+        positionAttr.array[idx++] = pos2[2]
+        positionAttr.array[idx++] = pos2[1]
       })
 
       positionAttr.needsUpdate = true
       spheresMesh.instanceMatrix.needsUpdate = true
+
+      if (person.joint_centers && person.joint_centers.length >= 26) {
+        // 1. MOVE THE ENTIRE MODEL TO THE TRACKED ROOT
+        // We apply this to the parent group to respect your 0.01 scale!
+        if (modelsRoot && modelsRoot.length > 0) {
+          const pelvisPos = person.joint_centers[19]; // Tracked Pelvis
+          // Map OpenCV (X, Y, Z) to Three.js (X, Z, Y)
+          const targetPelvis = new THREE.Vector3(pelvisPos[0], pelvisPos[2], pelvisPos[1]);
+          if (bindPelvisWorldOffset) {
+            modelsRoot[0].position.copy(targetPelvis).sub(bindPelvisWorldOffset);
+          } else {
+            modelsRoot[0].position.copy(targetPelvis);
+          }
+          const leftHipPos = person.joint_centers[11];
+          const rightHipPos = person.joint_centers[12];
+
+          // Map to Three.js coordinates
+          const lHip = new THREE.Vector3(leftHipPos[0], leftHipPos[2], leftHipPos[1]);
+          const rHip = new THREE.Vector3(rightHipPos[0], rightHipPos[2], rightHipPos[1]);
+
+          // Get the directional vector from Right Hip to Left Hip
+          const hipDir = new THREE.Vector3().subVectors(lHip, rHip);
+
+          // Restrict to the XZ plane so the character doesn't tilt/lean over
+          hipDir.y = 0;
+
+          if (hipDir.lengthSq() > 1e-8) {
+            hipDir.normalize();
+
+            // Default Right-to-Left vector. 
+            // (Mixamo models usually face +Z, so Right to Left points to +X)
+            const defaultHipDir = new THREE.Vector3(-1, 0, 0);
+
+            const rootRotation = new THREE.Quaternion().setFromUnitVectors(defaultHipDir, hipDir);
+            modelsRoot[0].quaternion.copy(rootRotation);
+          }
+        }
+
+        // Torso (Pelvis -> Neck)
+        alignBoneFromBindPose('spine', person.joint_centers[19], person.joint_centers[18]);
+
+        // Right Arm (Shoulder -> Elbow, Elbow -> Wrist)
+        alignBoneFromBindPose('shoulder_r', person.joint_centers[5], person.joint_centers[7]);
+        alignBoneFromBindPose('elbow_r', person.joint_centers[7], person.joint_centers[9]);
+
+        // Left Arm (Shoulder -> Elbow, Elbow -> Wrist)
+        alignBoneFromBindPose('shoulder_l', person.joint_centers[6], person.joint_centers[8]);
+        alignBoneFromBindPose('elbow_l', person.joint_centers[8], person.joint_centers[10]);
+
+        // Right Leg (Hip -> Knee, Knee -> Ankle)
+        alignBoneFromBindPose('hip_r', person.joint_centers[11], person.joint_centers[13]);
+        alignBoneFromBindPose('knee_r', person.joint_centers[13], person.joint_centers[15]);
+
+        // Left Leg (Hip -> Knee, Knee -> Ankle)
+        alignBoneFromBindPose('hip_l', person.joint_centers[12], person.joint_centers[14]);
+        alignBoneFromBindPose('knee_l', person.joint_centers[14], person.joint_centers[16]);
+
+        skeletonHelper?.update();
+      }
     })
   }
-  catch{
-    console.log("unable to pass the IRIS data")
+  catch (err) {
+    console.error("unable to pass the IRIS data", err)
   }
 }
 
