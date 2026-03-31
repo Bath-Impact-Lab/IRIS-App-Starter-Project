@@ -44,6 +44,8 @@ function createWindow() {
         height: 800,
         minWidth: 960,
         minHeight: 640,
+        frame: false,
+        autoHideMenuBar: true,
         title: process.env.VITE_APP_TITLE || 'IRIS Starter',
         backgroundColor: nativeTheme.shouldUseDarkColors ? '#111418' : '#ffffff',
         webPreferences: {
@@ -67,6 +69,19 @@ function createWindow() {
     mainWindow.on('closed', () => {
         mainWindow = null;
     });
+
+    const sendWindowState = () => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        mainWindow.webContents.send('window-state', {
+            isMaximized: mainWindow.isMaximized(),
+        });
+    };
+
+    mainWindow.on('maximize', sendWindowState);
+    mainWindow.on('unmaximize', sendWindowState);
+    mainWindow.on('enter-full-screen', sendWindowState);
+    mainWindow.on('leave-full-screen', sendWindowState);
+    mainWindow.once('ready-to-show', sendWindowState);
 }
 
 app.whenReady().then(() => {
@@ -97,6 +112,38 @@ ipcMain.handle('open-external', async (event, url) => {
         console.error('[Main] shell.openExternal failed:', e);
         return { ok: false, error: e.message };
     }
+});
+
+function getEventWindow(event) {
+    return BrowserWindow.fromWebContents(event.sender) || mainWindow;
+}
+
+ipcMain.handle('window-minimize', (event) => {
+    const win = getEventWindow(event);
+    if (win && !win.isDestroyed()) win.minimize();
+});
+
+ipcMain.handle('window-toggle-maximize', (event) => {
+    const win = getEventWindow(event);
+    if (!win || win.isDestroyed()) return { isMaximized: false };
+
+    if (win.isMaximized()) {
+        win.unmaximize();
+    } else {
+        win.maximize();
+    }
+
+    return { isMaximized: win.isMaximized() };
+});
+
+ipcMain.handle('window-close', (event) => {
+    const win = getEventWindow(event);
+    if (win && !win.isDestroyed()) win.close();
+});
+
+ipcMain.handle('window-is-maximized', (event) => {
+    const win = getEventWindow(event);
+    return { isMaximized: !!win && !win.isDestroyed() && win.isMaximized() };
 });
 
 // Check whether iris_cli.exe is present on disk

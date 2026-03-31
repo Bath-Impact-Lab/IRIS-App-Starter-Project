@@ -17,7 +17,12 @@ declare module '*.vue' {
 
 interface Window {
   electronAPI?: {
-    openExternal: (url: string) => {ok: boolean, error?: string},
+    openExternal: (url: string) => Promise<{ok: boolean, error?: string}>;
+    minimizeWindow: () => Promise<void>;
+    toggleMaximizeWindow: () => Promise<{isMaximized: boolean}>;
+    closeWindow: () => Promise<void>;
+    isWindowMaximized: () => Promise<{isMaximized: boolean}>;
+    onWindowStateChange: (callback: (data: {isMaximized: boolean}) => void) => () => void;
   }
   ipc?: {
     startIRIS: (options: any) => Promise<any>;
