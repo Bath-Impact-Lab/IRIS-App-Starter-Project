@@ -68,9 +68,10 @@ const playbackFeedNames = computed(() =>
 <style scoped>
 .sidenav {
   position: absolute;
+  top: var(--app-topbar-height, 63px);
+  bottom: 0;
   right: 0;
-  height: calc(100% - 63px);
-  width: 250px;
+  width: var(--app-sidebar-width, 250px);
   background-color: var(--sidebar);
   z-index: 10;
   border-left: 1px solid rgba(255,255,255,0.06);
