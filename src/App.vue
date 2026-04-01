@@ -30,7 +30,7 @@ const {
   isRunning: isIrisRunning,
   isStarting: isStartingIris,
   start: startIris,
-} = useIris({ autoFetch: false, autoCheck: false });
+} = useIris({ autoFetch: true, autoCheck: false });
 
 // View State Routing
 const activeView = computed(() => currentProject.value?.workspace.activeView || 'capture');
