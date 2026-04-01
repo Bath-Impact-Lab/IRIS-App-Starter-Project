@@ -317,7 +317,7 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
       const extrinsics: Extrinsics = result;
       if (extrinsics?.cameras?.length) {
         const unit = ('m').replace(/[^a-z]/gi, '').toLowerCase();
-        const scale = unit === 'mm' ? 0.001 : unit === 'cm' ? 0.01 : 4.5; // 4.5 instead of 1 for unscaled data
+        const scale = unit === 'mm' ? 0.001 : unit === 'cm' ? 0.01 : 1; // 4.5 instead of 1 for unscaled data
         defs = extrinsics.cameras
           .filter((c) => c.success !== false)
           .map((c, i: number) => extrinsicsToDef(c, i, scale));
