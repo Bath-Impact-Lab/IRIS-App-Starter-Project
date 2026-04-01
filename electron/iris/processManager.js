@@ -221,7 +221,10 @@ class ProcessManager {
       console.log(`[iris:${sessionId}] START pid=${child.pid}`);
       console.log(`[iris:${sessionId}] exe=${exePath} args=${JSON.stringify(args)}`);
 
-      child.stdout.on('data', (data) => onStdout(data));
+      child.stdout.on('data', (data) => {
+        onStdout(data)
+        console.error(`[iris:${sessionId}] PROCESS ERROR`, err);
+      });
       child.stderr.on('data', (data) => {
         onStderr?.(data);
         console.log(`[iris:${sessionId}] stderr: ${data.toString().trim()}`);
