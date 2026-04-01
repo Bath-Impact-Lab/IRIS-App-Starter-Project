@@ -53,6 +53,7 @@ function setView(view: 'capture' | 'mocap' | 'analysis') {
 
 const selectedResolution = computed(() => currentProject.value?.workspace.resolution ?? '1920x1080');
 const selectedFps = computed(() => currentProject.value?.workspace.fps ?? 30);
+const selectedRotation = computed(() => currentProject.value?.workspace.rotation ?? 0);
 const selectedCameraIds = computed(() => currentProject.value?.workspace.selectedCameraIds ?? []);
 const availableIrisCameras = computed(() => {
   if (selectedCameraIds.value.length === 0) return irisCameras.value;
@@ -70,6 +71,11 @@ function updateResolution(value: string) {
 function updateFps(value: number) {
   if (!currentProject.value) return;
   currentProject.value.workspace.fps = value;
+}
+
+function updateRotation(value: number) {
+  if (!currentProject.value) return;
+  currentProject.value.workspace.rotation = value;
 }
 
 function parseResolution(value: string) {
@@ -96,7 +102,7 @@ async function handleStartIris() {
       width,
       height,
       fps: selectedFps.value,
-      rotation: 0,
+      rotation: selectedRotation.value,
     })),
     camera_width: width,
     camera_height: height,
@@ -143,12 +149,14 @@ async function handleStartIris() {
             <Toolbar
               :resolution="selectedResolution"
               :fps="selectedFps"
+              :rotation="selectedRotation"
               :show-start-button="true"
               :is-starting-iris="isStartingIris"
               :is-iris-running="isIrisRunning"
               :start-disabled="!canStartIris"
               @update:resolution="updateResolution"
               @update:fps="updateFps"
+              @update:rotation="updateRotation"
               @start-iris="handleStartIris"
             />
           </div>

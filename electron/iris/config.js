@@ -48,6 +48,7 @@ function buildConfigFromOptions(opts = {}) {
         camera_ids: camera_ids,
         width: width,
         height: height,
+        rotate: 90,
         fps: fps,
         batching: true,
         batch_camera_ids: camera_ids

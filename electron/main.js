@@ -189,6 +189,7 @@ function ensureProjectPayload(projectData = {}, filePath = null, options = {}) {
             selectedRecordingPath: projectData.workspace?.selectedRecordingPath ?? null,
             resolution: projectData.workspace?.resolution || '1920x1080',
             fps: typeof projectData.workspace?.fps === 'number' ? projectData.workspace.fps : 30,
+            rotation: typeof projectData.workspace?.rotation === 'number' ? projectData.workspace.rotation : 0,
             personCount: projectData.workspace?.personCount ?? 'Single Person',
             outputOption: projectData.workspace?.outputOption || 'Filesystem',
         },

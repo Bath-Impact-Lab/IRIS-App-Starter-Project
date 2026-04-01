@@ -167,35 +167,7 @@ onBeforeUnmount(() => {
   renderer?.domElement.remove();
   renderer = null;
 })
-
-async function loadModel(scene: THREE.Scene, type: string) {
-  const loader = new FBXLoader(manager);
-  const file = `assets/${type}`
-
-  try {
-    loader.load(file, function (group) {
-      if (modelsRoot) {
-        modelsRoot.push(group)
-      }
-      else {
-        modelsRoot = [group]
-      }
-      const modelRoot = modelsRoot[modelsRoot.length - 1]
-      modelRoot.castShadow = true
-      modelRoot.receiveShadow = true
-      modelRoot.scale.set(0.01, 0.01, 0.01)
-      scene.add(modelRoot)
-      modelRoot.updateMatrixWorld(true)
-
-      collectBonesFromSkinnedMesh(modelRoot)
-
-    })
-  }
-  catch (err) {
-    console.log("error loading file")
-    console.log(err)
-  }
-}
+ 
 
 async function initThree(container: HTMLElement) {
   const width = Math.max(container.clientWidth, 1);
@@ -253,9 +225,7 @@ async function initThree(container: HTMLElement) {
   applyThemeToScene();
   themeObserver = new MutationObserver(() => applyThemeToScene());
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-
-  // Load the mesh so it exists in the scene
-  loadModel(scene, "Idle.fbx");
+ 
 
 
   watch(selectedCameraCount, () => { nextTick(() => rebuildPlaySpace()); });
@@ -394,64 +364,7 @@ function renderIRISdata(poseInfo: IrisData) {
 
       positionAttr.needsUpdate = true
       spheresMesh.instanceMatrix.needsUpdate = true
-
-      if (person.joint_centers && person.joint_centers.length >= 26) {
-        // 1. MOVE THE ENTIRE MODEL TO THE TRACKED ROOT
-        // We apply this to the parent group to respect your 0.01 scale!
-        if (modelsRoot && modelsRoot.length > 0) {
-          const pelvisPos = person.joint_centers[19]; // Tracked Pelvis
-          // Map OpenCV (X, Y, Z) to Three.js (X, Z, Y)
-          const targetPelvis = new THREE.Vector3(pelvisPos[0], pelvisPos[2], pelvisPos[1]);
-          if (bindPelvisWorldOffset) {
-            modelsRoot[0].position.copy(targetPelvis).sub(bindPelvisWorldOffset);
-          } else {
-            modelsRoot[0].position.copy(targetPelvis);
-          }
-          const leftHipPos = person.joint_centers[11];
-          const rightHipPos = person.joint_centers[12];
-
-          // Map to Three.js coordinates
-          const lHip = new THREE.Vector3(leftHipPos[0], leftHipPos[2], leftHipPos[1]);
-          const rHip = new THREE.Vector3(rightHipPos[0], rightHipPos[2], rightHipPos[1]);
-
-          // Get the directional vector from Right Hip to Left Hip
-          const hipDir = new THREE.Vector3().subVectors(lHip, rHip);
-
-          // Restrict to the XZ plane so the character doesn't tilt/lean over
-          hipDir.y = 0;
-
-          if (hipDir.lengthSq() > 1e-8) {
-            hipDir.normalize();
-
-            // Default Right-to-Left vector. 
-            // (Mixamo models usually face +Z, so Right to Left points to +X)
-            const defaultHipDir = new THREE.Vector3(-1, 0, 0);
-
-            const rootRotation = new THREE.Quaternion().setFromUnitVectors(defaultHipDir, hipDir);
-            modelsRoot[0].quaternion.copy(rootRotation);
-          }
-        }
-
-        // Torso (Pelvis -> Neck)
-        alignBoneFromBindPose('spine', person.joint_centers[19], person.joint_centers[18]);
-
-        // Right Arm (Shoulder -> Elbow, Elbow -> Wrist)
-        alignBoneFromBindPose('shoulder_r', person.joint_centers[5], person.joint_centers[7]);
-        alignBoneFromBindPose('elbow_r', person.joint_centers[7], person.joint_centers[9]);
-
-        // Left Arm (Shoulder -> Elbow, Elbow -> Wrist)
-        alignBoneFromBindPose('shoulder_l', person.joint_centers[6], person.joint_centers[8]);
-        alignBoneFromBindPose('elbow_l', person.joint_centers[8], person.joint_centers[10]);
-
-        // Right Leg (Hip -> Knee, Knee -> Ankle)
-        alignBoneFromBindPose('hip_r', person.joint_centers[11], person.joint_centers[13]);
-        alignBoneFromBindPose('knee_r', person.joint_centers[13], person.joint_centers[15]);
-
-        // Left Leg (Hip -> Knee, Knee -> Ankle)
-        alignBoneFromBindPose('hip_l', person.joint_centers[12], person.joint_centers[14]);
-        alignBoneFromBindPose('knee_l', person.joint_centers[14], person.joint_centers[16]);
  
-      }
     })
   }
   catch (err) {

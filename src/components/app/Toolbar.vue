@@ -56,6 +56,34 @@
       </div>
     </div>
 
+    <div class="toolbar-divider"></div>
+
+    <div class="toolbar-group">
+      <label class="toolbar-label" for="rotation-select">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+          <polyline points="3 3 3 9 9 9"></polyline>
+        </svg>
+        Rotate
+      </label>
+      <div class="select-wrapper">
+        <select
+          id="rotation-select"
+          class="toolbar-select"
+          v-model="selectedRotation"
+          @change="emit('update:rotation', selectedRotation)"
+        >
+          <option :value="0">0 deg</option>
+          <option :value="90">90 deg</option>
+          <option :value="180">180 deg</option>
+          <option :value="270">270 deg</option>
+        </select>
+        <svg class="select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"></polyline>
+        </svg>
+      </div>
+    </div>
+
     <template v-if="showStartButton">
       <div class="toolbar-divider"></div>
 
@@ -78,6 +106,7 @@ import { computed, ref, watch } from 'vue';
 interface Props {
   resolution?: string;
   fps?: number;
+  rotation?: number;
   showStartButton?: boolean;
   isStartingIris?: boolean;
   isIrisRunning?: boolean;
@@ -87,6 +116,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   resolution: '1920x1080',
   fps: 30,
+  rotation: 0,
   showStartButton: false,
   isStartingIris: false,
   isIrisRunning: false,
@@ -96,11 +126,13 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
   'update:resolution': [value: string];
   'update:fps': [value: number];
+  'update:rotation': [value: number];
   'start-iris': [];
 }>();
 
 const selectedResolution = ref(props.resolution);
 const selectedFps = ref(props.fps);
+const selectedRotation = ref(props.rotation);
 const startLabel = computed(() => {
   if (props.isStartingIris) return 'Starting IRIS...';
   if (props.isIrisRunning) return 'IRIS Running';
@@ -110,6 +142,7 @@ const startLabel = computed(() => {
 // Keep local state in sync if parent updates props
 watch(() => props.resolution, (newVal) => { selectedResolution.value = newVal; });
 watch(() => props.fps, (newVal) => { selectedFps.value = newVal; });
+watch(() => props.rotation, (newVal) => { selectedRotation.value = newVal; });
 </script>
 
 <style scoped>

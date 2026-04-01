@@ -14,6 +14,7 @@ export interface ProjectWorkspaceState {
   selectedRecordingPath: string | null;
   resolution: string;
   fps: number;
+  rotation: number;
   personCount: string | null;
   outputOption: string;
 }
@@ -139,6 +140,7 @@ function sanitizeProjectFile(raw: Partial<ProjectFile> | null | undefined, fileP
       selectedRecordingPath: raw?.workspace?.selectedRecordingPath ?? null,
       resolution: raw?.workspace?.resolution ?? '1920x1080',
       fps: typeof raw?.workspace?.fps === 'number' ? raw.workspace.fps : 30,
+      rotation: typeof raw?.workspace?.rotation === 'number' ? raw.workspace.rotation : 0,
       personCount: raw?.workspace?.personCount ?? 'Single Person',
       outputOption: raw?.workspace?.outputOption ?? 'Filesystem',
     },
@@ -165,6 +167,7 @@ function toProjectFile(project: ProjectDocument | ProjectFile): ProjectFile {
       selectedRecordingPath: project.workspace.selectedRecordingPath,
       resolution: project.workspace.resolution,
       fps: project.workspace.fps,
+      rotation: project.workspace.rotation,
       personCount: project.workspace.personCount,
       outputOption: project.workspace.outputOption,
     },
