@@ -142,7 +142,7 @@ function buildConfigFromOptions(opts = {}) {
       da3_startup_calibration: {
         engine: `${modelDir}/DA3-LARGE-1.1.engine`,
         output_dir: "output/triangulation_da3_startup",
-        frame_source: "capture", 
+        frame_source: "capture_rig", 
         viewer_align: true,
         save_ply: "scene.ply"
       },
