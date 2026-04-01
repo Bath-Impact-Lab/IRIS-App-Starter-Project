@@ -78,6 +78,7 @@ const activeSessionIds = ref<string[]>([]);
 const isRunning = ref(false);
 const lastFrame = ref<IrisData[] | IrisData | null>(null);
 const cliOutput = ref<IrisCliOutput[]>([]);
+const wsUrl = ref<string | null>(null);
 
 let ipcListenersRegistered = false;
 
@@ -266,6 +267,7 @@ export function useIris(options: UseIrisOptions = {}) {
     stopError.value = null;
     lastFrame.value = null;
     cliOutput.value = [];
+    wsUrl.value = null;
 
     const sessionIds: string[] = [];
     let mocked = false;
@@ -297,6 +299,10 @@ export function useIris(options: UseIrisOptions = {}) {
         if (streamResult?.sessionId) {
           sessionIds.push(String(streamResult.sessionId));
         }
+
+        if (typeof streamResult?.wsUrl === 'string' && streamResult.wsUrl.length > 0) {
+          wsUrl.value = streamResult.wsUrl;
+        }
       }
 
       activeSessionIds.value = sessionIds;
@@ -308,6 +314,7 @@ export function useIris(options: UseIrisOptions = {}) {
       activeSessionIds.value = [];
       isRunning.value = false;
       startError.value = err instanceof Error ? err.message : 'Failed to start IRIS.';
+      wsUrl.value = null;
       console.warn('[useIris] Failed to start IRIS.', err);
       return { ok: false, error: startError.value };
     } finally {
@@ -335,6 +342,7 @@ export function useIris(options: UseIrisOptions = {}) {
       activeSessionIds.value = [];
       isRunning.value = false;
       lastFrame.value = null;
+      wsUrl.value = null;
       await refreshCameras();
       return { ok: true, sessionIds };
     } catch (err) {
@@ -399,6 +407,7 @@ export function useIris(options: UseIrisOptions = {}) {
     activeSessionIds,
     lastFrame,
     cliOutput,
+    wsUrl,
     clearCliOutput,
     clearFrame,
     start,

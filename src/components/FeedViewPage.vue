@@ -1,58 +1,95 @@
 <template>
   <div class="feed-view-page">
     <div class="feed-toolbar-wrapper">
-      <Toolbar 
+      <Toolbar
         :resolution="selectedResolution"
-        :fps="selectedFps" 
+        :fps="selectedFps"
+        @update:resolution="emit('update:resolution', $event)"
+        @update:fps="emit('update:fps', $event)"
       />
     </div>
 
     <div class="feed-grid">
-      <div v-for="n in displayCount" :key="n" class="feed-card">
-        <div class="skeleton-header">
-          <div class="skeleton-title"></div>
-          <div class="skeleton-actions"></div>
+      <template v-if="displayCameras.length > 0">
+        <div v-for="camera in displayCameras" :key="camera.id" class="feed-card">
+          <div class="feed-card-header">
+            <div class="feed-card-title">{{ camera.name }}</div>
+            <div class="feed-card-actions">
+              <span class="activity-blinker" :class="{ active: Boolean(camera.frameSrc) }"></span>
+            </div>
+          </div>
+
+          <div class="video-area" :class="{ 'video-area-empty': !camera.frameSrc }">
+            <img
+              v-if="camera.frameSrc"
+              :src="camera.frameSrc"
+              class="live-stream-img"
+              :alt="camera.name"
+            />
+
+            <div v-else class="empty-video-state">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="empty-video-icon">
+                <rect x="2" y="4" width="15" height="16" rx="2"></rect>
+                <path d="M17 10l5-3v10l-5-3z"></path>
+              </svg>
+              <span>Waiting for feed</span>
+            </div>
+          </div>
         </div>
-        <div class="skeleton-video-area">
-          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="skeleton-icon">
-            <rect x="2" y="2" width="20" height="20" rx="2.5" ry="2.5"></rect>
-            <line x1="2" y1="12" x2="22" y2="12"></line>
-            <line x1="12" y1="2" x2="12" y2="22"></line>
-          </svg>
+      </template>
+
+      <template v-else>
+        <div v-for="n in skeletonCount" :key="n" class="feed-card">
+          <div class="feed-card-header">
+            <div class="skeleton-title"></div>
+            <div class="skeleton-actions"></div>
+          </div>
+          <div class="skeleton-video-area">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="skeleton-icon">
+              <rect x="2" y="2" width="20" height="20" rx="2.5" ry="2.5"></rect>
+              <line x1="2" y1="12" x2="22" y2="12"></line>
+              <line x1="12" y1="2" x2="12" y2="22"></line>
+            </svg>
+          </div>
         </div>
-      </div>
+      </template>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import Toolbar from './app/Toolbar.vue';
 
+interface FeedCamera {
+  id: number | string;
+  name: string;
+}
+
 interface Props {
-  devices?: MediaDeviceInfo[];
-  selectedCameras?: MediaDeviceInfo[];
-  camera?: string;
+  cameras?: FeedCamera[];
+  wsUrl?: string | null;
   resolution?: string;
   fps?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  devices: () => [],
-  selectedCameras: () => [],
-  camera: '',
+  cameras: () => [],
+  wsUrl: null,
   resolution: '1920x1080',
   fps: 30,
 });
 
 const emit = defineEmits<{
-  'update:camera': [value: string];
   'update:resolution': [value: string];
   'update:fps': [value: number];
 }>();
 
 const selectedResolution = ref(props.resolution);
 const selectedFps = ref(props.fps);
+const cameraFrames = ref<Record<string, string>>({});
+
+let ws: WebSocket | null = null;
 
 watch(() => props.resolution, (value) => {
   selectedResolution.value = value;
@@ -61,10 +98,97 @@ watch(() => props.resolution, (value) => {
 watch(() => props.fps, (value) => {
   selectedFps.value = value;
 });
- 
-// Default to 4 skeleton placeholders if no physical cameras are passed in yet
-const displayCount = computed(() => {
-  return props.selectedCameras.length > 0 ? props.selectedCameras.length : 4;
+
+const displayCameras = computed(() => {
+  if (props.cameras.length > 0) {
+    return props.cameras.map((camera) => {
+      const id = String(camera.id);
+      return {
+        id,
+        name: camera.name || `Camera ${id}`,
+        frameSrc: cameraFrames.value[id] ?? null,
+      };
+    });
+  }
+
+  const activeIds = Object.keys(cameraFrames.value).sort((left, right) => Number(left) - Number(right));
+  return activeIds.map((id) => ({
+    id,
+    name: `Camera ${id}`,
+    frameSrc: cameraFrames.value[id],
+  }));
+});
+
+const skeletonCount = computed(() => {
+  return props.cameras.length > 0 ? props.cameras.length : 4;
+});
+
+watch(() => props.wsUrl, (nextUrl) => {
+  disconnectStream();
+  clearFrames();
+
+  if (typeof nextUrl === 'string' && nextUrl.length > 0) {
+    connectStream(nextUrl);
+  }
+}, { immediate: true });
+
+function connectStream(url: string) {
+  ws = new WebSocket(url);
+
+  ws.onmessage = (event) => {
+    if (typeof event.data !== 'string') {
+      return;
+    }
+
+    try {
+      const payload = JSON.parse(event.data) as {
+        cameraId?: number | string;
+        image?: string;
+        mimeType?: string;
+      };
+
+      if (typeof payload.image !== 'string' || payload.image.length === 0) {
+        return;
+      }
+
+      const cameraId = String(payload.cameraId ?? '0');
+      const mimeType = typeof payload.mimeType === 'string' && payload.mimeType.length > 0
+        ? payload.mimeType
+        : 'image/jpeg';
+
+      cameraFrames.value = {
+        ...cameraFrames.value,
+        [cameraId]: `data:${mimeType};base64,${payload.image}`,
+      };
+    } catch (err) {
+      console.warn('[FeedViewPage] Failed to parse frame payload.', err);
+    }
+  };
+
+  ws.onerror = (err) => {
+    console.warn('[FeedViewPage] Video websocket error.', err);
+  };
+
+  ws.onclose = () => {
+    if (ws?.url === url) {
+      ws = null;
+    }
+  };
+}
+
+function disconnectStream() {
+  if (!ws) return;
+  ws.close();
+  ws = null;
+}
+
+function clearFrames() {
+  cameraFrames.value = {};
+}
+
+onBeforeUnmount(() => {
+  disconnectStream();
+  clearFrames();
 });
 </script>
 
@@ -77,7 +201,7 @@ const displayCount = computed(() => {
   background: var(--bg);
   overflow: hidden;
   transition: background 0.3s ease;
-} 
+}
 
 .feed-toolbar-wrapper {
   padding: 16px;
@@ -104,7 +228,6 @@ const displayCount = computed(() => {
   align-content: start;
 }
 
-/* ── Skeleton Component Styles ── */
 .feed-card {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -121,7 +244,7 @@ const displayCount = computed(() => {
   box-shadow: 0 4px 12px rgba(31, 78, 121, 0.05);
 }
 
-.skeleton-header {
+.feed-card-header {
   padding: 12px 16px;
   display: flex;
   justify-content: space-between;
@@ -130,9 +253,78 @@ const displayCount = computed(() => {
   background: rgba(0, 0, 0, 0.2);
 }
 
-[data-theme="light"] .skeleton-header {
+[data-theme="light"] .feed-card-header {
   background: rgba(31, 78, 121, 0.03);
   border-bottom-color: rgba(31, 78, 121, 0.08);
+}
+
+.feed-card-title {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--fg);
+}
+
+.feed-card-actions {
+  display: flex;
+  align-items: center;
+}
+
+.video-area {
+  flex: 1;
+  display: flex;
+  background: #000;
+  overflow: hidden;
+  position: relative;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-area-empty {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="light"] .video-area-empty {
+  background: rgba(31, 78, 121, 0.05);
+}
+
+.live-stream-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.empty-video-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+[data-theme="light"] .empty-video-state {
+  color: rgba(31, 78, 121, 0.55);
+}
+
+.empty-video-icon {
+  opacity: 0.8;
+}
+
+.activity-blinker {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  transition: background 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+}
+
+.activity-blinker.active {
+  background: #6be675;
+  box-shadow: 0 0 6px rgba(107, 230, 117, 0.8);
+  animation: blink 1.2s ease-in-out infinite;
 }
 
 .skeleton-title {
@@ -183,11 +375,16 @@ const displayCount = computed(() => {
   100% { opacity: 0.6; }
 }
 
-/* ── Mobile Responsiveness ── */
+@keyframes blink {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(107, 230, 117, 0.8); }
+  50% { opacity: 0.25; box-shadow: none; }
+}
+
 @media (max-width: 768px) {
   .feed-view-page {
     inset: var(--app-topbar-height, 63px) 0 0 0;
-  } 
+  }
+
   .feed-grid {
     grid-template-columns: 1fr;
     padding: 16px;

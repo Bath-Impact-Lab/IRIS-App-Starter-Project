@@ -30,6 +30,7 @@ const {
   isRunning: isIrisRunning,
   isStarting: isStartingIris,
   isStopping: isStoppingIris,
+  wsUrl: irisWsUrl,
   start: startIris,
   stop: stopIris,
 } = useIris({ autoFetch: true, autoCheck: false });
@@ -158,7 +159,15 @@ async function handleStopIris() {
       />
 
       <main class="workspace-content">
-        <FeedViewPage v-if="activeView === 'capture'" />
+        <FeedViewPage
+          v-if="activeView === 'capture'"
+          :cameras="availableIrisCameras"
+          :ws-url="irisWsUrl"
+          :resolution="selectedResolution"
+          :fps="selectedFps"
+          @update:resolution="updateResolution"
+          @update:fps="updateFps"
+        />
         <div v-else-if="activeView === 'mocap'" class="mocap-stage">
           <div class="mocap-toolbar-shell">
             <Toolbar
