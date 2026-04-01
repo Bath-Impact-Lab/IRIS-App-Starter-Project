@@ -375,11 +375,7 @@ onBeforeUnmount(() => {
   padding: 20px;
   overflow: auto;
   background: radial-gradient(120% 120% at 15% 0%, rgba(45, 87, 138, 0.15) 0%, rgba(8, 13, 20, 0.95) 62%);
-}
-
-.sidebar-open .analysis-window {
-  inset: var(--app-topbar-height, 63px) var(--app-sidebar-width, 250px) 0 var(--app-session-sidenav-width, 240px);
-}
+} 
 
 [data-theme="light"] .analysis-window {
   background: #ffffff;

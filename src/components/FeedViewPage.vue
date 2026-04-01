@@ -92,11 +92,7 @@ const displayCount = computed(() => {
   background: var(--bg);
   overflow: hidden;
   transition: background 0.3s ease;
-}
-
-.sidebar-open .feed-view-page {
-  right: var(--app-sidebar-width, 250px);
-}
+} 
 
 .feed-toolbar-wrapper {
   padding: 16px;
@@ -206,10 +202,7 @@ const displayCount = computed(() => {
 @media (max-width: 768px) {
   .feed-view-page {
     inset: var(--app-topbar-height, 63px) 0 0 0;
-  }
-  .sidebar-open .feed-view-page {
-    right: 0;
-  }
+  } 
   .feed-grid {
     grid-template-columns: 1fr;
     padding: 16px;

@@ -1,5 +1,5 @@
 ﻿<template>
-  <div id="app-container" :class="{ 'sidebar-open': hasCameraSelected }">
+  <div id="app-container">
     <AppTopBar
       :app-title="appTitle"
       :disabled="IrisState.running"
@@ -24,21 +24,7 @@
         @open-mocap="openMocapView"
         @open-analysis="openAnalysisView"
       />
-
-      <sidebar
-        v-if="hasCameraSelected"
-        :person-count="personCount"
-        :iris-data="irisData"
-        :selected-cameras="selectedDevices"
-        :scene-cameras="sceneCameras"
-        :camera-rotation="cameraRotation"
-        :devices="devices"
-        :selected-camera-ids="selectedDeviceId"
-        :playback-video-urls="fsPlaybackVideoUrls"
-        :is-playing-back="isPlaying"
-        @iris-data-update="irisDataUpdate"
-        @reorder-cameras="reorderCameras"
-      />
+ 
 
       <FeedViewPage
         v-if="activeView === 'capture'"
@@ -774,34 +760,17 @@ function openHome() {
 
 .capture-toolbar-shell > * {
   pointer-events: auto;
-}
-
-.sidebar-open .capture-toolbar-shell {
-  right: var(--app-sidebar-width, 250px);
-}
+} 
 
 .capture-scene {
   inset: var(--app-topbar-height, 63px) 0 0 var(--app-session-sidenav-width, 240px) !important;
-}
-
-.sidebar-open .capture-scene {
-  right: var(--app-sidebar-width, 250px) !important;
-}
-
+} 
 @media (max-width: 768px) {
   .capture-toolbar-shell {
     left: 0;
     right: 0;
     padding: 12px 12px 0;
   }
-
-  .sidebar-open .capture-toolbar-shell {
-    right: 0;
-  }
-
-  .capture-scene,
-  .sidebar-open .capture-scene {
-    inset: var(--app-topbar-height, 63px) 0 0 0 !important;
-  }
+ 
 }
 </style>
