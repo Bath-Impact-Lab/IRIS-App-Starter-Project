@@ -3,7 +3,7 @@
     <div v-if="props.showSettings" class="modal-overlay" @click.self="settings">
       <div class="modal-content fade-up">
         <button class="modal-close" @click="settings">×</button>
-        
+
         <div class="modal-header">
           <h2 class="modal-title">Settings</h2>
           <p class="modal-subtitle">Manage your application preferences</p>
@@ -27,16 +27,16 @@
           <div class="settings-group">
             <label>License Management</label>
             <div class="license-input-wrapper">
-              <input 
-                v-model="licenseKeyInput" 
-                type="text" 
+              <input
+                v-model="licenseKeyInput"
+                type="text"
                 placeholder="Enter License Key"
                 class="license-input"
                 :disabled="isChecking"
                 @keyup.enter="handleLicenseSubmit"
               />
-              <button 
-                class="btn-activate" 
+              <button
+                class="btn-activate"
                 @click="handleLicenseSubmit"
                 :disabled="isChecking || !licenseKeyInput"
               >
@@ -49,7 +49,7 @@
               <div v-else-if="isValidLicense" class="license-msg success">License active and valid</div>
             </Transition>
           </div>
-          
+
           <div v-if="isValidLicense" class="settings-actions">
             <button class="btn-deactivate" @click="licenseLogout">Deactivate License</button>
           </div>
@@ -87,14 +87,14 @@ const emit = defineEmits<{
 
 
 const licenseKeyInput = ref('');
-const { 
+const {
   licenseKey: storedLicenseKey,
-  isValid: isValidLicense, 
-  isChecking, 
-  error: licenseError, 
+  isValid: isValidLicense,
+  isChecking,
+  error: licenseError,
   planType,
-  validateLicense, 
-  logout: licenseLogout 
+  validateLicense,
+  logout: licenseLogout
 } = useLicense();
 
 const isPaidLicense = computed(() => {
@@ -111,7 +111,7 @@ async function handleLicenseSubmit() {
 async function buyLicense() {
   const url = import.meta.env.VITE_LICENSE_URL || 'https://embodi.ecolizard.com/#pricing';
   console.log('Buy License clicked - opening:', url);
-  
+
   if (!(window as any).electronAPI?.openExternal) {
     console.error('CRITICAL: electronAPI.openExternal is missing! Please restart the application.');
     return;
@@ -259,11 +259,6 @@ function toggleTheme() {
   transition: all 0.2s ease;
 }
 
-:global([data-theme="light"]) .btn-buy {
-  background: rgba(46, 134, 193, 0.08);
-  border: 1px solid rgba(46, 134, 193, 0.25);
-  color: #2E86C1;
-}
 
 .btn-buy:hover {
   background: rgba(107, 230, 117, 0.15);
