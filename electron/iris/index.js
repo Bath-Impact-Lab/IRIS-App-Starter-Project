@@ -13,6 +13,15 @@ const { execFile } = require('child_process');
 const processManager = new ProcessManager();
 const monitorManager = new MonitorManager();
 
+function resolveOutputDir(value) {
+  if (typeof value === 'string' && value.trim().length > 0) {
+    return value.trim();
+  }
+
+  const irisCliDir = path.dirname(getIrisCliPath());
+  return path.join(irisCliDir, 'output', 'triangulation_da3_startup');
+}
+
 function registerIrisIpc() {
   ipcMain.handle('start-iris', (event, options) => {
     const sessionId = crypto.randomUUID();
@@ -70,47 +79,45 @@ function registerIrisIpc() {
     });
   });
  
-  ipcMain.handle('get-extrinsics', async () => {
-    const irisCliDir = path.dirname(getIrisCliPath());
-    const outputDir = path.join(irisCliDir, 'output', 'triangulation_da3_startup');
-    
-    // DA3 calibration typically writes to extrinsics.json or cameras.json
+  ipcMain.handle('get-extrinsics', async (_event, outputDirArg) => {
+    const outputDir = resolveOutputDir(outputDirArg);
+
     const extrinsicsPath = path.join(outputDir, 'extrinsics.json');
     const camerasPath = path.join(outputDir, 'cameras.json');
-    
-    const targetPath = fs.existsSync(extrinsicsPath) ? extrinsicsPath : 
-                       fs.existsSync(camerasPath) ? camerasPath : null;
+
+    const targetPath = fs.existsSync(extrinsicsPath)
+      ? extrinsicsPath
+      : fs.existsSync(camerasPath)
+        ? camerasPath
+        : null;
 
     if (!targetPath) {
-      return { ok: false, error: `Extrinsics file not found in ${outputDir}` };
+      return null;
     }
 
     try {
       const rawData = fs.readFileSync(targetPath, 'utf8');
-      return { ok: true, data: JSON.parse(rawData), path: targetPath };
+      return JSON.parse(rawData);
     } catch (error) {
-      return { ok: false, error: error.message };
+      console.warn('[iris] Failed to read extrinsics from', targetPath, error);
+      return null;
     }
   });
 
-  ipcMain.handle('get-scene', async () => {
-    const irisCliDir = path.dirname(getIrisCliPath());
-    const scenePath = path.join(irisCliDir, 'output', 'triangulation_da3_startup', 'scene.ply');
+  ipcMain.handle('get-scene', async (_event, outputDirArg) => {
+    const outputDir = resolveOutputDir(outputDirArg);
+    const scenePath = path.join(outputDir, 'scene.ply');
 
     if (!fs.existsSync(scenePath)) {
-      return { ok: false, error: `scene.ply not found at ${scenePath}` };
+      return null;
     }
 
     try { 
-      const buffer = fs.readFileSync(scenePath);
-      return { 
-        ok: true, 
-        data: buffer, 
-        path: scenePath,
-        fileUrl: `file:///${scenePath.replace(/\\/g, '/')}`
-      };
+      fs.accessSync(scenePath, fs.constants.R_OK);
+      return `file:///${scenePath.replace(/\\/g, '/')}`;
     } catch (error) {
-      return { ok: false, error: error.message };
+      console.warn('[iris] Failed to resolve scene file at', scenePath, error);
+      return null;
     }
   });
  

@@ -29,8 +29,8 @@ interface Window {
     startIRISStream: (options: any) => Promise<any>;
     stopIRIS: (Id: any) => Promise<any>;
     getHardwareCameras: () => Promise<{ ok: boolean; data?: { id: number; name: string }[]; error?: string }>;
-    getExtrinsics: () => Promise<any>;
-    getScene: () => Promise<string | null>;
+    getExtrinsics: (outputDir?: string) => Promise<any>;
+    getScene: (outputDir?: string) => Promise<string | null>;
     onIrisData: (callback: (data: IrisData[] | IrisData) => void) => void;
 
     checkIrisCli: () => Promise<{ found: boolean, path: string }>;

@@ -1,4 +1,5 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue';
+import { useProject } from '@/lib/useProject';
 
 export interface IrisCameraExtrinsics {
   R: number[];
@@ -79,6 +80,11 @@ const lastFrame = ref<IrisData[] | IrisData | null>(null);
 const cliOutput = ref<IrisCliOutput[]>([]);
 
 let ipcListenersRegistered = false;
+
+function getParentDirectory(filePath: string | null | undefined) {
+  if (typeof filePath !== 'string' || filePath.trim().length === 0) return '';
+  return filePath.replace(/[\\/][^\\/]+$/, '');
+}
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
@@ -174,6 +180,7 @@ function ensureIpcListeners() {
 
 export function useIris(options: UseIrisOptions = {}) {
   const { autoFetch = true, pollInterval = 0, autoCheck = true } = options;
+  const { currentProject } = useProject();
 
   let pollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -206,7 +213,8 @@ export function useIris(options: UseIrisOptions = {}) {
         return cameras.value;
       }
 
-      const extrinsicsResult = await getExtrinsics();
+      const projectOutputDir = getParentDirectory(currentProject.value?.path);
+      const extrinsicsResult = await getExtrinsics(projectOutputDir || undefined);
       cameras.value = extractIrisCameras(extrinsicsResult);
       return cameras.value;
     } catch (err) {

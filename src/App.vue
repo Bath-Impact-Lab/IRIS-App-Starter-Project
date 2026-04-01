@@ -55,6 +55,7 @@ const selectedResolution = computed(() => currentProject.value?.workspace.resolu
 const selectedFps = computed(() => currentProject.value?.workspace.fps ?? 30);
 const selectedRotation = computed(() => currentProject.value?.workspace.rotation ?? 0);
 const selectedCameraIds = computed(() => currentProject.value?.workspace.selectedCameraIds ?? []);
+const projectOutputDir = computed(() => getParentDirectory(currentProject.value?.path));
 const availableIrisCameras = computed(() => {
   if (selectedCameraIds.value.length === 0) return irisCameras.value;
   return irisCameras.value.filter((camera) => selectedCameraIds.value.includes(String(camera.id)));
@@ -90,6 +91,11 @@ function parseResolution(value: string) {
   };
 }
 
+function getParentDirectory(filePath: string | null | undefined) {
+  if (typeof filePath !== 'string' || filePath.trim().length === 0) return '';
+  return filePath.replace(/[\\/][^\\/]+$/, '');
+}
+
 async function handleStartIris() {
   if (!currentProject.value || availableIrisCameras.value.length === 0) return;
 
@@ -107,7 +113,7 @@ async function handleStartIris() {
     camera_width: width,
     camera_height: height,
     video_fps: selectedFps.value,
-    output_dir: '',
+    output_dir: projectOutputDir.value,
     stream: true,
   };
 

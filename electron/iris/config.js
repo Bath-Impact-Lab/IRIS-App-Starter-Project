@@ -33,6 +33,9 @@ function buildConfigFromOptions(opts = {}) {
   const height = opts.camera_height ?? 1080;
   const cameras = opts.cameras || [];
   const captureOnly = opts.capture_only === true;
+  const outputDir = typeof opts.output_dir === 'string' && opts.output_dir.trim().length > 0
+    ? opts.output_dir.trim().replace(/\\/g, '/')
+    : 'output/triangulation_da3_startup';
   
   const camera_ids = cameras.map((_, index) => index);
   const fps = cameras.length > 0 && cameras[0].fps ? cameras[0].fps : 30;
@@ -142,7 +145,7 @@ function buildConfigFromOptions(opts = {}) {
       camera_group: "capture_rig",
       da3_startup_calibration: {
         engine: `${modelDir}/DA3-LARGE-1.1.engine`,
-        output_dir: "output/triangulation_da3_startup",
+        output_dir: outputDir,
         frame_source: "frame_batch", 
         viewer_align: true,
         save_ply: "scene.ply"

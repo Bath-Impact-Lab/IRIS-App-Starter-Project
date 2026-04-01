@@ -1,6 +1,7 @@
 import { ref, watch, type Ref } from 'vue';
 import * as THREE from 'three'; 
 import { PLYLoader } from 'three/examples/jsm/Addons.js';
+import { useProject } from '@/lib/useProject';
 export interface SceneCameraDef {
   name: string;
   position: { x: number; y: number; z: number };
@@ -51,6 +52,11 @@ interface cameras {
 }
 
 const GIZMO_SCALE = 0.2;
+
+function getParentDirectory(filePath: string | null | undefined) {
+  if (typeof filePath !== 'string' || filePath.trim().length === 0) return '';
+  return filePath.replace(/[\\/][^\\/]+$/, '');
+}
 
 function createCameraGizmo(
   position: { x: number; y: number; z: number },
@@ -245,6 +251,7 @@ function updateFrustumLines(entry: SceneCameraEntry) {
 
 export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<boolean>, showGizmos?: Ref<boolean>) {
   const sceneCameras = ref<SceneCameraEntry[]>([]);
+  const { currentProject } = useProject();
   let attachedScene: THREE.Scene | null = null;
 
   const COLORS = ['#ff4466', '#44aaff', '#ffaa22', '#44dd88', '#cc44ff', '#00dddd'];
@@ -283,10 +290,11 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
     attachedScene = scene;
 
     let defs: SceneCameraDef[] = [];
+    const projectOutputDir = getParentDirectory(currentProject.value?.path);
 
     // Try loading live extrinsics via IPC; fall back to bundled mock
     try {
-      const result = await window.ipc?.getExtrinsics();
+      const result = await window.ipc?.getExtrinsics(projectOutputDir || undefined);
       const extrinsics: Extrinsics = result;
       if (extrinsics?.cameras?.length) {
         const unit = ('m').replace(/[^a-z]/gi, '').toLowerCase();
@@ -315,7 +323,7 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
           scene.add(points)
         })
     }
-    const scenePath = await window.ipc?.getScene()
+    const scenePath = await window.ipc?.getScene(projectOutputDir || undefined)
     if (scenePath) {
       loadScenePoints(scenePath)
     }
