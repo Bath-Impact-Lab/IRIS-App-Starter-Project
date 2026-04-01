@@ -1,34 +1,5 @@
 <template>
   <div class="capture-toolbar">
-
-    <div class="toolbar-group">
-      <label class="toolbar-label" for="camera-select">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-          <circle cx="12" cy="13" r="4"></circle>
-        </svg>
-        Camera
-      </label>
-      <div class="select-wrapper">
-        <select
-          id="camera-select"
-          class="toolbar-select"
-          v-model="selectedCamera"
-          @change="emit('update:camera', selectedCamera)"
-        >
-          <option value="" disabled>Select a camera</option>
-          <option v-for="device in devices" :key="device.deviceId" :value="device.deviceId">
-            {{ device.label || 'Unknown Camera' }}
-          </option>
-        </select>
-        <svg class="select-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="6 9 12 15 18 9"></polyline>
-        </svg>
-      </div>
-    </div>
-
-    <div class="toolbar-divider"></div>
-
     <div class="toolbar-group">
       <label class="toolbar-label" for="resolution-select">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -92,31 +63,24 @@
 import { ref, watch } from 'vue';
 
 interface Props {
-  devices?: MediaDeviceInfo[];
-  camera?: string;
   resolution?: string;
   fps?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  devices: () => [],
-  camera: '',
   resolution: '1920x1080',
   fps: 30,
 });
 
 const emit = defineEmits<{
-  'update:camera': [value: string];
   'update:resolution': [value: string];
   'update:fps': [value: number];
 }>();
 
-const selectedCamera = ref(props.camera);
 const selectedResolution = ref(props.resolution);
 const selectedFps = ref(props.fps);
 
 // Keep local state in sync if parent updates props
-watch(() => props.camera, (newVal) => { selectedCamera.value = newVal; });
 watch(() => props.resolution, (newVal) => { selectedResolution.value = newVal; });
 watch(() => props.fps, (newVal) => { selectedFps.value = newVal; });
 </script>
@@ -127,16 +91,24 @@ watch(() => props.fps, (newVal) => { selectedFps.value = newVal; });
   align-items: center;
   gap: 16px;
   padding: 8px 16px;
-  background: var(--navbar-bg); /* Uses the translucent background from the app */
-  border: 1px solid var(--navbar-border);
+
+  /* Glassmorphism settings */
+  background: rgba(15, 22, 30, 0.45);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 12px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+
+  /* Subtle inset glow and drop shadow */
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   transition: background 0.3s ease, border-color 0.3s ease;
 }
 
 [data-theme="light"] .capture-toolbar {
-  box-shadow: 0 4px 16px rgba(31, 78, 121, 0.08);
+  background: rgba(255, 255, 255, 0.65);
+  border-color: rgba(31, 78, 121, 0.15);
+  box-shadow: 0 8px 32px rgba(31, 78, 121, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 .toolbar-group {
@@ -158,7 +130,7 @@ watch(() => props.fps, (newVal) => { selectedFps.value = newVal; });
 }
 
 [data-theme="light"] .toolbar-label {
-  color: #cce4f6; /* Softer light theme contrast if using deep blue nav */
+  color: #2E86C1;
 }
 
 .select-wrapper {
@@ -169,8 +141,8 @@ watch(() => props.fps, (newVal) => { selectedFps.value = newVal; });
 
 .toolbar-select {
   appearance: none;
-  background: var(--input-bg);
-  border: 1px solid var(--input-border);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
   color: var(--fg);
   font-size: 0.85rem;
@@ -184,7 +156,7 @@ watch(() => props.fps, (newVal) => { selectedFps.value = newVal; });
 
 .toolbar-select:hover {
   background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .toolbar-select:focus-visible {
@@ -194,11 +166,12 @@ watch(() => props.fps, (newVal) => { selectedFps.value = newVal; });
 
 [data-theme="light"] .toolbar-select {
   color: #1F4E79;
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.5);
+  border-color: rgba(31, 78, 121, 0.15);
 }
 
 [data-theme="light"] .toolbar-select:hover {
-  background: #f8fbff;
+  background: rgba(255, 255, 255, 0.8);
   border-color: var(--accent);
 }
 
@@ -237,7 +210,11 @@ watch(() => props.fps, (newVal) => { selectedFps.value = newVal; });
 .toolbar-divider {
   width: 1px;
   height: 24px;
-  background: var(--navbar-border);
+  background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="light"] .toolbar-divider {
+  background: rgba(31, 78, 121, 0.15);
 }
 
 /* Mobile Responsiveness */

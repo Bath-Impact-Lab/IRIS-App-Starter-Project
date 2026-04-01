@@ -78,12 +78,12 @@
       <div class="session-sidenav-bottom">
         <button
           class="session-sidenav-action"
-          :class="{ active: activeView === 'calibrate' }"
-          @click="emit('calibrate-rig')"
+          :class="{ active: activeView === 'mocap' }"
+          @click="emit('open-mocap')"
           type="button"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><line x1="12" y1="5" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="19"></line><line x1="5" y1="12" x2="2" y2="12"></line><line x1="22" y1="12" x2="19" y2="12"></line></svg>
-          Calibrate Rig
+          Mocap Mode
         </button>
         <button
           class="session-sidenav-action"
@@ -120,7 +120,7 @@
 import { ref } from 'vue';
 
 interface Props {
-  activeView: 'capture' | 'analysis' | 'calibrate';
+  activeView: 'capture' | 'analysis' | 'mocap';
 }
 
 defineProps<Props>();
@@ -128,7 +128,7 @@ defineProps<Props>();
 const emit = defineEmits<{
   'open-capture': [];
   'open-analysis': [];
-  'calibrate-rig': [];
+  'open-mocap': [];
 }>();
 
 // State for the main cameras dropdown

@@ -16,7 +16,12 @@
     />
 
     <template v-else>
-      <SessionSidenav :active-view="activeView" @open-capture="openCaptureView" @open-analysis="openAnalysisView" />
+      <SessionSidenav
+        :active-view="activeView"
+        @open-capture="openCaptureView"
+        @open-mocap="openMocapView"
+        @open-analysis="openAnalysisView"
+      />
 
       <sidebar
         v-if="hasCameraSelected"
@@ -33,25 +38,51 @@
         @reorder-cameras="reorderCameras"
       />
 
-      <ThreeWindow
+      <FeedViewPage
         v-if="activeView === 'capture'"
-        :selected-camera-count="selectedCameraCount"
-        :iris-data="irisData"
-        :spheres-mesh="spheresMesh"
-        :skeleton-line="skeletonLine"
-        :rebuild-play-space="rebuildPlaySpace"
-        :create-play-space="createPlaySpace"
-        :add-scene-cameras="addSceneCameras"
-        @give-sphere-mesh="sphereMeshUpdate"
-        @give-skeleton-mesh="skeletonMeshUpdate"
-      >
-        <SceneHudControls
-          :show-play-space="showPlaySpace"
-          :show-cameras="showCameras"
-          @toggle-play-space="showPlaySpace = !showPlaySpace"
-          @toggle-cameras="showCameras = !showCameras"
-        />
-      </ThreeWindow>
+        :devices="devices"
+        :selected-cameras="selectedDevices ?? []"
+        :camera="primarySelectedCameraId"
+        :resolution="selectedResolution"
+        :fps="selectedFps"
+        @update:camera="updatePrimaryCamera"
+        @update:resolution="selectedResolution = $event"
+        @update:fps="selectedFps = $event"
+      />
+
+      <template v-else-if="activeView === 'mocap'">
+        <div class="capture-toolbar-shell">
+          <Toolbar
+            :devices="devices"
+            :camera="primarySelectedCameraId"
+            :resolution="selectedResolution"
+            :fps="selectedFps"
+            @update:camera="updatePrimaryCamera"
+            @update:resolution="selectedResolution = $event"
+            @update:fps="selectedFps = $event"
+          />
+        </div>
+
+        <ThreeWindow
+          class="capture-scene"
+          :selected-camera-count="selectedCameraCount"
+          :iris-data="irisData"
+          :spheres-mesh="spheresMesh"
+          :skeleton-line="skeletonLine"
+          :rebuild-play-space="rebuildPlaySpace"
+          :create-play-space="createPlaySpace"
+          :add-scene-cameras="addSceneCameras"
+          @give-sphere-mesh="sphereMeshUpdate"
+          @give-skeleton-mesh="skeletonMeshUpdate"
+        >
+          <SceneHudControls
+            :show-play-space="showPlaySpace"
+            :show-cameras="showCameras"
+            @toggle-play-space="showPlaySpace = !showPlaySpace"
+            @toggle-cameras="showCameras = !showCameras"
+          />
+        </ThreeWindow>
+      </template>
       <AnalysisWindow v-else />
 
       <StatusOverlays
@@ -100,9 +131,11 @@ import SceneHudControls from './components/app/SceneHudControls.vue';
 import StatusOverlays from './components/app/StatusOverlays.vue';
 import RenameRecordingModal from './components/app/RenameRecordingModal.vue';
 import IrisMissingModal from './components/app/IrisMissingModal.vue';
+import Toolbar from './components/app/Toolbar.vue';
 import sidebar from './components/sidebar.vue';
 import ThreeWindow from './components/threeWindow.vue';
 import AnalysisWindow from './components/analysisWindow.vue';
+import FeedViewPage from './components/FeedViewPage.vue';
 import ProjectHome from './components/ProjectHome.vue';
 import settingsModal from './components/settingsModal.vue';
 import { useIrisStore } from './Stores/irisStore';
@@ -128,7 +161,7 @@ const {
   planType,
 } = useLicense();
 const currentScreen = ref<'home' | 'workspace'>('home');
-const activeView = ref<'capture' | 'analysis'>('capture');
+const activeView = ref<'capture' | 'mocap' | 'analysis'>('capture');
 
 // Sync local input with stored key on mount
 watch(storedLicenseKey, (newKey) => {
@@ -171,6 +204,8 @@ const {
 
 // Person count options
 const personCount = ref<string | null>('Single Person');
+const selectedResolution = ref('1920x1080');
+const selectedFps = ref(30);
 
 // Output always uses Filesystem
 const outputOption = ref<string>('Filesystem');
@@ -442,6 +477,7 @@ function stopFsTimer() {
 }
 
 const lastSentMsg = ref('');
+const primarySelectedCameraId = computed(() => selectedDeviceId.value?.[0] ?? '');
 
 const irisDisplayFps = ref(0);
 const jointAngles = computed(() => {
@@ -488,6 +524,13 @@ const { create: createPlaySpace, rebuild: rebuildPlaySpace, dispose: disposePlay
 function reorderCameras(newOrder: MediaDeviceInfo[]) {
   selectedDevices.value = newOrder;
   selectedDeviceId.value = newOrder.map(d => d.deviceId);
+}
+
+function updatePrimaryCamera(deviceId: string) {
+  const device = devices.value.find((item) => item.deviceId === deviceId);
+  if (!device) return;
+  selectedDevices.value = [device];
+  selectedDeviceId.value = [device.deviceId];
 }
 
 onMounted(() => {
@@ -568,6 +611,11 @@ function openCaptureView() {
   activeView.value = 'capture';
 }
 
+function openMocapView() {
+  currentScreen.value = 'workspace';
+  activeView.value = 'mocap';
+}
+
 function openAnalysisView() {
   currentScreen.value = 'workspace';
   activeView.value = 'analysis';
@@ -587,3 +635,48 @@ function openHome() {
 }
 
 </script>
+
+<style>
+.capture-toolbar-shell {
+  position: absolute;
+  top: var(--app-topbar-height, 63px);
+  left: var(--app-session-sidenav-width, 240px);
+  right: 0;
+  z-index: 11;
+  padding: 12px 16px 0;
+  pointer-events: none;
+}
+
+.capture-toolbar-shell > * {
+  pointer-events: auto;
+}
+
+.sidebar-open .capture-toolbar-shell {
+  right: var(--app-sidebar-width, 250px);
+}
+
+.capture-scene {
+  inset: var(--app-topbar-height, 63px) 0 0 var(--app-session-sidenav-width, 240px) !important;
+}
+
+.sidebar-open .capture-scene {
+  right: var(--app-sidebar-width, 250px) !important;
+}
+
+@media (max-width: 768px) {
+  .capture-toolbar-shell {
+    left: 0;
+    right: 0;
+    padding: 12px 12px 0;
+  }
+
+  .sidebar-open .capture-toolbar-shell {
+    right: 0;
+  }
+
+  .capture-scene,
+  .sidebar-open .capture-scene {
+    inset: var(--app-topbar-height, 63px) 0 0 0 !important;
+  }
+}
+</style>
