@@ -29,7 +29,9 @@ const {
   cameras: irisCameras,
   isRunning: isIrisRunning,
   isStarting: isStartingIris,
+  isStopping: isStoppingIris,
   start: startIris,
+  stop: stopIris,
 } = useIris({ autoFetch: true, autoCheck: false });
 
 // View State Routing
@@ -62,6 +64,9 @@ const availableIrisCameras = computed(() => {
 });
 const canStartIris = computed(() =>
   availableIrisCameras.value.length > 0 && !isIrisRunning.value && !isStartingIris.value
+);
+const canStopIris = computed(() =>
+  isIrisRunning.value && !isStoppingIris.value && !isStartingIris.value
 );
 
 function updateResolution(value: string) {
@@ -119,6 +124,10 @@ async function handleStartIris() {
 
   await startIris(options);
 }
+
+async function handleStopIris() {
+  await stopIris();
+}
 </script>
 
 <template>
@@ -157,13 +166,17 @@ async function handleStartIris() {
               :fps="selectedFps"
               :rotation="selectedRotation"
               :show-start-button="true"
+              :show-stop-button="true"
               :is-starting-iris="isStartingIris"
+              :is-stopping-iris="isStoppingIris"
               :is-iris-running="isIrisRunning"
               :start-disabled="!canStartIris"
+              :stop-disabled="!canStopIris"
               @update:resolution="updateResolution"
               @update:fps="updateFps"
               @update:rotation="updateRotation"
               @start-iris="handleStartIris"
+              @stop-iris="handleStopIris"
             />
           </div>
           <ThreeWindow />

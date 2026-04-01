@@ -84,16 +84,27 @@
       </div>
     </div>
 
-    <template v-if="showStartButton">
+    <template v-if="showStartButton || showStopButton">
       <div class="toolbar-divider"></div>
 
       <button
+        v-if="showStartButton"
         class="toolbar-action"
         type="button"
         :disabled="startDisabled"
         @click="emit('start-iris')"
       >
         {{ startLabel }}
+      </button>
+
+      <button
+        v-if="showStopButton"
+        class="toolbar-action toolbar-action-danger"
+        type="button"
+        :disabled="stopDisabled"
+        @click="emit('stop-iris')"
+      >
+        {{ stopLabel }}
       </button>
     </template>
 
@@ -108,9 +119,12 @@ interface Props {
   fps?: number;
   rotation?: number;
   showStartButton?: boolean;
+  showStopButton?: boolean;
   isStartingIris?: boolean;
+  isStoppingIris?: boolean;
   isIrisRunning?: boolean;
   startDisabled?: boolean;
+  stopDisabled?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -118,9 +132,12 @@ const props = withDefaults(defineProps<Props>(), {
   fps: 30,
   rotation: 0,
   showStartButton: false,
+  showStopButton: false,
   isStartingIris: false,
+  isStoppingIris: false,
   isIrisRunning: false,
   startDisabled: false,
+  stopDisabled: false,
 });
 
 const emit = defineEmits<{
@@ -128,6 +145,7 @@ const emit = defineEmits<{
   'update:fps': [value: number];
   'update:rotation': [value: number];
   'start-iris': [];
+  'stop-iris': [];
 }>();
 
 const selectedResolution = ref(props.resolution);
@@ -137,6 +155,10 @@ const startLabel = computed(() => {
   if (props.isStartingIris) return 'Starting IRIS...';
   if (props.isIrisRunning) return 'IRIS Running';
   return 'Start IRIS';
+});
+const stopLabel = computed(() => {
+  if (props.isStoppingIris) return 'Stopping IRIS...';
+  return 'Stop IRIS';
 });
 
 // Keep local state in sync if parent updates props
@@ -301,10 +323,24 @@ watch(() => props.rotation, (newVal) => { selectedRotation.value = newVal; });
   cursor: not-allowed;
 }
 
+.toolbar-action-danger {
+  border-color: rgba(255, 107, 107, 0.24);
+  background: linear-gradient(135deg, rgba(255, 107, 107, 0.24), rgba(255, 159, 67, 0.16));
+}
+
+.toolbar-action-danger:hover:not(:disabled) {
+  border-color: rgba(255, 107, 107, 0.44);
+}
+
 [data-theme="light"] .toolbar-action {
   color: #1F4E79;
   background: linear-gradient(135deg, rgba(46, 134, 193, 0.16), rgba(56, 189, 248, 0.14));
   border-color: rgba(31, 78, 121, 0.18);
+}
+
+[data-theme="light"] .toolbar-action-danger {
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.14), rgba(249, 115, 22, 0.14));
+  border-color: rgba(185, 28, 28, 0.18);
 }
 
 /* Mobile Responsiveness */
