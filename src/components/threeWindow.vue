@@ -302,14 +302,11 @@ async function initThree(container: HTMLElement) {
 function renderIRISdata(poseInfo: IrisData) {
   try {
     poseInfo.people.forEach((person, i) => {
-      const neck = person.joint_centers[0]
-      const pelvis = person.joint_centers[1]
-      const spine_mid = person.joint_centers[2]
-      const keypoints = [[neck[0], neck[1], neck[2]], [pelvis[0], pelvis[1], pelvis[2]], [spine_mid[0], spine_mid[1], spine_mid[2]]]
+      
       if (!(spheresMesh && skeletonLine)) {
         const sphereGeometry = new THREE.SphereGeometry(0.025, 8, 8)
         const material = new THREE.MeshBasicMaterial({color: 0xffffff})
-        spheresMesh = new THREE.InstancedMesh(sphereGeometry, material, (keypoints.length + person.joint_centers.length))
+        spheresMesh = new THREE.InstancedMesh(sphereGeometry, material, (person.joint_centers.length))
         scene.add(spheresMesh)
 
         const lMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 })
@@ -322,7 +319,7 @@ function renderIRISdata(poseInfo: IrisData) {
       const positionAttr = skeletonLine.geometry.attributes.position
       let idx = 0
 
-      keypoints.forEach((points, i) => {
+      person.joint_centers.forEach((points, i) => {
         position.position.set(points[0], points[2], points[1])
         position.updateMatrix()
         spheresMesh?.setMatrixAt(i, position.matrix)
