@@ -331,7 +331,7 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
       const loader = new PLYLoader()
         loader.load(path, (geometry) => {
           geometry.computeVertexNormals()
-          geometry.scale(4.5, 4.5, 4.5)
+          geometry.scale(1, 1, 1)
 
           const material = new THREE.PointsMaterial({
             size: 0.02,
