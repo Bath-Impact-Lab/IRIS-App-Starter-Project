@@ -2,28 +2,30 @@
   <div class="feed-view-page">
     <div class="feed-grid">
       <template v-if="displayCameras.length > 0">
-        <div v-for="camera in displayCameras" :key="camera.id" class="feed-card">
+        <div v-for="camera in displayCameras" :key="camera.key" class="feed-card">
           <div class="feed-card-header">
             <div class="feed-card-title">{{ camera.name }}</div>
             <div class="feed-card-actions">
-              <span class="activity-blinker" :class="{ active: Boolean(camera.frameSrc) }"></span>
+              <span class="activity-blinker" :class="{ active: camera.isActive }"></span>
             </div>
           </div>
 
-          <div class="video-area" :class="{ 'video-area-empty': !camera.frameSrc }">
-            <img
-              v-if="camera.frameSrc"
-              :src="camera.frameSrc"
-              class="live-stream-img"
-              :alt="camera.name"
-            />
+          <div class="video-area" :class="{ 'video-area-empty': !camera.isActive }">
+            <video
+              :ref="(element) => setVideoElement(camera.streamSlot, element as HTMLVideoElement | null)"
+              class="live-stream-video"
+              :class="{ 'live-stream-video-hidden': !camera.isActive }"
+              autoplay
+              muted
+              playsinline
+            ></video>
 
-            <div v-else class="empty-video-state">
+            <div v-if="!camera.isActive" class="empty-video-state">
               <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="empty-video-icon">
                 <rect x="2" y="4" width="15" height="16" rx="2"></rect>
                 <path d="M17 10l5-3v10l-5-3z"></path>
               </svg>
-              <span>Waiting for feed</span>
+              <span>{{ camera.statusText }}</span>
             </div>
           </div>
         </div>
@@ -61,104 +63,508 @@ interface Props {
   wsUrl?: string | null;
 }
 
+interface StreamState {
+  active: boolean;
+  connected: boolean;
+  error: string | null;
+  statusText: string;
+}
+
+interface StreamController {
+  slot: number;
+  routeIds: number[];
+  routeIndex: number;
+  socket: WebSocket | null;
+  mediaSource: MediaSource | null;
+  sourceBuffer: SourceBuffer | null;
+  queue: Uint8Array[];
+  queuedBytes: number;
+  objectUrl: string | null;
+  videoElement: HTMLVideoElement | null;
+  receivedData: boolean;
+  fallbackTimer: ReturnType<typeof setTimeout> | null;
+  updateEndHandler: (() => void) | null;
+  destroyed: boolean;
+}
+
+const STREAM_MIME_CANDIDATES = [
+  'video/mp2t; codecs="avc1.64001F"',
+  'video/mp2t; codecs="avc1.4D401F"',
+  'video/mp2t; codecs="avc1.42E01E"',
+  'video/mp2t; codecs="avc1"',
+  'video/mp2t',
+];
+const FIRST_PACKET_TIMEOUT_MS = 2500;
+const MAX_QUEUED_BYTES = 8 * 1024 * 1024;
+
 const props = withDefaults(defineProps<Props>(), {
   cameras: () => [],
   wsUrl: null,
 });
-const cameraFrames = ref<Record<string, string>>({});
 
-let ws: WebSocket | null = null;
+const streamStates = ref<Record<string, StreamState>>({});
+const controllers = new Map<number, StreamController>();
+const videoElements = new Map<number, HTMLVideoElement>();
+const supportedMimeType = resolveSupportedMimeType();
 
 const displayCameras = computed(() => {
-  if (props.cameras.length > 0) {
-    return props.cameras.map((camera) => {
-      const id = String(camera.id);
-      return {
-        id,
-        name: camera.name || `Camera ${id}`,
-        frameSrc: cameraFrames.value[id] ?? null,
-      };
-    });
-  }
+  return props.cameras.map((camera, index) => {
+    const state = streamStates.value[String(index)] ?? defaultStreamState(getIdleStatus());
 
-  const activeIds = Object.keys(cameraFrames.value).sort((left, right) => Number(left) - Number(right));
-  return activeIds.map((id) => ({
-    id,
-    name: `Camera ${id}`,
-    frameSrc: cameraFrames.value[id],
-  }));
+    return {
+      id: String(camera.id),
+      key: `${camera.id}-${index}`,
+      name: camera.name || `Camera ${camera.id}`,
+      streamSlot: index,
+      isActive: state.active,
+      statusText: state.statusText,
+    };
+  });
 });
 
 const skeletonCount = computed(() => {
   return props.cameras.length > 0 ? props.cameras.length : 4;
 });
 
-watch(() => props.wsUrl, (nextUrl) => {
-  disconnectStream();
-  clearFrames();
+watch(
+  () => ({
+    wsUrl: props.wsUrl,
+    cameras: props.cameras.map((camera) => `${camera.id}:${camera.name}`).join('|'),
+  }),
+  ({ wsUrl }) => {
+    disconnectAllStreams();
+    resetStreamStates();
 
-  if (typeof nextUrl === 'string' && nextUrl.length > 0) {
-    connectStream(nextUrl);
-  }
-}, { immediate: true });
-
-function connectStream(url: string) {
-  ws = new WebSocket(url);
-
-  ws.onmessage = (event) => {
-    if (typeof event.data !== 'string') {
+    if (typeof wsUrl !== 'string' || wsUrl.length === 0) {
       return;
     }
 
-    try {
-      const payload = JSON.parse(event.data) as {
-        cameraId?: number | string;
-        image?: string;
-        mimeType?: string;
-      };
+    if (!supportedMimeType) {
+      return;
+    }
 
-      if (typeof payload.image !== 'string' || payload.image.length === 0) {
+    props.cameras.forEach((camera, index) => {
+      const controller = createStreamController(index, camera);
+      controllers.set(index, controller);
+      openStreamRoute(controller, wsUrl);
+    });
+  },
+  { immediate: true },
+);
+
+function resolveSupportedMimeType() {
+  if (typeof MediaSource === 'undefined' || typeof MediaSource.isTypeSupported !== 'function') {
+    return null;
+  }
+
+  return STREAM_MIME_CANDIDATES.find((candidate) => MediaSource.isTypeSupported(candidate)) ?? null;
+}
+
+function defaultStreamState(statusText: string): StreamState {
+  return {
+    active: false,
+    connected: false,
+    error: null,
+    statusText,
+  };
+}
+
+function getIdleStatus() {
+  if (!supportedMimeType) {
+    return 'MPEG-TS playback is not supported in this renderer.';
+  }
+
+  if (typeof props.wsUrl !== 'string' || props.wsUrl.length === 0) {
+    return 'Start IRIS to view camera feed';
+  }
+
+  return 'Waiting for feed';
+}
+
+function resetStreamStates() {
+  streamStates.value = Object.fromEntries(
+    props.cameras.map((_camera, index) => [String(index), defaultStreamState(getIdleStatus())]),
+  );
+}
+
+function updateStreamState(slot: number, patch: Partial<StreamState>) {
+  const key = String(slot);
+  const current = streamStates.value[key] ?? defaultStreamState(getIdleStatus());
+  streamStates.value = {
+    ...streamStates.value,
+    [key]: {
+      ...current,
+      ...patch,
+    },
+  };
+}
+
+function toNumericId(value: number | string) {
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+    return value;
+  }
+
+  if (typeof value === 'string' && /^\d+$/.test(value)) {
+    return Number.parseInt(value, 10);
+  }
+
+  return null;
+}
+
+function buildRouteIds(camera: FeedCamera, slot: number) {
+  const routeIds = [slot];
+  const cameraId = toNumericId(camera.id);
+
+  if (cameraId !== null && !routeIds.includes(cameraId)) {
+    routeIds.push(cameraId);
+  }
+
+  return routeIds;
+}
+
+function buildCameraStreamUrl(baseUrl: string, routeId: number) {
+  const url = new URL(baseUrl);
+  url.pathname = `/camera/${routeId}`;
+  url.search = '';
+  url.hash = '';
+  return url.toString();
+}
+
+function createStreamController(slot: number, camera: FeedCamera): StreamController {
+  const controller: StreamController = {
+    slot,
+    routeIds: buildRouteIds(camera, slot),
+    routeIndex: 0,
+    socket: null,
+    mediaSource: null,
+    sourceBuffer: null,
+    queue: [],
+    queuedBytes: 0,
+    objectUrl: null,
+    videoElement: videoElements.get(slot) ?? null,
+    receivedData: false,
+    fallbackTimer: null,
+    updateEndHandler: null,
+    destroyed: false,
+  };
+
+  attachMediaSource(controller);
+  return controller;
+}
+
+function attachMediaSource(controller: StreamController) {
+  if (!supportedMimeType) {
+    updateStreamState(controller.slot, {
+      error: 'MPEG-TS playback is not supported in this renderer.',
+      statusText: 'MPEG-TS playback is not supported in this renderer.',
+    });
+    return;
+  }
+
+  const mediaSource = new MediaSource();
+  controller.mediaSource = mediaSource;
+  controller.objectUrl = URL.createObjectURL(mediaSource);
+
+  mediaSource.addEventListener(
+    'sourceopen',
+    () => {
+      if (controller.destroyed || !controller.mediaSource || controller.mediaSource.readyState !== 'open' || controller.sourceBuffer) {
         return;
       }
 
-      const cameraId = String(payload.cameraId ?? '0');
-      const mimeType = typeof payload.mimeType === 'string' && payload.mimeType.length > 0
-        ? payload.mimeType
-        : 'image/jpeg';
+      try {
+        const sourceBuffer = controller.mediaSource.addSourceBuffer(supportedMimeType);
+        sourceBuffer.mode = 'segments';
+        controller.sourceBuffer = sourceBuffer;
+        controller.updateEndHandler = () => {
+          appendNextChunk(controller);
+        };
+        sourceBuffer.addEventListener('updateend', controller.updateEndHandler);
+        sourceBuffer.addEventListener('error', () => {
+          if (controller.destroyed) {
+            return;
+          }
+          updateStreamState(controller.slot, {
+            connected: false,
+            error: 'Video decoder error',
+            statusText: 'Video decoder error',
+          });
+        });
+        appendNextChunk(controller);
+      } catch (err) {
+        updateStreamState(controller.slot, {
+          connected: false,
+          error: 'Unable to initialize MPEG-TS playback',
+          statusText: 'Unable to initialize MPEG-TS playback',
+        });
+        console.warn('[FeedViewPage] Failed to initialize MediaSource.', err);
+      }
+    },
+    { once: true },
+  );
 
-      cameraFrames.value = {
-        ...cameraFrames.value,
-        [cameraId]: `data:${mimeType};base64,${payload.image}`,
-      };
-    } catch (err) {
-      console.warn('[FeedViewPage] Failed to parse frame payload.', err);
+  if (controller.videoElement) {
+    controller.videoElement.src = controller.objectUrl;
+    void controller.videoElement.play().catch(() => {
+      // Autoplay will be retried when data arrives.
+    });
+  }
+}
+
+function setVideoElement(slot: number, element: HTMLVideoElement | null) {
+  if (element) {
+    videoElements.set(slot, element);
+  } else {
+    videoElements.delete(slot);
+  }
+
+  const controller = controllers.get(slot);
+  if (!controller) {
+    return;
+  }
+
+  controller.videoElement = element;
+
+  if (element && controller.objectUrl) {
+    if (element.src !== controller.objectUrl) {
+      element.src = controller.objectUrl;
     }
+    void element.play().catch(() => {
+      // Autoplay will be retried when data arrives.
+    });
+  }
+}
+
+function clearFallbackTimer(controller: StreamController) {
+  if (!controller.fallbackTimer) {
+    return;
+  }
+
+  clearTimeout(controller.fallbackTimer);
+  controller.fallbackTimer = null;
+}
+
+function scheduleFallback(controller: StreamController) {
+  clearFallbackTimer(controller);
+
+  if (controller.destroyed || controller.routeIndex >= controller.routeIds.length - 1) {
+    return;
+  }
+
+  controller.fallbackTimer = setTimeout(() => {
+    if (controller.destroyed || controller.receivedData || controller.routeIndex >= controller.routeIds.length - 1) {
+      return;
+    }
+
+    controller.routeIndex += 1;
+    updateStreamState(controller.slot, {
+      connected: false,
+      statusText: `Retrying /camera/${controller.routeIds[controller.routeIndex]}`,
+    });
+
+    if (controller.socket) {
+      controller.socket.close();
+    }
+  }, FIRST_PACKET_TIMEOUT_MS);
+}
+
+function trimQueuedChunks(controller: StreamController) {
+  while (controller.queuedBytes > MAX_QUEUED_BYTES && controller.queue.length > 1) {
+    const dropped = controller.queue.shift();
+    if (!dropped) {
+      break;
+    }
+    controller.queuedBytes -= dropped.byteLength;
+  }
+}
+
+function appendNextChunk(controller: StreamController) {
+  if (!controller.sourceBuffer || controller.sourceBuffer.updating || controller.queue.length === 0) {
+    return;
+  }
+
+  const nextChunk = controller.queue.shift();
+  if (!nextChunk) {
+    return;
+  }
+
+  controller.queuedBytes -= nextChunk.byteLength;
+
+  try {
+    controller.sourceBuffer.appendBuffer(nextChunk);
+    if (controller.videoElement) {
+      void controller.videoElement.play().catch(() => {
+        // Playback will resume on the next successful append.
+      });
+    }
+  } catch (err) {
+    updateStreamState(controller.slot, {
+      connected: false,
+      error: 'Failed to append video data',
+      statusText: 'Failed to append video data',
+    });
+    console.warn('[FeedViewPage] Failed to append MPEG-TS chunk.', err);
+  }
+}
+
+async function toUint8Array(data: Blob | ArrayBuffer | ArrayBufferView | string) {
+  if (data instanceof ArrayBuffer) {
+    return new Uint8Array(data);
+  }
+
+  if (ArrayBuffer.isView(data)) {
+    return new Uint8Array(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
+  }
+
+  if (data instanceof Blob) {
+    return new Uint8Array(await data.arrayBuffer());
+  }
+
+  return null;
+}
+
+function openStreamRoute(controller: StreamController, baseUrl: string) {
+  if (controller.destroyed) {
+    return;
+  }
+
+  const routeId = controller.routeIds[controller.routeIndex];
+  const streamUrl = buildCameraStreamUrl(baseUrl, routeId);
+  const socket = new WebSocket(streamUrl);
+
+  controller.socket = socket;
+  socket.binaryType = 'arraybuffer';
+
+  updateStreamState(controller.slot, {
+    active: controller.receivedData,
+    connected: false,
+    error: null,
+    statusText: `Connecting to /camera/${routeId}`,
+  });
+
+  socket.onopen = () => {
+    if (controller.destroyed || controller.socket !== socket) {
+      return;
+    }
+
+    updateStreamState(controller.slot, {
+      connected: true,
+      statusText: `Waiting on /camera/${routeId}`,
+    });
+    scheduleFallback(controller);
   };
 
-  ws.onerror = (err) => {
-    console.warn('[FeedViewPage] Video websocket error.', err);
+  socket.onmessage = async (event) => {
+    if (controller.destroyed || controller.socket !== socket) {
+      return;
+    }
+
+    const chunk = await toUint8Array(event.data);
+    if (!chunk || chunk.byteLength === 0) {
+      return;
+    }
+
+    controller.receivedData = true;
+    clearFallbackTimer(controller);
+    controller.queue.push(chunk);
+    controller.queuedBytes += chunk.byteLength;
+    trimQueuedChunks(controller);
+    appendNextChunk(controller);
+
+    updateStreamState(controller.slot, {
+      active: true,
+      connected: true,
+      error: null,
+      statusText: `Receiving stream from /camera/${routeId}`,
+    });
   };
 
-  ws.onclose = () => {
-    if (ws?.url === url) {
-      ws = null;
+  socket.onerror = () => {
+    if (controller.destroyed || controller.socket !== socket) {
+      return;
     }
+
+    updateStreamState(controller.slot, {
+      connected: false,
+      error: controller.receivedData ? null : 'Video websocket error',
+      statusText: controller.receivedData ? 'Stream interrupted' : 'Video websocket error',
+    });
+  };
+
+  socket.onclose = () => {
+    if (controller.destroyed) {
+      return;
+    }
+
+    if (controller.socket === socket) {
+      controller.socket = null;
+    }
+
+    clearFallbackTimer(controller);
+
+    if (!controller.receivedData && controller.routeIds[controller.routeIndex] !== routeId) {
+      openStreamRoute(controller, baseUrl);
+      return;
+    }
+
+    if (!controller.receivedData && controller.routeIndex < controller.routeIds.length - 1) {
+      controller.routeIndex += 1;
+      openStreamRoute(controller, baseUrl);
+      return;
+    }
+
+    if (!controller.receivedData) {
+      updateStreamState(controller.slot, {
+        connected: false,
+        error: 'No video received',
+        statusText: 'No video received',
+      });
+      return;
+    }
+
+    updateStreamState(controller.slot, {
+      active: true,
+      connected: false,
+      statusText: 'Stream disconnected',
+    });
   };
 }
 
-function disconnectStream() {
-  if (!ws) return;
-  ws.close();
-  ws = null;
+function teardownController(controller: StreamController) {
+  controller.destroyed = true;
+  clearFallbackTimer(controller);
+
+  if (controller.socket) {
+    controller.socket.close();
+    controller.socket = null;
+  }
+
+  if (controller.sourceBuffer && controller.updateEndHandler) {
+    controller.sourceBuffer.removeEventListener('updateend', controller.updateEndHandler);
+  }
+
+  if (controller.videoElement) {
+    controller.videoElement.pause();
+    controller.videoElement.removeAttribute('src');
+    controller.videoElement.load();
+  }
+
+  if (controller.objectUrl) {
+    URL.revokeObjectURL(controller.objectUrl);
+    controller.objectUrl = null;
+  }
 }
 
-function clearFrames() {
-  cameraFrames.value = {};
+function disconnectAllStreams() {
+  for (const controller of controllers.values()) {
+    teardownController(controller);
+  }
+
+  controllers.clear();
 }
 
 onBeforeUnmount(() => {
-  disconnectStream();
-  clearFrames();
+  disconnectAllStreams();
 });
 </script>
 
@@ -242,21 +648,31 @@ onBeforeUnmount(() => {
   background: rgba(31, 78, 121, 0.05);
 }
 
-.live-stream-img {
+.live-stream-video {
   width: 100%;
   height: 100%;
   object-fit: contain;
   display: block;
+  background: #000;
+}
+
+.live-stream-video-hidden {
+  opacity: 0;
 }
 
 .empty-video-state {
+  position: absolute;
+  inset: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   color: rgba(255, 255, 255, 0.55);
   font-size: 0.85rem;
   font-weight: 600;
+  text-align: center;
+  padding: 20px;
 }
 
 [data-theme="light"] .empty-video-state {

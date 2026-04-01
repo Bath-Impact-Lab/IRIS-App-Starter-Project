@@ -171,83 +171,7 @@ function createFrustumLines(cam: THREE.PerspectiveCamera, color: string): THREE.
   const lines = new THREE.LineSegments(geo, lineMat);
   lines.frustumCulled = false;
   return lines;
-}
-
-function updateFrustumLines(entry: SceneCameraEntry) {
-  const cam = entry.camera;
-  cam.updateMatrixWorld(true);
-
-  const fovV = THREE.MathUtils.degToRad(cam.fov);
-  const halfV = fovV / 2;
-  const aspect = cam.aspect;
-  const tanV = Math.tan(halfV);
-  const tanH = tanV * aspect;
-
-  const camPos = new THREE.Vector3();
-  cam.getWorldPosition(camPos);
-
-  const xAxis = new THREE.Vector3();
-  const yAxis = new THREE.Vector3();
-  const zAxis = new THREE.Vector3();
-  cam.matrixWorld.extractBasis(xAxis, yAxis, zAxis);
-  const fwd = zAxis.clone().multiplyScalar(-1);
-
-  // 4 frustum corner directions (normalised)
-  const dirs = [
-    fwd.clone().add(xAxis.clone().multiplyScalar( tanH)).add(yAxis.clone().multiplyScalar( tanV)), // TL
-    fwd.clone().add(xAxis.clone().multiplyScalar( tanH)).add(yAxis.clone().multiplyScalar(-tanV)), // BL
-    fwd.clone().add(xAxis.clone().multiplyScalar(-tanH)).add(yAxis.clone().multiplyScalar(-tanV)), // BR
-    fwd.clone().add(xAxis.clone().multiplyScalar(-tanH)).add(yAxis.clone().multiplyScalar( tanV)), // TR
-  ].map(d => d.normalize());
-
-  // Near plane distance (fixed visual distance from camera)
-  const nearDist = 0.5;
-
-  // Near-plane corner world positions
-  const nearCorners = dirs.map(d => camPos.clone().addScaledVector(d, nearDist));
-
-  // Floor intersection for each ray
-  const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-  const EPS = 1e-6;
-  const MAX_DIST = 20;
-
-  const floorCorners = dirs.map(dir => {
-    const denom = floorPlane.normal.dot(dir);
-    if (Math.abs(denom) > EPS) {
-      const t = -(floorPlane.normal.dot(camPos) + floorPlane.constant) / denom;
-      if (t > EPS && t < MAX_DIST) {
-        return camPos.clone().addScaledVector(dir, t);
-      }
-    }
-    // Ray doesn't hit floor within range – project to MAX_DIST
-    return camPos.clone().addScaledVector(dir, MAX_DIST);
-  });
-
-  const verts = new Float32Array(FRUSTUM_SEG_COUNT * 6);
-  let s = 0; // segment index
-
-  const seg = (a: THREE.Vector3, b: THREE.Vector3) => {
-    verts[s * 6] = a.x; verts[s * 6 + 1] = a.y; verts[s * 6 + 2] = a.z;
-    verts[s * 6 + 3] = b.x; verts[s * 6 + 4] = b.y; verts[s * 6 + 5] = b.z;
-    s++;
-  };
-
-  // 1. Apex → floor corners (4 rays that define the frustum sides)
-  for (let i = 0; i < 4; i++) seg(camPos, floorCorners[i]);
-
-  // 2. Near-plane rectangle
-  for (let i = 0; i < 4; i++) seg(nearCorners[i], nearCorners[(i + 1) % 4]);
-
-  // 3. Near corner → floor corner (frustum edges from near to far)
-  for (let i = 0; i < 4; i++) seg(nearCorners[i], floorCorners[i]);
-
-  // 4. Floor footprint rectangle
-  for (let i = 0; i < 4; i++) seg(floorCorners[i], floorCorners[(i + 1) % 4]);
-
-  const posAttr = entry.frustumLines.geometry.attributes.position as THREE.BufferAttribute;
-  (posAttr.array as Float32Array).set(verts);
-  posAttr.needsUpdate = true;
-}
+} 
 
 export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<boolean>, showGizmos?: Ref<boolean>) {
   const sceneCameras = ref<SceneCameraEntry[]>([]);
@@ -426,135 +350,7 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
       child.rotation.z = rotRad;
     }
   }
-
-  /**
-   * Projects each visible camera's frustum onto the floor (Y = 0) and returns
-   * the AABB of the intersection of all footprints — i.e. the area that every
-   * active camera can see.  Falls back to the full union if there is no overlap.
-   */
-  function computePlaySpaceBounds(captureHeight = 2.5): PlaySpaceBounds {
-    const visibleCams = sceneCameras.value.filter(e => e.visible);
-
-    const emptyBounds: PlaySpaceBounds = {
-      minX: -2, maxX: 2, minZ: -2, maxZ: 2,
-      height: captureHeight, centerX: 0, centerZ: 0, width: 4, depth: 4,
-      polygons: [],
-      cameraFootprints: [],
-    };
-
-    if (visibleCams.length < 2) return emptyBounds;
-
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-    const footprints: THREE.Vector3[][] = [];
-    const cameraFootprints: CameraFootprint[] = [];
-
-    // 1. Get ground footprints for each camera
-    for (const entry of visibleCams) {
-      const cam = entry.camera;
-      cam.updateMatrixWorld(true);
-      cam.updateProjectionMatrix();
-
-      const fovV = THREE.MathUtils.degToRad(cam.fov);
-      const halfV = fovV / 2;
-      const aspect = cam.aspect;
-      const tanV = Math.tan(halfV);
-      const tanH = tanV * aspect;
-
-      const camPos = cam.getWorldPosition(new THREE.Vector3());
-      const xAxis = new THREE.Vector3(), yAxis = new THREE.Vector3(), zAxis = new THREE.Vector3();
-      cam.matrixWorld.extractBasis(xAxis, yAxis, zAxis);
-      const fwd = zAxis.clone().multiplyScalar(-1);
-
-      const poly: THREE.Vector3[] = [];
-      const dirs = [
-        fwd.clone().add(xAxis.clone().multiplyScalar(tanH)).add(yAxis.clone().multiplyScalar(tanV)),
-        fwd.clone().add(xAxis.clone().multiplyScalar(tanH)).add(yAxis.clone().multiplyScalar(-tanV)),
-        fwd.clone().add(xAxis.clone().multiplyScalar(-tanH)).add(yAxis.clone().multiplyScalar(-tanV)),
-        fwd.clone().add(xAxis.clone().multiplyScalar(-tanH)).add(yAxis.clone().multiplyScalar(tanV)),
-      ].map(d => d.normalize());
-
-      for (const dir of dirs) {
-        const denom = plane.normal.dot(dir);
-        if (Math.abs(denom) > 1e-6) {
-          const t = -plane.normal.dot(camPos) / denom;
-          if (t > 0) poly.push(camPos.clone().addScaledVector(dir, t));
-        }
-      }
-      if (poly.length === 4) {
-        footprints.push(poly);
-        cameraFootprints.push({ color: entry.color, polygon: poly });
-      }
-    }
-
-    if (footprints.length < 2) return { ...emptyBounds, cameraFootprints };
-
-    // 2. Pairwise Footprint Intersection logic
-    // Sutherland-Hodgman clipping to find intersection of two convex 2D polygons
-    const getLineIntersection = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, d: THREE.Vector3) => {
-      const det = (b.x - a.x) * (d.z - c.z) - (b.z - a.z) * (d.x - c.x);
-      if (Math.abs(det) < 1e-8) return null;
-      const t = ((c.x - a.x) * (d.z - c.z) - (c.z - a.z) * (d.x - c.x)) / det;
-      return new THREE.Vector3(a.x + t * (b.x - a.x), 0, a.z + t * (b.z - a.z));
-    };
-
-    const clipPoly = (subjectPoly: THREE.Vector3[], clipPoly: THREE.Vector3[]) => {
-      let outputList = subjectPoly;
-      for (let i = 0; i < clipPoly.length; i++) {
-        const edgeStart = clipPoly[i];
-        const edgeEnd = clipPoly[(i + 1) % clipPoly.length];
-        const inputList = outputList;
-        outputList = [];
-        if (inputList.length === 0) break;
-        let startPoint = inputList[inputList.length - 1];
-        for (const endPoint of inputList) {
-          const isInside = (p: THREE.Vector3) =>
-            ((edgeEnd.x - edgeStart.x) * (p.z - edgeStart.z) - (edgeEnd.z - edgeStart.z) * (p.x - edgeStart.x)) >= -1e-5;
-          if (isInside(endPoint)) {
-            if (!isInside(startPoint)) {
-              const intersect = getLineIntersection(startPoint, endPoint, edgeStart, edgeEnd);
-              if (intersect) outputList.push(intersect);
-            }
-            outputList.push(endPoint);
-          } else if (isInside(startPoint)) {
-            const intersect = getLineIntersection(startPoint, endPoint, edgeStart, edgeEnd);
-            if (intersect) outputList.push(intersect);
-          }
-          startPoint = endPoint;
-        }
-      }
-      return outputList;
-    };
-
-    // Compute intersection across ALL camera footprints
-    let intersection = footprints[0];
-
-    for (let i = 1; i < footprints.length; i++) {
-      intersection = clipPoly(intersection, footprints[i]);
-      if (intersection.length === 0) break;
-    }
-
-    const resultPolygons: THREE.Vector3[][] =
-      intersection.length >= 3 ? [intersection] : [];
-
-    if (resultPolygons.length === 0) return { ...emptyBounds, cameraFootprints };
-
-    // 3. Compute metadata
-    let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
-    resultPolygons.forEach(p => p.forEach(v => {
-      minX = Math.min(minX, v.x); maxX = Math.max(maxX, v.x);
-      minZ = Math.min(minZ, v.z); maxZ = Math.max(maxZ, v.z);
-    }));
-
-    return {
-      minX, maxX, minZ, maxZ,
-      height: captureHeight,
-      centerX: (minX + maxX) / 2,
-      centerZ: (minZ + maxZ) / 2,
-      width: maxX - minX, depth: maxZ - minZ,
-      polygons: resultPolygons,
-      cameraFootprints,
-    };
-  }
+ 
 
   /** Remove all scene camera objects and clear the list. */
   function clearSceneCameras() {
@@ -609,8 +405,7 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
     addToScene,
     clearSceneContent,
     syncVisibility,
-    setGizmoRotation,
-    computePlaySpaceBounds,
+    setGizmoRotation, 
     dispose,
   } as const;
 }

@@ -7,8 +7,7 @@ import { onMounted, onBeforeUnmount, ref, watch, nextTick, computed } from 'vue'
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'; 
 import { useIris } from '@/lib/useIris';
-import { useSceneCameras } from '@/lib/useSceneCameras';
-import { usePlaySpace } from '@/lib/usePlaySpace';
+import { useSceneCameras } from '@/lib/useSceneCameras'; 
  
 const showPlaySpace = ref(true);
 const showCameras = ref(true);
@@ -16,8 +15,8 @@ const showCameras = ref(true);
 const { cameras: irisCameras, isRunning, lastFrame: irisData } = useIris({ autoFetch: true, pollInterval: 5000 });
 const selectedCameraCount = computed(() => irisCameras.value.length);
 
-const { addToScene: addSceneCameras, clearSceneContent, computePlaySpaceBounds } = useSceneCameras(selectedCameraCount, showCameras, showCameras);
-const { create: createPlaySpace, rebuild: rebuildPlaySpace } = usePlaySpace(showPlaySpace, computePlaySpaceBounds);
+const { addToScene: addSceneCameras, clearSceneContent } = useSceneCameras(selectedCameraCount, showCameras, showCameras);
+
 
 const sceneRef = ref<HTMLElement | null>(null);
 
@@ -115,7 +114,6 @@ watch(isRunning, (running) => {
     hasLoadedIrisScene = false
     isLoadingIrisScene = false
     clearSceneContent()
-    nextTick(() => rebuildPlaySpace())
 
     if (skeletonLine) {
       skeletonLine.removeFromParent()
@@ -139,7 +137,6 @@ async function loadIrisSceneOnce() {
   try {
     await addSceneCameras(scene)
     hasLoadedIrisScene = true
-    nextTick(() => rebuildPlaySpace())
   } catch (err) {
     console.warn('[threeWindow] unable to load IRIS extrinsics/scene data', err)
   } finally {
@@ -245,9 +242,6 @@ async function initThree(container: HTMLElement) {
   themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
  
 
-
-  watch(selectedCameraCount, () => { nextTick(() => rebuildPlaySpace()); });
-
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
@@ -258,10 +252,7 @@ async function initThree(container: HTMLElement) {
   watch(irisData, () => {
     void loadIrisSceneOnce()
   }, { immediate: true })
-
-  // Build play space from loaded camera frustums
-  createPlaySpace(scene);
-
+ 
   //if using a positions json
   const fps = 30
   const frameDuration = 1000 / fps
