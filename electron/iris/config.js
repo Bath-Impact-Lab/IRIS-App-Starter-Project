@@ -5,14 +5,44 @@ const os = require('os');
 const path = require('path');
 
 const PIPE_NAME = '\\\\.\\pipe\\iris_ipc';
-const DEV_IRIS_CLI_EXE = process.env.IRIS_CLI_EXE || path.join(os.homedir(), 'Documents', 'Iris', 'build', 'bin', 'iris_cli.exe');
+
+function getIrisHomeFromRegistry() {
+  if (process.platform !== 'win32') return null;
+  try {
+    const { execFileSync } = require('child_process');
+    const query = (hive) => {
+      try {
+        const out = execFileSync('reg', ['query', hive, '/v', 'IRIS_HOME'], { encoding: 'utf8', windowsHide: true });
+        const match = out.match(/IRIS_HOME\s+\w+\s+(.+)/);
+        return match ? match[1].trim() : null;
+      } catch {
+        return null;
+      }
+    };
+    return query('HKCU\\Environment') || query('HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment');
+  } catch {
+    return null;
+  }
+}
+
+function getIrisHome() {
+  return process.env.IRIS_HOME || getIrisHomeFromRegistry();
+}
+
+const DEV_IRIS_CLI_EXE = process.env.IRIS_CLI_EXE
+  || (getIrisHome() && path.join(getIrisHome(), 'bin', 'iris_cli.exe'))
+  || path.join(os.homedir(), 'Documents', 'Iris', 'build', 'bin', 'iris_cli.exe');
 
 function getIrisCliPath() {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'app.asar.unpacked', 'iris_runtime_bundle', 'iris_cli.exe');
   }
-  console.log('[Config] Using iris_cli.exe path:', process.env.IRIS_CLI_EXE );
-  return process.env.IRIS_CLI_EXE || path.join(os.homedir(), 'Documents', 'Iris', 'build', 'bin', 'iris_cli.exe');
+  const irisHome = getIrisHome();
+  const resolved = process.env.IRIS_CLI_EXE
+    || (irisHome && path.join(irisHome, 'bin', 'iris_cli.exe'))
+    || path.join(os.homedir(), 'Documents', 'Iris', 'build', 'bin', 'iris_cli.exe');
+  console.log('[Config] Using iris_cli.exe path:', resolved);
+  return resolved;
 }
 
 
@@ -20,8 +50,10 @@ function getModelDir() {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'app.asar.unpacked', 'iris_runtime_bundle', 'models');
   }
-
-  return process.env.IRIS_MODELS_DIR || path.join(os.homedir(), 'Documents', 'Iris', 'models');
+  const irisHome = getIrisHome();
+  return process.env.IRIS_MODELS_DIR
+    || (irisHome && path.join(irisHome, 'models'))
+    || path.join(os.homedir(), 'Documents', 'Iris', 'models');
 }
 
 
