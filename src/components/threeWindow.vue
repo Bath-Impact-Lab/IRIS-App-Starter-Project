@@ -320,12 +320,15 @@ function renderIRISdata(poseInfo: IrisData) {
       let idx = 0
 
       person.joint_centers.forEach((points, i) => {
-        position.position.set(points[0], points[2], points[1])
+        // Changed to X, Y, Z (0, 1, 2)
+        position.position.set(points[0], points[1], points[2])
         position.updateMatrix()
         spheresMesh?.setMatrixAt(i, position.matrix)
       })
+      
       person.joint_centers.forEach((points, i) => {
-        position.position.set(points[0], points[2], points[1])
+        // Changed to X, Y, Z (0, 1, 2)
+        position.position.set(points[0], points[1], points[2])
         position.updateMatrix()
         spheresMesh?.setMatrixAt(i + 3, position.matrix)
       })
@@ -334,13 +337,15 @@ function renderIRISdata(poseInfo: IrisData) {
         const pos1 = person.joint_centers[a]
         const pos2 = person.joint_centers[b]
 
+        // Changed to X, Y, Z mapping for position 1
         positionAttr.array[idx++] = pos1[0]
-        positionAttr.array[idx++] = pos1[2]
         positionAttr.array[idx++] = pos1[1]
+        positionAttr.array[idx++] = pos1[2]
 
+        // Changed to X, Y, Z mapping for position 2
         positionAttr.array[idx++] = pos2[0]
-        positionAttr.array[idx++] = pos2[2]
         positionAttr.array[idx++] = pos2[1]
+        positionAttr.array[idx++] = pos2[2]
       })
 
       positionAttr.needsUpdate = true
