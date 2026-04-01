@@ -1,0 +1,359 @@
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { useIrisStore } from '@/Stores/irisStore';
+
+export interface IrisCameraExtrinsics {
+  R: number[];
+  t: number[];
+}
+
+export interface IrisExtrinsicsCamera {
+  cam_id?: number;
+  name?: string;
+  success?: boolean;
+  reprojection_error?: number;
+  extrinsics?: IrisCameraExtrinsics | null;
+}
+
+export interface IrisExtrinsicsResponse {
+  cameras?: IrisExtrinsicsCamera[];
+  frames_used?: number;
+  mean_reprojection_error?: number;
+  success?: boolean;
+}
+
+export interface IrisCamera {
+  id: number;
+  name: string;
+  success: boolean;
+  reprojectionError: number | null;
+  extrinsics: IrisCameraExtrinsics | null;
+}
+
+export interface UseIrisOptions {
+  autoFetch?: boolean;
+  pollInterval?: number;
+  autoCheck?: boolean;
+}
+
+export interface IrisCliOutput {
+  channel: string;
+  cameraIndex?: number;
+  line: string;
+}
+
+export interface IrisStartCameraOption {
+  uri: string;
+  width: number;
+  height: number;
+  fps: number;
+  rotation: number;
+}
+
+export interface IrisStartOptions {
+  kp_format: string;
+  subjects: string | null;
+  cameras: IrisStartCameraOption[];
+  camera_width: number;
+  camera_height: number;
+  video_fps: number;
+  output_dir: string;
+  stream?: boolean;
+}
+
+const cameras = ref<IrisCamera[]>([]);
+const isLoading = ref(false);
+const error = ref<string | null>(null);
+const isStarting = ref(false);
+const isStopping = ref(false);
+const startError = ref<string | null>(null);
+const stopError = ref<string | null>(null);
+const runtimeFound = ref<boolean | null>(null);
+const runtimePath = ref<string | null>(null);
+const activeSessionIds = ref<string[]>([]);
+const lastFrame = ref<IrisData[] | IrisData | null>(null);
+const cliOutput = ref<IrisCliOutput[]>([]);
+
+let ipcListenersRegistered = false;
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value);
+}
+
+function normalizeExtrinsics(value: unknown): IrisCameraExtrinsics | null {
+  if (!value || typeof value !== 'object') return null;
+
+  const extrinsics = value as Partial<IrisCameraExtrinsics>;
+  const rotation = Array.isArray(extrinsics.R) ? extrinsics.R.filter(isFiniteNumber) : null;
+  const translation = Array.isArray(extrinsics.t) ? extrinsics.t.filter(isFiniteNumber) : null;
+
+  if (!rotation || !translation) return null;
+
+  return {
+    R: rotation,
+    t: translation,
+  };
+}
+
+export function extractIrisCameras(result: unknown): IrisCamera[] {
+  if (!result || typeof result !== 'object') return [];
+
+  const response = result as IrisExtrinsicsResponse;
+  if (!Array.isArray(response.cameras)) return [];
+
+  return response.cameras
+    .map((camera, index) => {
+      const id = isFiniteNumber(camera.cam_id) ? camera.cam_id : index;
+      const name = typeof camera.name === 'string' && camera.name.trim().length > 0
+        ? camera.name.trim()
+        : `Camera ${id}`;
+
+      return {
+        id,
+        name,
+        success: camera.success !== false,
+        reprojectionError: isFiniteNumber(camera.reprojection_error) ? camera.reprojection_error : null,
+        extrinsics: normalizeExtrinsics(camera.extrinsics),
+      };
+    })
+    .sort((left, right) => left.id - right.id);
+}
+
+function trimCliOutput(nextLine: IrisCliOutput) {
+  const nextOutput = [...cliOutput.value, nextLine];
+  cliOutput.value = nextOutput.slice(-200);
+}
+
+function isMockFallbackResult(result: unknown) {
+  if (!result || typeof result !== 'object') return false;
+  const maybeError = (result as { error?: unknown }).error;
+  return typeof maybeError === 'string' && maybeError.toLowerCase().includes('mock data');
+}
+
+function ensureIpcListeners() {
+  if (ipcListenersRegistered || !window.ipc) return;
+
+  window.ipc.onIrisData((data) => {
+    lastFrame.value = data;
+  });
+
+  window.ipc.onIrisCliOutput?.((payload) => {
+    trimCliOutput(payload);
+  });
+
+  ipcListenersRegistered = true;
+}
+
+export function useIris(options: UseIrisOptions = {}) {
+  const { autoFetch = true, pollInterval = 0, autoCheck = true } = options;
+  const irisStore = useIrisStore();
+  const isRunning = computed(() => irisStore.running);
+
+  let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+  async function refreshCameras() {
+    const getExtrinsics = window.ipc?.getExtrinsics;
+    if (!getExtrinsics) {
+      cameras.value = [];
+      error.value = null;
+      return cameras.value;
+    }
+
+    isLoading.value = true;
+    error.value = null;
+
+    try {
+      const result = await getExtrinsics();
+      cameras.value = extractIrisCameras(result);
+      return cameras.value;
+    } catch (err) {
+      cameras.value = [];
+      error.value = err instanceof Error ? err.message : 'Failed to fetch camera data from IRIS.';
+      console.warn('[useIris]', error.value, err);
+      return cameras.value;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  async function checkRuntime() {
+    const checkIrisCli = window.ipc?.checkIrisCli;
+    if (!checkIrisCli) {
+      runtimeFound.value = null;
+      runtimePath.value = null;
+      return null;
+    }
+
+    try {
+      const result = await checkIrisCli();
+      runtimeFound.value = result.found;
+      runtimePath.value = result.path;
+      return result;
+    } catch (err) {
+      runtimeFound.value = null;
+      runtimePath.value = null;
+      console.warn('[useIris] Failed to check IRIS runtime.', err);
+      return null;
+    }
+  }
+
+  async function start(options: IrisStartOptions) {
+    ensureIpcListeners();
+
+    if (!window.ipc?.startIRIS) {
+      startError.value = 'IRIS IPC is unavailable.';
+      return { ok: false, error: startError.value };
+    }
+
+    if (isRunning.value) {
+      startError.value = 'IRIS is already running.';
+      return { ok: false, error: startError.value };
+    }
+
+    isStarting.value = true;
+    startError.value = null;
+    stopError.value = null;
+    lastFrame.value = null;
+    cliOutput.value = [];
+
+    const sessionIds: string[] = [];
+    let mocked = false;
+
+    try {
+      const startResult = await window.ipc.startIRIS(options);
+      mocked = isMockFallbackResult(startResult);
+
+      if (!startResult?.ok && !mocked) {
+        startError.value = startResult?.error ?? 'Failed to start IRIS.';
+        irisStore.setRunningState(false);
+        return { ok: false, error: startError.value };
+      }
+
+      if (startResult?.sessionId) {
+        sessionIds.push(String(startResult.sessionId));
+      }
+
+      if (options.stream && window.ipc.startIRISStream) {
+        const streamResult = await window.ipc.startIRISStream(options);
+        mocked = mocked || isMockFallbackResult(streamResult);
+
+        if (!streamResult?.ok && !mocked) {
+          startError.value = streamResult?.error ?? 'Failed to start IRIS streaming.';
+          await Promise.all(sessionIds.map((sessionId) => window.ipc!.stopIRIS(sessionId)));
+          activeSessionIds.value = [];
+          irisStore.setRunningState(false);
+          return { ok: false, error: startError.value };
+        }
+
+        if (streamResult?.sessionId) {
+          sessionIds.push(String(streamResult.sessionId));
+        }
+      }
+
+      activeSessionIds.value = sessionIds;
+      irisStore.setRunningState(true);
+      await Promise.all([refreshCameras(), checkRuntime()]);
+      return { ok: true, mocked, sessionIds: [...sessionIds] };
+    } catch (err) {
+      await Promise.all(sessionIds.map((sessionId) => window.ipc!.stopIRIS(sessionId)));
+      activeSessionIds.value = [];
+      irisStore.setRunningState(false);
+      startError.value = err instanceof Error ? err.message : 'Failed to start IRIS.';
+      console.warn('[useIris] Failed to start IRIS.', err);
+      return { ok: false, error: startError.value };
+    } finally {
+      isStarting.value = false;
+    }
+  }
+
+  async function stop() {
+    stopError.value = null;
+
+    if (!window.ipc?.stopIRIS) {
+      stopError.value = 'IRIS IPC is unavailable.';
+      return { ok: false, error: stopError.value };
+    }
+
+    isStopping.value = true;
+
+    try {
+      const sessionIds = [...activeSessionIds.value];
+
+      if (sessionIds.length > 0) {
+        await Promise.all(sessionIds.map((sessionId) => window.ipc!.stopIRIS(sessionId)));
+      }
+
+      activeSessionIds.value = [];
+      irisStore.setRunningState(false);
+      lastFrame.value = null;
+      await refreshCameras();
+      return { ok: true, sessionIds };
+    } catch (err) {
+      stopError.value = err instanceof Error ? err.message : 'Failed to stop IRIS.';
+      console.warn('[useIris] Failed to stop IRIS.', err);
+      return { ok: false, error: stopError.value };
+    } finally {
+      isStopping.value = false;
+    }
+  }
+
+  function clearCliOutput() {
+    cliOutput.value = [];
+  }
+
+  function clearFrame() {
+    lastFrame.value = null;
+  }
+
+  function startPolling() {
+    if (pollInterval <= 0 || pollTimer !== null) return;
+    pollTimer = setInterval(() => {
+      void refreshCameras();
+    }, pollInterval);
+  }
+
+  function stopPolling() {
+    if (pollTimer === null) return;
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
+
+  onMounted(() => {
+    ensureIpcListeners();
+    if (autoFetch) {
+      void refreshCameras();
+    }
+    if (autoCheck) {
+      void checkRuntime();
+    }
+    startPolling();
+  });
+
+  onBeforeUnmount(() => {
+    stopPolling();
+  });
+
+  return {
+    cameras,
+    isLoading,
+    error,
+    refresh: refreshCameras,
+    refreshCameras,
+    runtimeFound,
+    runtimePath,
+    checkRuntime,
+    isRunning,
+    isStarting,
+    isStopping,
+    startError,
+    stopError,
+    activeSessionIds,
+    lastFrame,
+    cliOutput,
+    clearCliOutput,
+    clearFrame,
+    start,
+    stop,
+    startPolling,
+    stopPolling,
+  } as const;
+}

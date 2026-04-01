@@ -3,33 +3,30 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, watch, nextTick, computed, ComputedRef } from 'vue';
+import { onMounted, onBeforeUnmount, ref, watch, nextTick, computed } from 'vue';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { FBXLoader } from 'three/examples/jsm/Addons.js';
-import { useIrisStore } from '@/Stores/irisStore';
+import { useIris } from '@/lib/useIris';
+import { useSceneCameras } from '@/lib/useSceneCameras';
+import { usePlaySpace } from '@/lib/usePlaySpace';
 
-interface Props {
-  selectedCameraCount: number,
-  irisData: IrisData[] | IrisData | null,
-  rebuildPlaySpace: () => void,
-  createPlaySpace: (scene: THREE.Scene) => void,
-  addSceneCameras: (scene: THREE.Scene) => Promise<void>,
-  spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null,
-  skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null,
-}
-
-const props = defineProps<Props>()
 //defining emits for future
 const emit = defineEmits<{
   giveSphereMesh: [THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null]
   giveSkeletonMesh: [THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null]
 }>()
 
-const selectedCameraCount = computed(() => props.selectedCameraCount)
-const sceneRef = ref<HTMLElement | null>(null);
-const IrisState = useIrisStore()
+const showPlaySpace = ref(true);
+const showCameras = ref(true);
 
+const { cameras: irisCameras, isRunning, lastFrame: irisData } = useIris({ autoFetch: true, pollInterval: 5000 });
+const selectedCameraCount = computed(() => irisCameras.value.length);
+
+const { addToScene: addSceneCameras, computePlaySpaceBounds } = useSceneCameras(selectedCameraCount, showCameras, showCameras);
+const { create: createPlaySpace, rebuild: rebuildPlaySpace } = usePlaySpace(showPlaySpace, computePlaySpaceBounds);
+
+const sceneRef = ref<HTMLElement | null>(null);
 
 let renderer: THREE.WebGLRenderer | null = null;
 let scene: THREE.Scene;
@@ -128,7 +125,7 @@ const halpe26_pairs = [
 
 const linePositions = new Float32Array(halpe26_pairs.length * 3 * 2)
 
-watch(() => IrisState.running, (running) => {
+watch(isRunning, (running) => {
   if (!running) {
     if (skeletonLine) {
       skeletonLine.removeFromParent()
@@ -270,8 +267,7 @@ async function initThree(container: HTMLElement) {
   loadModel(scene, "Idle.fbx");
 
 
-
-  watch(selectedCameraCount, () => { nextTick(() => props.rebuildPlaySpace()); });
+  watch(selectedCameraCount, () => { nextTick(() => rebuildPlaySpace()); });
 
   controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
@@ -282,12 +278,12 @@ async function initThree(container: HTMLElement) {
 
 
   // Add scene cameras from extrinsics
-  watch(() => IrisState.running, (running) => {
-    if (window.ipc?.getExtrinsics()) props.addSceneCameras(scene);
+  watch(isRunning, (running) => {
+    if (running && window.ipc?.getExtrinsics()) addSceneCameras(scene);
   })
 
   // Build play space from loaded camera frustums
-  props.createPlaySpace(scene);
+  createPlaySpace(scene);
 
   //if using a positions json
   const fps = 30
@@ -298,17 +294,17 @@ async function initThree(container: HTMLElement) {
   const animate = (time: number) => {
     animationFrameId = requestAnimationFrame(animate)
 
-    if (props.irisData) {
+    if (irisData.value) {
       //used for data from position json file
-      if (time - lastTime >= frameDuration && Array.isArray(props.irisData)) {
-        renderIRISdata(props.irisData[currentFrame])
+      if (time - lastTime >= frameDuration && Array.isArray(irisData.value)) {
+        renderIRISdata(irisData.value[currentFrame])
 
-        currentFrame = (currentFrame + 1) % props.irisData.length
+        currentFrame = (currentFrame + 1) % irisData.value.length
         lastTime = time
       }
       //used for live data
-      else if (!Array.isArray(props.irisData)) {
-        renderIRISdata(props.irisData)
+      else if (!Array.isArray(irisData.value)) {
+        renderIRISdata(irisData.value)
       }
     }
     controls?.update()

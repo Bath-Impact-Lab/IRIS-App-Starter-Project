@@ -19,15 +19,33 @@
         </button>
 
         <div v-show="isCamerasOpen" class="session-sidenav-list">
-          <button
-            v-for="(camera, index) in cameras"
-            :key="`camera-${index}`"
-            class="session-sidenav-link"
-            type="button"
-          >
-            <span class="indicator camera-indicator"></span>
-            {{ camera }}
-          </button>
+          <div v-if="areIrisCamerasLoading && !hasIrisCameras" class="session-sidenav-empty-state">
+            Loading IRIS cameras...
+          </div>
+          <div v-else-if="irisCameraErrorMessage" class="session-sidenav-empty-state">
+            {{ irisCameraErrorMessage }}
+          </div>
+          <div v-else-if="!hasIrisCameras" class="session-sidenav-empty-state">
+            No IRIS cameras detected.
+          </div>
+          <template v-else>
+            <div
+              v-for="camera in irisCameras"
+              :key="`camera-${camera.id}`"
+              class="session-sidenav-link session-sidenav-link--static"
+            >
+              <div class="camera-listing">
+                <span
+                  class="indicator camera-indicator"
+                  :class="{ 'camera-indicator--inactive': !camera.success }"
+                ></span>
+                <span>{{ camera.name }}</span>
+              </div>
+              <span class="camera-status">
+                {{ camera.success ? 'Connected' : 'Unavailable' }}
+              </span>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -121,6 +139,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
+import { useIris } from '@/lib/useIris';
 import type { ProjectParticipant } from '@/lib/useProject';
 
 interface Props {
@@ -140,9 +159,21 @@ const emit = defineEmits<{
 
 // State for the main cameras dropdown
 const isCamerasOpen = ref(true);
-const cameras = ['Camera 1', 'Camera 2', 'Camera 3', 'Camera 4'];
 const openSessionIds = ref<string[]>([]);
 const participants = computed(() => props.participants);
+const {
+  cameras: irisCameras,
+  isLoading: areIrisCamerasLoading,
+  error: irisCamerasError,
+} = useIris({
+  autoFetch: true,
+  pollInterval: 5000,
+});
+
+const hasIrisCameras = computed(() => irisCameras.value.length > 0);
+const irisCameraErrorMessage = computed(() =>
+  irisCamerasError.value ? 'Unable to load IRIS cameras.' : ''
+);
 
 watch(participants, () => {
   openSessionIds.value = [];
@@ -333,9 +364,36 @@ function toggleSession(sessionId: string) {
   background-color: var(--success, #10b981);
 }
 
+.camera-indicator--inactive {
+  background-color: rgba(148, 163, 184, 0.6);
+}
+
+.camera-listing {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.camera-status {
+  flex-shrink: 0;
+  font-size: 0.78rem;
+  color: var(--muted, #94a3b8);
+}
+
 .session-sidenav-link:hover {
   background: var(--sidenav-hover, rgba(0, 0, 0, 0.04));
   color: var(--sidenav-title, #111827);
+}
+
+.session-sidenav-link--static {
+  justify-content: space-between;
+  cursor: default;
+}
+
+.session-sidenav-link.session-sidenav-link--static:hover {
+  background: transparent;
+  color: var(--sidenav-link, #4b5563);
 }
 
 .session-sidenav-link:hover .indicator:not(.camera-indicator) {
