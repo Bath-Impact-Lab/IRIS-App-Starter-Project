@@ -5,8 +5,7 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, watch, nextTick, computed } from 'vue';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { FBXLoader } from 'three/examples/jsm/Addons.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'; 
 import { useIris } from '@/lib/useIris';
 import { useSceneCameras } from '@/lib/useSceneCameras';
 import { usePlaySpace } from '@/lib/usePlaySpace';
@@ -17,7 +16,7 @@ const showCameras = ref(true);
 const { cameras: irisCameras, isRunning, lastFrame: irisData } = useIris({ autoFetch: true, pollInterval: 5000 });
 const selectedCameraCount = computed(() => irisCameras.value.length);
 
-const { addToScene: addSceneCameras, computePlaySpaceBounds } = useSceneCameras(selectedCameraCount, showCameras, showCameras);
+const { addToScene: addSceneCameras, clearSceneContent, computePlaySpaceBounds } = useSceneCameras(selectedCameraCount, showCameras, showCameras);
 const { create: createPlaySpace, rebuild: rebuildPlaySpace } = usePlaySpace(showPlaySpace, computePlaySpaceBounds);
 
 const sceneRef = ref<HTMLElement | null>(null);
@@ -26,12 +25,13 @@ let renderer: THREE.WebGLRenderer | null = null;
 let scene: THREE.Scene;
 let camera: THREE.PerspectiveCamera;
 let resizeObserver: ResizeObserver | null = null;
-let controls: OrbitControls | null = null;
-let modelsRoot: THREE.Object3D[] | null = null;
+let controls: OrbitControls | null = null; 
 let grid: THREE.GridHelper | null = null;
 let hemi: THREE.HemisphereLight | null = null;
 let themeObserver: MutationObserver | null = null;
 let animationFrameId: number | null = null;
+let hasLoadedIrisScene = false;
+let isLoadingIrisScene = false;
 
 const DARK_BG  = '#0b0f14';
 const LIGHT_BG = '#ddeef8';
@@ -87,18 +87,12 @@ function createAxisLabelSprite(text: string): THREE.Sprite {
   sprite.scale.set(1.5, 0.75, 1); // Adjust aspect ratio to match canvas
   
   return sprite;
-}
-
-// Store discovered bones to drive them with joint_angles
-let activeBones: Record<string, THREE.Object3D> = {};
-let boneBindQuats: Record<string, THREE.Quaternion> = {};
-let bindPelvisWorldOffset: THREE.Vector3 | null = null;
+} 
 
 let spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null = null;
 let skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null  = null;
 const position = new THREE.Object3D()
- 
-const manager = new THREE.LoadingManager(); 
+  
 
 const halpe26_pairs = [
   [0, 1], [0, 2], [1, 3], [2, 4],
@@ -118,6 +112,11 @@ const linePositions = new Float32Array(halpe26_pairs.length * 3 * 2)
 
 watch(isRunning, (running) => {
   if (!running) {
+    hasLoadedIrisScene = false
+    isLoadingIrisScene = false
+    clearSceneContent()
+    nextTick(() => rebuildPlaySpace())
+
     if (skeletonLine) {
       skeletonLine.removeFromParent()
       skeletonLine = null
@@ -129,6 +128,24 @@ watch(isRunning, (running) => {
     
   }
 })
+
+async function loadIrisSceneOnce() {
+  if (!scene || !isRunning.value || !irisData.value || hasLoadedIrisScene || isLoadingIrisScene) {
+    return
+  }
+
+  isLoadingIrisScene = true
+
+  try {
+    await addSceneCameras(scene)
+    hasLoadedIrisScene = true
+    nextTick(() => rebuildPlaySpace())
+  } catch (err) {
+    console.warn('[threeWindow] unable to load IRIS extrinsics/scene data', err)
+  } finally {
+    isLoadingIrisScene = false
+  }
+}
 
 function resizeScene(width = sceneRef.value?.clientWidth ?? 0, height = sceneRef.value?.clientHeight ?? 0) {
   if (!renderer || !camera) return;
@@ -157,6 +174,7 @@ onBeforeUnmount(() => {
   resizeObserver = null;
   themeObserver?.disconnect();
   themeObserver = null;
+  clearSceneContent();
   if (animationFrameId !== null) {
     cancelAnimationFrame(animationFrameId);
     animationFrameId = null;
@@ -237,11 +255,9 @@ async function initThree(container: HTMLElement) {
   controls.minDistance = 0.1;
   controls.maxDistance = 100;
 
-
-  // Add scene cameras from extrinsics
-  watch(isRunning, (running) => {
-    if (running && window.ipc?.getExtrinsics()) addSceneCameras(scene);
-  })
+  watch(irisData, () => {
+    void loadIrisSceneOnce()
+  }, { immediate: true })
 
   // Build play space from loaded camera frustums
   createPlaySpace(scene);
@@ -282,39 +298,7 @@ async function initThree(container: HTMLElement) {
     resizeObserver.observe(container);
   }
 }
-
-const tmpParentWorldQuat = new THREE.Quaternion();
-const tmpParentWorldQuatInv = new THREE.Quaternion();
-const tmpBoneAxis = new THREE.Vector3(0, 1, 0); // Mixamo bones typically point along Y 
-const tmpTargetDirWorld = new THREE.Vector3();
-const tmpDeltaLocal = new THREE.Quaternion();
-const tmpTargetDirLocal = new THREE.Vector3();
-const tmpBindDirLocal = new THREE.Vector3();
-
-function alignBoneFromBindPose(
-  boneKey: string,
-  p1: [number, number, number],
-  p2: [number, number, number]
-) {
-  const bone = activeBones[boneKey];
-  const bindQuat = boneBindQuats[boneKey];
-  if (!bone || !bindQuat || !bone.parent || !p1 || !p2) return;
-
-  const worldStart = new THREE.Vector3(p1[0], p1[2], p1[1]);
-  const worldEnd = new THREE.Vector3(p2[0], p2[2], p2[1]);
-  tmpTargetDirWorld.subVectors(worldEnd, worldStart).normalize();
-
-  if (tmpTargetDirWorld.lengthSq() < 1e-8) return;
-
-  bone.parent.getWorldQuaternion(tmpParentWorldQuat);
-  tmpParentWorldQuatInv.copy(tmpParentWorldQuat).invert();
-  tmpTargetDirLocal.copy(tmpTargetDirWorld).applyQuaternion(tmpParentWorldQuatInv).normalize();
-  tmpBindDirLocal.copy(tmpBoneAxis).applyQuaternion(bindQuat).normalize();
-  tmpDeltaLocal.setFromUnitVectors(tmpBindDirLocal, tmpTargetDirLocal);
-  bone.quaternion.copy(tmpDeltaLocal).multiply(bindQuat).normalize();
-  bone.updateMatrixWorld(true);
-}
-
+ 
 function renderIRISdata(poseInfo: IrisData) {
   try {
     poseInfo.people.forEach((person, i) => {

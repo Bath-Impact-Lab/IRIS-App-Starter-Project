@@ -253,6 +253,7 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
   const sceneCameras = ref<SceneCameraEntry[]>([]);
   const { currentProject } = useProject();
   let attachedScene: THREE.Scene | null = null;
+  let scenePoints: THREE.Points | null = null;
 
   const COLORS = ['#ff4466', '#44aaff', '#ffaa22', '#44dd88', '#cc44ff', '#00dddd'];
 
@@ -286,8 +287,26 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
 
   let isMockExtrinsics = false;
 
+  function clearScenePoints() {
+    if (!scenePoints) return;
+
+    attachedScene?.remove(scenePoints);
+    scenePoints.geometry.dispose();
+
+    const material = scenePoints.material;
+    if (Array.isArray(material)) {
+      material.forEach((entry) => entry.dispose());
+    } else {
+      material.dispose();
+    }
+
+    scenePoints = null;
+  }
+
   async function addToScene(scene: THREE.Scene) {
     attachedScene = scene;
+    clearSceneCameras();
+    clearScenePoints();
 
     let defs: SceneCameraDef[] = [];
     const projectOutputDir = getParentDirectory(currentProject.value?.path);
@@ -320,6 +339,7 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
           })
 
           const points = new THREE.Points(geometry, material)
+          scenePoints = points
           scene.add(points)
         })
     }
@@ -552,6 +572,11 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
     sceneCameras.value = [];
   }
 
+  function clearSceneContent() {
+    clearSceneCameras();
+    clearScenePoints();
+  }
+
   if (selectedCount) {
     let prevCount = 0;
     watch(selectedCount, async (count) => {
@@ -575,28 +600,14 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
   }
 
   function dispose() {
-    for (const entry of sceneCameras.value) {
-      attachedScene?.remove(entry.gizmoMesh);
-      attachedScene?.remove(entry.camera);
-      attachedScene?.remove(entry.frustumLines);
-      entry.gizmoMesh.traverse((child) => {
-        if ((child as THREE.Mesh).geometry) {
-          (child as THREE.Mesh).geometry.dispose();
-        }
-        if ((child as THREE.Mesh).material) {
-          ((child as THREE.Mesh).material as THREE.Material).dispose();
-        }
-      });
-      entry.frustumLines.geometry.dispose();
-      (entry.frustumLines.material as THREE.Material).dispose();
-    }
-    sceneCameras.value = [];
+    clearSceneContent();
     attachedScene = null;
   }
 
   return {
     sceneCameras,
     addToScene,
+    clearSceneContent,
     syncVisibility,
     setGizmoRotation,
     computePlaySpaceBounds,
