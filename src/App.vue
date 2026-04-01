@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { ref, computed, watchEffect } from 'vue';
+import { ref, computed, watch, watchEffect } from 'vue';
 import { useProject } from '@/lib/useProject';
 import { useIris, type IrisStartOptions } from '@/lib/useIris';
 
@@ -41,6 +41,7 @@ const activeView = computed(() => currentProject.value?.workspace.activeView || 
 // Global Settings State
 const showSettings = ref(false);
 const currentTheme = ref<'dark' | 'light'>('light');
+const irisRunMode = ref<'capture' | 'mocap' | null>(null);
 
 // Apply theme to document root for global CSS variable targeting
 watchEffect(() => {
@@ -63,8 +64,23 @@ const availableIrisCameras = computed(() => {
   if (selectedCameraIds.value.length === 0) return irisCameras.value;
   return irisCameras.value.filter((camera) => selectedCameraIds.value.includes(String(camera.id)));
 });
-const canStartIris = computed(() =>
-  availableIrisCameras.value.length > 0 && !isIrisRunning.value && !isStartingIris.value
+const isCaptureIrisRunning = computed(() =>
+  isIrisRunning.value && irisRunMode.value === 'capture'
+);
+const isMocapIrisRunning = computed(() =>
+  isIrisRunning.value && irisRunMode.value === 'mocap'
+);
+const canStartCaptureIris = computed(() =>
+  availableIrisCameras.value.length > 0
+  && !isStartingIris.value
+  && !isStoppingIris.value
+  && !isCaptureIrisRunning.value
+);
+const canStartMocapIris = computed(() =>
+  availableIrisCameras.value.length > 0
+  && !isStartingIris.value
+  && !isStoppingIris.value
+  && !isMocapIrisRunning.value
 );
 const canStopIris = computed(() =>
   isIrisRunning.value && !isStoppingIris.value && !isStartingIris.value
@@ -102,11 +118,10 @@ function getParentDirectory(filePath: string | null | undefined) {
   return filePath.replace(/[\\/][^\\/]+$/, '');
 }
 
-async function handleStartIris() {
-  if (!currentProject.value || availableIrisCameras.value.length === 0) return;
-
+function buildIrisOptions(mode: 'capture' | 'mocap'): IrisStartOptions | null {
+  if (!currentProject.value || availableIrisCameras.value.length === 0) return null;
   const { width, height } = parseResolution(selectedResolution.value);
-  const options: IrisStartOptions = {
+  return {
     kp_format: 'halpe26',
     subjects: currentProject.value.workspace.personCount,
     cameras: availableIrisCameras.value.map((camera) => ({
@@ -120,14 +135,60 @@ async function handleStartIris() {
     camera_height: height,
     video_fps: selectedFps.value,
     output_dir: projectOutputDir.value,
+    capture_only: mode === 'capture',
     stream: true,
   };
+}
 
-  await startIris(options);
+async function startIrisForMode(mode: 'capture' | 'mocap') {
+  if (isStartingIris.value || isStoppingIris.value) {
+    return { ok: false, error: 'IRIS is busy.' };
+  }
+
+  if (isIrisRunning.value && irisRunMode.value === mode) {
+    return { ok: true, alreadyRunning: true };
+  }
+
+  if (isIrisRunning.value) {
+    const stopResult = await stopIris();
+    if (!stopResult?.ok) {
+      return stopResult;
+    }
+    irisRunMode.value = null;
+  }
+
+  const options = buildIrisOptions(mode);
+  if (!options) {
+    return { ok: false, error: 'No available cameras.' };
+  }
+
+  const result = await startIris(options);
+  if (result?.ok) {
+    irisRunMode.value = mode;
+  }
+
+  return result;
+}
+
+watch(isIrisRunning, (running) => {
+  if (!running && !isStartingIris.value) {
+    irisRunMode.value = null;
+  }
+});
+
+async function handleStartCaptureIris() {
+  await startIrisForMode('capture');
+}
+
+async function handleStartIris() {
+  await startIrisForMode('mocap');
 }
 
 async function handleStopIris() {
-  await stopIris();
+  const result = await stopIris();
+  if (result?.ok) {
+    irisRunMode.value = null;
+  }
 }
 </script>
 
@@ -159,15 +220,31 @@ async function handleStopIris() {
       />
 
       <main class="workspace-content">
-        <FeedViewPage
-          v-if="activeView === 'capture'"
-          :cameras="availableIrisCameras"
-          :ws-url="irisWsUrl"
-          :resolution="selectedResolution"
-          :fps="selectedFps"
-          @update:resolution="updateResolution"
-          @update:fps="updateFps"
-        />
+        <div v-if="activeView === 'capture'" class="capture-stage">
+          <div class="capture-toolbar-shell">
+            <Toolbar
+              :resolution="selectedResolution"
+              :fps="selectedFps"
+              :rotation="selectedRotation"
+              :show-start-button="true"
+              :show-stop-button="true"
+              :is-starting-iris="isStartingIris"
+              :is-stopping-iris="isStoppingIris"
+              :is-iris-running="isCaptureIrisRunning"
+              :start-disabled="!canStartCaptureIris"
+              :stop-disabled="!canStopIris"
+              @update:resolution="updateResolution"
+              @update:fps="updateFps"
+              @update:rotation="updateRotation"
+              @start-iris="handleStartCaptureIris"
+              @stop-iris="handleStopIris"
+            />
+          </div>
+          <FeedViewPage
+            :cameras="availableIrisCameras"
+            :ws-url="irisWsUrl"
+          />
+        </div>
         <div v-else-if="activeView === 'mocap'" class="mocap-stage">
           <div class="mocap-toolbar-shell">
             <Toolbar
@@ -178,8 +255,8 @@ async function handleStopIris() {
               :show-stop-button="true"
               :is-starting-iris="isStartingIris"
               :is-stopping-iris="isStoppingIris"
-              :is-iris-running="isIrisRunning"
-              :start-disabled="!canStartIris"
+              :is-iris-running="isMocapIrisRunning"
+              :start-disabled="!canStartMocapIris"
               :stop-disabled="!canStopIris"
               @update:resolution="updateResolution"
               @update:fps="updateFps"
@@ -222,6 +299,7 @@ async function handleStopIris() {
   background: var(--bg);
 }
 
+.capture-stage,
 .mocap-stage {
   position: relative;
   width: 100%;
@@ -233,6 +311,7 @@ async function handleStopIris() {
   inset: 0;
 }
 
+.capture-toolbar-shell,
 .mocap-toolbar-shell {
   position: absolute;
   top: 16px;
@@ -244,6 +323,7 @@ async function handleStopIris() {
   pointer-events: none;
 }
 
+.capture-toolbar-shell > *,
 .mocap-toolbar-shell > * {
   pointer-events: auto;
 }
@@ -253,6 +333,7 @@ async function handleStopIris() {
     inset: var(--app-topbar-height, 63px) 0 0 0;
   }
 
+  .capture-toolbar-shell,
   .mocap-toolbar-shell {
     top: 12px;
     left: 12px;

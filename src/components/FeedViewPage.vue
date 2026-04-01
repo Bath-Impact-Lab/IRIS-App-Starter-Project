@@ -1,14 +1,5 @@
 <template>
   <div class="feed-view-page">
-    <div class="feed-toolbar-wrapper">
-      <Toolbar
-        :resolution="selectedResolution"
-        :fps="selectedFps"
-        @update:resolution="emit('update:resolution', $event)"
-        @update:fps="emit('update:fps', $event)"
-      />
-    </div>
-
     <div class="feed-grid">
       <template v-if="displayCameras.length > 0">
         <div v-for="camera in displayCameras" :key="camera.id" class="feed-card">
@@ -59,7 +50,6 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
-import Toolbar from './app/Toolbar.vue';
 
 interface FeedCamera {
   id: number | string;
@@ -69,35 +59,15 @@ interface FeedCamera {
 interface Props {
   cameras?: FeedCamera[];
   wsUrl?: string | null;
-  resolution?: string;
-  fps?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   cameras: () => [],
   wsUrl: null,
-  resolution: '1920x1080',
-  fps: 30,
 });
-
-const emit = defineEmits<{
-  'update:resolution': [value: string];
-  'update:fps': [value: number];
-}>();
-
-const selectedResolution = ref(props.resolution);
-const selectedFps = ref(props.fps);
 const cameraFrames = ref<Record<string, string>>({});
 
 let ws: WebSocket | null = null;
-
-watch(() => props.resolution, (value) => {
-  selectedResolution.value = value;
-});
-
-watch(() => props.fps, (value) => {
-  selectedFps.value = value;
-});
 
 const displayCameras = computed(() => {
   if (props.cameras.length > 0) {
@@ -195,7 +165,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .feed-view-page {
   position: absolute;
-  inset: var(--app-topbar-height, 63px) 0 0 var(--app-session-sidenav-width, 240px);
+  inset: 0;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -203,24 +173,9 @@ onBeforeUnmount(() => {
   transition: background 0.3s ease;
 }
 
-.feed-toolbar-wrapper {
-  padding: 16px;
-  display: flex;
-  justify-content: center;
-  background: rgba(12, 18, 25, 0.6);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(10px);
-  z-index: 10;
-}
-
-[data-theme="light"] .feed-toolbar-wrapper {
-  background: rgba(255, 255, 255, 0.65);
-  border-bottom-color: rgba(31, 78, 121, 0.1);
-}
-
 .feed-grid {
   flex: 1;
-  padding: 24px;
+  padding: 92px 24px 24px;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
   gap: 20px;
@@ -381,13 +336,9 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
-  .feed-view-page {
-    inset: var(--app-topbar-height, 63px) 0 0 0;
-  }
-
   .feed-grid {
     grid-template-columns: 1fr;
-    padding: 16px;
+    padding: 84px 16px 16px;
   }
 }
 </style>
