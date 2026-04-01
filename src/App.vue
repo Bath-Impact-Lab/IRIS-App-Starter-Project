@@ -1,6 +1,7 @@
 ﻿<script setup lang="ts">
 import { ref, computed, watchEffect } from 'vue';
 import { useProject } from '@/lib/useProject';
+import { useIris, type IrisStartOptions } from '@/lib/useIris';
 
 // ── Layout & Core UI ─────────────────────────────────────────────────────────
 import AppTopBar from '@/components/app/AppTopBar.vue';
@@ -24,6 +25,12 @@ const {
   openProject,
   setCurrentProject
 } = useProject();
+const {
+  cameras: irisCameras,
+  isRunning: isIrisRunning,
+  isStarting: isStartingIris,
+  start: startIris,
+} = useIris({ autoFetch: false, autoCheck: false });
 
 // View State Routing
 const activeView = computed(() => currentProject.value?.workspace.activeView || 'capture');
@@ -46,6 +53,14 @@ function setView(view: 'capture' | 'mocap' | 'analysis') {
 
 const selectedResolution = computed(() => currentProject.value?.workspace.resolution ?? '1920x1080');
 const selectedFps = computed(() => currentProject.value?.workspace.fps ?? 30);
+const selectedCameraIds = computed(() => currentProject.value?.workspace.selectedCameraIds ?? []);
+const availableIrisCameras = computed(() => {
+  if (selectedCameraIds.value.length === 0) return irisCameras.value;
+  return irisCameras.value.filter((camera) => selectedCameraIds.value.includes(String(camera.id)));
+});
+const canStartIris = computed(() =>
+  availableIrisCameras.value.length > 0 && !isIrisRunning.value && !isStartingIris.value
+);
 
 function updateResolution(value: string) {
   if (!currentProject.value) return;
@@ -55,6 +70,42 @@ function updateResolution(value: string) {
 function updateFps(value: number) {
   if (!currentProject.value) return;
   currentProject.value.workspace.fps = value;
+}
+
+function parseResolution(value: string) {
+  const match = value.match(/^(\d+)x(\d+)$/);
+  if (!match) {
+    return { width: 1920, height: 1080 };
+  }
+
+  return {
+    width: Number.parseInt(match[1], 10),
+    height: Number.parseInt(match[2], 10),
+  };
+}
+
+async function handleStartIris() {
+  if (!currentProject.value || availableIrisCameras.value.length === 0) return;
+
+  const { width, height } = parseResolution(selectedResolution.value);
+  const options: IrisStartOptions = {
+    kp_format: 'halpe26',
+    subjects: currentProject.value.workspace.personCount,
+    cameras: availableIrisCameras.value.map((camera) => ({
+      uri: String(camera.id),
+      width,
+      height,
+      fps: selectedFps.value,
+      rotation: 0,
+    })),
+    camera_width: width,
+    camera_height: height,
+    video_fps: selectedFps.value,
+    output_dir: '',
+    stream: true,
+  };
+
+  await startIris(options);
 }
 </script>
 
@@ -92,8 +143,13 @@ function updateFps(value: number) {
             <Toolbar
               :resolution="selectedResolution"
               :fps="selectedFps"
+              :show-start-button="true"
+              :is-starting-iris="isStartingIris"
+              :is-iris-running="isIrisRunning"
+              :start-disabled="!canStartIris"
               @update:resolution="updateResolution"
               @update:fps="updateFps"
+              @start-iris="handleStartIris"
             />
           </div>
           <ThreeWindow />

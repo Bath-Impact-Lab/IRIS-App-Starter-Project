@@ -56,29 +56,56 @@
       </div>
     </div>
 
+    <template v-if="showStartButton">
+      <div class="toolbar-divider"></div>
+
+      <button
+        class="toolbar-action"
+        type="button"
+        :disabled="startDisabled"
+        @click="emit('start-iris')"
+      >
+        {{ startLabel }}
+      </button>
+    </template>
+
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 interface Props {
   resolution?: string;
   fps?: number;
+  showStartButton?: boolean;
+  isStartingIris?: boolean;
+  isIrisRunning?: boolean;
+  startDisabled?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   resolution: '1920x1080',
   fps: 30,
+  showStartButton: false,
+  isStartingIris: false,
+  isIrisRunning: false,
+  startDisabled: false,
 });
 
 const emit = defineEmits<{
   'update:resolution': [value: string];
   'update:fps': [value: number];
+  'start-iris': [];
 }>();
 
 const selectedResolution = ref(props.resolution);
 const selectedFps = ref(props.fps);
+const startLabel = computed(() => {
+  if (props.isStartingIris) return 'Starting IRIS...';
+  if (props.isIrisRunning) return 'IRIS Running';
+  return 'Start IRIS';
+});
 
 // Keep local state in sync if parent updates props
 watch(() => props.resolution, (newVal) => { selectedResolution.value = newVal; });
@@ -217,6 +244,36 @@ watch(() => props.fps, (newVal) => { selectedFps.value = newVal; });
   background: rgba(31, 78, 121, 0.15);
 }
 
+.toolbar-action {
+  border: 1px solid rgba(107, 230, 117, 0.24);
+  border-radius: 9px;
+  background: linear-gradient(135deg, rgba(107, 230, 117, 0.24), rgba(68, 176, 255, 0.18));
+  color: var(--fg);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
+}
+
+.toolbar-action:hover:not(:disabled) {
+  transform: translateY(-1px);
+  border-color: rgba(107, 230, 117, 0.44);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.18);
+}
+
+.toolbar-action:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+[data-theme="light"] .toolbar-action {
+  color: #1F4E79;
+  background: linear-gradient(135deg, rgba(46, 134, 193, 0.16), rgba(56, 189, 248, 0.14));
+  border-color: rgba(31, 78, 121, 0.18);
+}
+
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
   .capture-toolbar {
@@ -228,6 +285,9 @@ watch(() => props.fps, (newVal) => { selectedFps.value = newVal; });
   }
   .toolbar-select {
     min-width: 140px;
+  }
+  .toolbar-action {
+    width: 100%;
   }
 }
 </style>

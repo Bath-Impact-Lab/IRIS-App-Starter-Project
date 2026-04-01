@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'; 
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 
 export interface IrisCameraExtrinsics {
   R: number[];
@@ -156,12 +156,7 @@ function trimCliOutput(nextLine: IrisCliOutput) {
   const nextOutput = [...cliOutput.value, nextLine];
   cliOutput.value = nextOutput.slice(-200);
 }
-
-function isMockFallbackResult(result: unknown) {
-  if (!result || typeof result !== 'object') return false;
-  const maybeError = (result as { error?: unknown }).error;
-  return typeof maybeError === 'string' && maybeError.toLowerCase().includes('mock data');
-}
+ 
 
 function ensureIpcListeners() {
   if (ipcListenersRegistered || !window.ipc) return;
@@ -179,7 +174,6 @@ function ensureIpcListeners() {
 
 export function useIris(options: UseIrisOptions = {}) {
   const { autoFetch = true, pollInterval = 0, autoCheck = true } = options;
-  const isRunning = ref(false);
 
   let pollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -269,8 +263,7 @@ export function useIris(options: UseIrisOptions = {}) {
     let mocked = false;
 
     try {
-      const startResult = await window.ipc.startIRIS(options);
-      mocked = isMockFallbackResult(startResult);
+      const startResult = await window.ipc.startIRIS(options); 
 
       if (!startResult?.ok && !mocked) {
         startError.value = startResult?.error ?? 'Failed to start IRIS.';
@@ -283,8 +276,7 @@ export function useIris(options: UseIrisOptions = {}) {
       }
 
       if (options.stream && window.ipc.startIRISStream) {
-        const streamResult = await window.ipc.startIRISStream(options);
-        mocked = mocked || isMockFallbackResult(streamResult);
+        const streamResult = await window.ipc.startIRISStream(options); 
 
         if (!streamResult?.ok && !mocked) {
           startError.value = streamResult?.error ?? 'Failed to start IRIS streaming.';
