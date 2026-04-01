@@ -15,8 +15,7 @@ function getIrisCliPath() {
     return path.join(process.resourcesPath, 'app.asar.unpacked', 'iris_runtime_bundle', 'iris_cli.exe');
   } 
   const resolved = process.env.IRIS_CLI_EXE 
-    || path.join(os.homedir(), 'Documents', 'Iris', 'build', 'bin', 'iris_cli.exe');
-  console.log('[Config] Using iris_cli.exe path:', resolved);
+    || path.join(os.homedir(), 'Documents', 'Iris', 'build', 'bin', 'iris_cli.exe'); 
   return resolved;
 }
 
