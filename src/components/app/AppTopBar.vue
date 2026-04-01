@@ -1,14 +1,16 @@
 <template>
   <nav ref="titlebarRef" class="navbar titlebar" @dblclick="handleTitlebarDoubleClick">
     <div class="brand">
-      <img
-        v-if="!logoError"
-        :src="logoSrc"
-        alt=""
-        class="brand-logo"
-        @error="logoError = true"
-      />
-      <span class="brand-text">{{ appTitle }}</span>
+      <button class="brand-button" type="button" @click="emit('navigate-home')" :disabled="disabled" :aria-label="`Go to ${appTitle} home`">
+        <img
+          v-if="!logoError"
+          :src="logoSrc"
+          alt=""
+          class="brand-logo"
+          @error="logoError = true"
+        />
+        <span class="brand-text">{{ appTitle }}</span>
+      </button>
     </div>
 
     <div class="nav-right">
@@ -61,6 +63,7 @@ const props = withDefaults(defineProps<Props>(), {
 
 const emit = defineEmits<{
   'toggle-settings': [];
+  'navigate-home': [];
 }>();
 
 const logoError = ref(false);
@@ -144,6 +147,25 @@ function handleTitlebarDoubleClick(event: MouseEvent) {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.brand,
+.brand-button {
+  -webkit-app-region: no-drag;
+}
+
+.brand-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.brand-button:disabled {
+  cursor: default;
 }
 
 .brand-text {

@@ -1,54 +1,69 @@
 ﻿<template>
   <div id="app-container" :class="{ 'sidebar-open': hasCameraSelected }">
-    <AppTopBar :app-title="appTitle" :disabled="IrisState.running" @toggle-settings="toggleSignIn" />
-
-    <SessionSidenav :active-view="activeView" @open-capture="openCaptureView" @open-analysis="openAnalysisView" />
-
-
-    <sidebar
-      v-if="hasCameraSelected"
-      :person-count="personCount" 
-      :iris-data="irisData"
-      :selected-cameras="selectedDevices"
-      :scene-cameras="sceneCameras"
-      :camera-rotation="cameraRotation"
-      :devices="devices"
-      :selected-camera-ids="selectedDeviceId"
-      :playback-video-urls="fsPlaybackVideoUrls"
-      :is-playing-back="isPlaying"
-      @iris-data-update="irisDataUpdate"
-      @reorder-cameras="reorderCameras"
+    <AppTopBar
+      :app-title="appTitle"
+      :disabled="IrisState.running"
+      @toggle-settings="toggleSignIn"
+      @navigate-home="openHome"
     />
 
-    <ThreeWindow
-      v-if="activeView === 'capture'"
-      :selected-camera-count="selectedCameraCount"
-      :iris-data="irisData"
-      :spheres-mesh="spheresMesh"
-      :skeleton-line="skeletonLine"
-      :rebuild-play-space="rebuildPlaySpace"
-      :create-play-space="createPlaySpace"
-      :add-scene-cameras="addSceneCameras"
-      @give-sphere-mesh="sphereMeshUpdate"
-      @give-skeleton-mesh="skeletonMeshUpdate"
-    >
-      <SceneHudControls
-        :show-play-space="showPlaySpace"
-        :show-cameras="showCameras"
-        @toggle-play-space="showPlaySpace = !showPlaySpace"
-        @toggle-cameras="showCameras = !showCameras"
+    <ProjectHome
+      v-if="currentScreen === 'home'"
+      @quick-demo="openWorkspace"
+      @new-project="openWorkspace"
+      @open-project="openWorkspace"
+      @open-recent="openRecentProject"
+    />
+
+    <template v-else>
+      <SessionSidenav :active-view="activeView" @open-capture="openCaptureView" @open-analysis="openAnalysisView" />
+
+      <sidebar
+        v-if="hasCameraSelected"
+        :person-count="personCount"
+        :iris-data="irisData"
+        :selected-cameras="selectedDevices"
+        :scene-cameras="sceneCameras"
+        :camera-rotation="cameraRotation"
+        :devices="devices"
+        :selected-camera-ids="selectedDeviceId"
+        :playback-video-urls="fsPlaybackVideoUrls"
+        :is-playing-back="isPlaying"
+        @iris-data-update="irisDataUpdate"
+        @reorder-cameras="reorderCameras"
       />
-    </ThreeWindow>
-    <AnalysisWindow v-else />
 
-    <StatusOverlays
-      :running="IrisState.running"
-      :fps="irisDisplayFps"
-      :is-valid-license="isValidLicense"
-      :plan-type="planType"
-      :joint-angles-pretty="jointAnglesPretty"
-      @open-settings="showSettings = true"
-    />
+      <ThreeWindow
+        v-if="activeView === 'capture'"
+        :selected-camera-count="selectedCameraCount"
+        :iris-data="irisData"
+        :spheres-mesh="spheresMesh"
+        :skeleton-line="skeletonLine"
+        :rebuild-play-space="rebuildPlaySpace"
+        :create-play-space="createPlaySpace"
+        :add-scene-cameras="addSceneCameras"
+        @give-sphere-mesh="sphereMeshUpdate"
+        @give-skeleton-mesh="skeletonMeshUpdate"
+      >
+        <SceneHudControls
+          :show-play-space="showPlaySpace"
+          :show-cameras="showCameras"
+          @toggle-play-space="showPlaySpace = !showPlaySpace"
+          @toggle-cameras="showCameras = !showCameras"
+        />
+      </ThreeWindow>
+      <AnalysisWindow v-else />
+
+      <StatusOverlays
+        :running="IrisState.running"
+        :fps="irisDisplayFps"
+        :is-valid-license="isValidLicense"
+        :plan-type="planType"
+        :joint-angles-pretty="jointAnglesPretty"
+        @open-settings="showSettings = true"
+      />
+    </template>
+
     <!-- Settings Modal -->
     <settingsModal
       :show-settings="showSettings"
@@ -88,6 +103,7 @@ import IrisMissingModal from './components/app/IrisMissingModal.vue';
 import sidebar from './components/sidebar.vue';
 import ThreeWindow from './components/threeWindow.vue';
 import AnalysisWindow from './components/analysisWindow.vue';
+import ProjectHome from './components/ProjectHome.vue';
 import settingsModal from './components/settingsModal.vue';
 import { useIrisStore } from './Stores/irisStore';
 
@@ -111,6 +127,7 @@ const {
   isValid: isValidLicense,
   planType,
 } = useLicense();
+const currentScreen = ref<'home' | 'workspace'>('home');
 const activeView = ref<'capture' | 'analysis'>('capture');
 
 // Sync local input with stored key on mount
@@ -446,7 +463,7 @@ async function checkIrisCli() {
     showIrisNotFound.value = false;
     if (irisPollTimer) { clearInterval(irisPollTimer); irisPollTimer = null; }
   } else {
-    showIrisNotFound.value = true;
+    showIrisNotFound.value = false;
     // Start polling every 5 seconds if not already polling
     if (!irisPollTimer) {
       irisPollTimer = setInterval(checkIrisCli, 5000);
@@ -532,7 +549,7 @@ function sphereMeshUpdate(value: THREE.InstancedMesh<THREE.SphereGeometry, THREE
 
 function skeletonMeshUpdate(value: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null) {
   skeletonLine.value = value
-} 
+}
 
 function irisDataUpdate(value: IrisData[] | IrisData | null) {
   irisData.value = value
@@ -547,12 +564,26 @@ function updateLicenseKey(value: string) {
 }
 
 function openCaptureView() {
+  currentScreen.value = 'workspace';
   activeView.value = 'capture';
 }
 
 function openAnalysisView() {
+  currentScreen.value = 'workspace';
   activeView.value = 'analysis';
 }
 
-</script>
+function openWorkspace() {
+  currentScreen.value = 'workspace';
+  activeView.value = 'capture';
+}
 
+function openRecentProject(_path: string) {
+  openWorkspace();
+}
+
+function openHome() {
+  currentScreen.value = 'home';
+}
+
+</script>

@@ -1,114 +1,117 @@
 <template>
-  <aside class="session-sidenav">   
-    <div class="session-sidenav-section">
-      <button 
-        class="dropdown-toggle" 
-        @click="isCamerasOpen = !isCamerasOpen"
-        type="button"
-        aria-label="Toggle Connected Cameras"
-      >
-        <h2 class="session-sidenav-title">Connected Cameras</h2>
-        <svg 
-          xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-          class="chevron" :class="{ 'open': isCamerasOpen }"
-        >
-          <polyline points="6 9 12 15 18 9"></polyline>
-        </svg>
-      </button>
+  <aside class="session-sidenav">
 
-      <div v-show="isCamerasOpen" class="session-sidenav-list">
-        <button 
-          v-for="(camera, index) in cameras" 
-          :key="`camera-${index}`" 
-          class="session-sidenav-link"
+    <div class="session-sidenav-scroll-area">
+      <div class="session-sidenav-section">
+        <button
+          class="dropdown-toggle"
+          @click="isCamerasOpen = !isCamerasOpen"
           type="button"
+          aria-label="Toggle Connected Cameras"
         >
-          <span class="indicator camera-indicator"></span>
-          {{ camera }}
+          <h2 class="session-sidenav-title">Connected Cameras</h2>
+          <svg
+            xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+            class="chevron" :class="{ 'open': isCamerasOpen }"
+          >
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
         </button>
-      </div>
-    </div>
 
-    <div class="session-sidenav-section">
-      <h2 class="session-sidenav-title">Participant 1</h2>
-      <div class="session-sidenav-list">
-        
-        <div v-for="(session, index) in participantSessions" :key="session.id" class="session-group">
-          
-          <button 
-            class="session-sidenav-link date-toggle"
-            @click="toggleSession(index)"
+        <div v-show="isCamerasOpen" class="session-sidenav-list">
+          <button
+            v-for="(camera, index) in cameras"
+            :key="`camera-${index}`"
+            class="session-sidenav-link"
             type="button"
           >
-            <div class="link-left">
-              <span class="indicator"></span>
-              {{ session.date }}
-            </div>
-            <svg 
-              xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-              class="chevron small-chevron" :class="{ 'open': session.isOpen }"
-            >
-              <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
+            <span class="indicator camera-indicator"></span>
+            {{ camera }}
           </button>
+        </div>
+      </div>
 
-          <div v-show="session.isOpen" class="nested-list">
-            <button 
-              v-for="(exercise, eIndex) in session.exercises" 
-              :key="`ex-${index}-${eIndex}`"
-              class="session-sidenav-link nested-link"
+      <div class="session-sidenav-section">
+        <h2 class="session-sidenav-title">Participant 1</h2>
+        <div class="session-sidenav-list">
+
+          <div v-for="(session, index) in participantSessions" :key="session.id" class="session-group">
+
+            <button
+              class="session-sidenav-link date-toggle"
+              @click="toggleSession(index)"
               type="button"
             >
-              <span class="nested-dash">-</span>
-              {{ exercise }}
+              <div class="link-left">
+                <span class="indicator"></span>
+                {{ session.date }}
+              </div>
+              <svg
+                xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                class="chevron small-chevron" :class="{ 'open': session.isOpen }"
+              >
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
             </button>
+
+            <div v-show="session.isOpen" class="nested-list">
+              <button
+                v-for="(exercise, eIndex) in session.exercises"
+                :key="`ex-${index}-${eIndex}`"
+                class="session-sidenav-link nested-link"
+                type="button"
+              >
+                <span class="nested-dash">-</span>
+                {{ exercise }}
+              </button>
+            </div>
+
           </div>
 
         </div>
-
       </div>
     </div>
 
-    <div class="session-sidenav-divider"></div>
+    <div class="session-sidenav-fixed-bottom">
+      <div class="session-sidenav-divider"></div>
 
-    
+      <div class="session-sidenav-bottom">
+        <button
+          class="session-sidenav-action"
+          :class="{ active: activeView === 'calibrate' }"
+          @click="emit('calibrate-rig')"
+          type="button"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><line x1="12" y1="5" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="19"></line><line x1="5" y1="12" x2="2" y2="12"></line><line x1="22" y1="12" x2="19" y2="12"></line></svg>
+          Calibrate Rig
+        </button>
+        <button
+          class="session-sidenav-action"
+          :class="{ active: activeView === 'capture' }"
+          @click="emit('open-capture')"
+          type="button"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect><circle cx="12" cy="12" r="3"></circle></svg>
+          Capture Mode
+        </button>
+        <button
+          class="session-sidenav-action"
+          :class="{ active: activeView === 'analysis' }"
+          @click="emit('open-analysis')"
+          type="button"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+          Analysis Mode
+        </button>
+      </div>
 
-    <div class="session-sidenav-bottom">
-      <button 
-        class="session-sidenav-action" 
-        :class="{ active: activeView === 'calibrate' }"
-        @click="emit('calibrate-rig')"
-        type="button"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><line x1="12" y1="5" x2="12" y2="2"></line><line x1="12" y1="22" x2="12" y2="19"></line><line x1="5" y1="12" x2="2" y2="12"></line><line x1="22" y1="12" x2="19" y2="12"></line></svg>
-        Calibrate Rig
-      </button>
-      <button 
-        class="session-sidenav-action" 
-        :class="{ active: activeView === 'capture' }"
-        @click="emit('open-capture')"
-        type="button"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2" ry="2"></rect><circle cx="12" cy="12" r="3"></circle></svg>
-        Capture Mode
-      </button>
-      <button 
-        class="session-sidenav-action" 
-        :class="{ active: activeView === 'analysis' }"
-        @click="emit('open-analysis')"
-        type="button"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
-        Analysis Mode
-      </button>
-    </div>
-
-    <div class="session-sidenav-brand">
-      <img
-        src="/assets/RecaptureGraphic.png"
-        alt="ReCapture"
-        class="session-sidenav-brand-image"
-      />
+      <div class="session-sidenav-brand">
+        <img
+          src="/assets/RecaptureGraphic.png"
+          alt="ReCapture"
+          class="session-sidenav-brand-image"
+        />
+      </div>
     </div>
   </aside>
 </template>
@@ -136,7 +139,7 @@ const cameras = ['Camera 1', 'Camera 2', 'Camera 3', 'Camera 4'];
 const availableExercises = ['Squat', 'Bench Press', 'Deadlift', 'Overhead Press', 'Barbell Row', 'Lunge', 'Plank'];
 const getRandomExercises = () => {
   // Pick between 2 to 4 random exercises
-  const count = Math.floor(Math.random() * 3) + 2; 
+  const count = Math.floor(Math.random() * 3) + 2;
   const shuffled = [...availableExercises].sort(() => 0.5 - Math.random());
   return shuffled.slice(0, count);
 };
@@ -162,20 +165,37 @@ const toggleSession = (index: number) => {
   bottom: 0;
   left: 0;
   width: var(--app-session-sidenav-width, 240px);
-  padding: 20px 12px;
   display: flex;
   flex-direction: column;
-  gap: 24px;
-  overflow-y: auto;
-  scrollbar-width: none;
   background: var(--sidebar, #ffffff);
   border-right: 1px solid var(--sidenav-border, #e5e7eb);
   z-index: 10;
   transition: background 0.3s ease, border-color 0.3s ease;
+  overflow: hidden; /* Lock main component from scrolling */
 }
 
-.session-sidenav::-webkit-scrollbar {
+/* Scrollable Container for Lists */
+.session-sidenav-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  scrollbar-width: none;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 20px 12px;
+}
+
+.session-sidenav-scroll-area::-webkit-scrollbar {
   display: none;
+}
+
+/* Fixed Container for Buttons and Brand */
+.session-sidenav-fixed-bottom {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+
+  background: inherit; /* Inherits background so items scrolling under it are hidden correctly */
 }
 
 .session-sidenav-brand {
@@ -297,7 +317,7 @@ const toggleSession = (index: number) => {
 }
 
 .camera-indicator {
-  background-color: var(--success, #10b981); 
+  background-color: var(--success, #10b981);
 }
 
 .session-sidenav-link:hover {
@@ -332,7 +352,7 @@ const toggleSession = (index: number) => {
 .session-sidenav-divider {
   width: calc(100% - 24px);
   height: 1px;
-  margin: 0 auto;
+  margin: 0 auto 16px auto;
   background: var(--sidenav-divider, #e5e7eb);
 }
 
@@ -340,7 +360,7 @@ const toggleSession = (index: number) => {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: auto;
+  padding: 0 12px;
 }
 
 .session-sidenav-action {
