@@ -5,6 +5,7 @@ import { useProject } from '@/lib/useProject';
 // ── Layout & Core UI ─────────────────────────────────────────────────────────
 import AppTopBar from '@/components/app/AppTopBar.vue';
 import SessionSidenav from '@/components/app/SessionSidenav.vue';
+import Toolbar from '@/components/app/Toolbar.vue';
 
 // ── Pages / Views ────────────────────────────────────────────────────────────
 import ProjectHome from '@/components/ProjectHome.vue';
@@ -29,7 +30,7 @@ const activeView = computed(() => currentProject.value?.workspace.activeView || 
 
 // Global Settings State
 const showSettings = ref(false);
-const currentTheme = ref<'dark' | 'light'>('dark');
+const currentTheme = ref<'dark' | 'light'>('light');
 
 // Apply theme to document root for global CSS variable targeting
 watchEffect(() => {
@@ -41,6 +42,19 @@ function setView(view: 'capture' | 'mocap' | 'analysis') {
   if (currentProject.value) {
     currentProject.value.workspace.activeView = view;
   }
+}
+
+const selectedResolution = computed(() => currentProject.value?.workspace.resolution ?? '1920x1080');
+const selectedFps = computed(() => currentProject.value?.workspace.fps ?? 30);
+
+function updateResolution(value: string) {
+  if (!currentProject.value) return;
+  currentProject.value.workspace.resolution = value;
+}
+
+function updateFps(value: number) {
+  if (!currentProject.value) return;
+  currentProject.value.workspace.fps = value;
 }
 </script>
 
@@ -73,7 +87,17 @@ function setView(view: 'capture' | 'mocap' | 'analysis') {
 
       <main class="workspace-content">
         <FeedViewPage v-if="activeView === 'capture'" />
-        <ThreeWindow v-else-if="activeView === 'mocap'" />
+        <div v-else-if="activeView === 'mocap'" class="mocap-stage">
+          <div class="mocap-toolbar-shell">
+            <Toolbar
+              :resolution="selectedResolution"
+              :fps="selectedFps"
+              @update:resolution="updateResolution"
+              @update:fps="updateFps"
+            />
+          </div>
+          <ThreeWindow />
+        </div>
         <AnalysisWindow v-else-if="activeView === 'analysis'" />
       </main>
  
@@ -104,6 +128,44 @@ function setView(view: 'capture' | 'mocap' | 'analysis') {
   inset: var(--app-topbar-height, 63px) 0 0 var(--app-session-sidenav-width, 240px);
   overflow: hidden;
   background: var(--bg);
+}
+
+.mocap-stage {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.mocap-stage :deep(.scene) {
+  position: absolute;
+  inset: 0;
+}
+
+.mocap-toolbar-shell {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  z-index: 20;
+  display: flex;
+  justify-content: flex-start;
+  pointer-events: none;
+}
+
+.mocap-toolbar-shell > * {
+  pointer-events: auto;
+}
+
+@media (max-width: 768px) {
+  .workspace-content {
+    inset: var(--app-topbar-height, 63px) 0 0 0;
+  }
+
+  .mocap-toolbar-shell {
+    top: 12px;
+    left: 12px;
+    right: 12px;
+  }
 }
   
 </style>

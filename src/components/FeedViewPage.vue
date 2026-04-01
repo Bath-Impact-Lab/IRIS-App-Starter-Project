@@ -1,14 +1,9 @@
 <template>
   <div class="feed-view-page">
     <div class="feed-toolbar-wrapper">
-      <Toolbar
-        :devices="devices"
-        :camera="camera"
+      <Toolbar 
         :resolution="selectedResolution"
-        :fps="selectedFps"
-        @update:camera="emit('update:camera', $event)"
-        @update:resolution="updateResolution"
-        @update:fps="updateFps"
+        :fps="selectedFps" 
       />
     </div>
 
@@ -66,17 +61,7 @@ watch(() => props.resolution, (value) => {
 watch(() => props.fps, (value) => {
   selectedFps.value = value;
 });
-
-function updateResolution(value: string) {
-  selectedResolution.value = value;
-  emit('update:resolution', value);
-}
-
-function updateFps(value: number) {
-  selectedFps.value = value;
-  emit('update:fps', value);
-}
-
+ 
 // Default to 4 skeleton placeholders if no physical cameras are passed in yet
 const displayCount = computed(() => {
   return props.selectedCameras.length > 0 ? props.selectedCameras.length : 4;

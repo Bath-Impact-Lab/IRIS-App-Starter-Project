@@ -15,24 +15,13 @@ contextBridge.exposeInMainWorld('ipc', {
     ipcRenderer.on('iris-cli-output', (event, data) => {
       callback(data)
     })
-  },
-  startMonitor: (outputDir) => ipcRenderer.invoke('start-monitor', outputDir),
-  stopMonitor: () => ipcRenderer.invoke('stop-monitor'),
+  }, 
   checkIrisCli: () => ipcRenderer.invoke('check-iris-cli'),
-  fsGetDefaultRecordingsDir: () => ipcRenderer.invoke('fs-get-default-recordings-dir'),
-  fsPickRecordingsDir: () => ipcRenderer.invoke('fs-pick-recordings-dir'),
-  fsListRecordings: (rootDir) => ipcRenderer.invoke('fs-list-recordings', rootDir),
-  fsOpenRecording: (folderPath) => ipcRenderer.invoke('fs-open-recording', folderPath),
-  fsRenameRecording: (oldPath, newName) => ipcRenderer.invoke('fs-rename-recording', oldPath, newName),
-  fsGetRecordingData: (recordingPath) => ipcRenderer.invoke('fs-get-recording-data', recordingPath),
-  fsGetVideoUrl: (filePath) => ipcRenderer.invoke('fs-get-video-url', filePath),
+   
   projectCreate: (projectData) => ipcRenderer.invoke('project-create', projectData),
   projectOpen: (filePath) => ipcRenderer.invoke('project-open', filePath),
   projectSave: (filePath, projectData) => ipcRenderer.invoke('project-save', filePath, projectData),
-
-  connectVR: () => ipcRenderer.invoke('connect-VR'),
-  updatePos: (val) => ipcRenderer.invoke('update-pos', val),
-  disconnectVR: () => ipcRenderer.invoke('disconnect-VR'),
+ 
 })
 
 contextBridge.exposeInMainWorld('electronAPI', {

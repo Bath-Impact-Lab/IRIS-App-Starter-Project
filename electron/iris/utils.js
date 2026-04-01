@@ -24,20 +24,10 @@ function writeTempConfigFile(configObj) {
   fs.writeFileSync(cfgPath, JSON.stringify(configObj, null, 2), { encoding: 'utf8' });
   return { tmpDir, cfgPath };
 }
-
-function sendMockData(targetWindow) {
-  try {
-    const positionsPath = path.join(__dirname, '..', '..', 'public', 'assets', 'mock-halpe26-stream.json');
-    const positions = JSON.parse(fs.readFileSync(positionsPath, 'utf8'));
-    sendToWindow(targetWindow, 'iris-data', positions);
-  } catch (err) {
-    console.error('Failed to load mock data:', err);
-  }
-}
+ 
 
 module.exports = {
-  getTargetWindow,
-  sendMockData,
+  getTargetWindow, 
   sendToWindow,
   writeTempConfigFile,
 };

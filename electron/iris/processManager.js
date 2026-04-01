@@ -45,10 +45,9 @@ class ProcessManager {
     return fs.existsSync(this.getExecutablePath());
   }
 
-  async startStandard({ sessionId, options, onMockData, onData }) {
+  async startStandard({ sessionId, options, onData }) {
     if (!this.hasExecutable()) {
-      onMockData();
-      return { ok: false, error: 'Executable not found, using mock data' };
+      return { ok: false, error: 'Executable not found' };
     }
 
     const { tmpDir, cfgPath } = writeTempConfigFile(buildConfigFromOptions(options));
@@ -61,10 +60,9 @@ class ProcessManager {
     });
   }
 
-  async startStream({ sessionId, options, onMockData, onFrame, onCliOutput }) {
+  async startStream({ sessionId, options, onFrame, onCliOutput }) {
     if (!this.hasExecutable()) {
-      onMockData();
-      return { ok: false, error: 'Executable not found, using mock data' };
+      return { ok: false, error: 'Executable not found' };
     }
 
     const { tmpDir, cfgPath } = writeTempConfigFile(buildConfigFromOptions(options));

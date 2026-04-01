@@ -4,8 +4,8 @@ declare module '*.vue' {
   const component: DefineComponent<{}, {}, any>
   export default component
 }
-  
-  interface IrisData {  
+
+interface IrisData {
   people: {
     person_id: number;
     joint_angles: [number, number, number, number][];
@@ -17,12 +17,12 @@ declare module '*.vue' {
 
 interface Window {
   electronAPI?: {
-    openExternal: (url: string) => Promise<{ok: boolean, error?: string}>;
+    openExternal: (url: string) => Promise<{ ok: boolean, error?: string }>;
     minimizeWindow: () => Promise<void>;
-    toggleMaximizeWindow: () => Promise<{isMaximized: boolean}>;
+    toggleMaximizeWindow: () => Promise<{ isMaximized: boolean }>;
     closeWindow: () => Promise<void>;
-    isWindowMaximized: () => Promise<{isMaximized: boolean}>;
-    onWindowStateChange: (callback: (data: {isMaximized: boolean}) => void) => () => void;
+    isWindowMaximized: () => Promise<{ isMaximized: boolean }>;
+    onWindowStateChange: (callback: (data: { isMaximized: boolean }) => void) => () => void;
   }
   ipc?: {
     startIRIS: (options: any) => Promise<any>;
@@ -31,15 +31,12 @@ interface Window {
     getExtrinsics: () => Promise<any>;
     getScene: () => Promise<string | null>;
     onIrisData: (callback: (data: IrisData[] | IrisData) => void) => void;
-    startMonitor: (outputDir: string) => Promise<{ok: boolean, outputDir?: string, error?: string}>;
-    stopMonitor: () => Promise<{ok: boolean}>;
-    checkIrisCli: () => Promise<{found: boolean, path: string}>;
-    onIrisCliOutput: (callback: (data: {channel: string; cameraIndex?: number; line: string}) => void) => void;
-    projectCreate: (projectData: any) => Promise<{ok: boolean; canceled?: boolean; error?: string; path?: string; project?: any}>;
-    projectOpen: (filePath?: string) => Promise<{ok: boolean; canceled?: boolean; error?: string; path?: string; project?: any}>;
-    projectSave: (filePath: string, projectData: any) => Promise<{ok: boolean; error?: string; path?: string; project?: any}>;
-    connectVR: () => void;
-    updatePos: (val: string) => void;
-    disconnectVR: () => void;
+
+    checkIrisCli: () => Promise<{ found: boolean, path: string }>;
+    onIrisCliOutput: (callback: (data: { channel: string; cameraIndex?: number; line: string }) => void) => void;
+    projectCreate: (projectData: any) => Promise<{ ok: boolean; canceled?: boolean; error?: string; path?: string; project?: any }>;
+    projectOpen: (filePath?: string) => Promise<{ ok: boolean; canceled?: boolean; error?: string; path?: string; project?: any }>;
+    projectSave: (filePath: string, projectData: any) => Promise<{ ok: boolean; error?: string; path?: string; project?: any }>;
+
   }
 } 

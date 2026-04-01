@@ -1,6 +1,5 @@
 import { ref, watch, type Ref } from 'vue';
-import * as THREE from 'three';
-import mockExtrinsicsFallback from './../../public/assets/mockExtrinsics.json';
+import * as THREE from 'three'; 
 import { PLYLoader } from 'three/examples/jsm/Addons.js';
 export interface SceneCameraDef {
   name: string;
@@ -288,7 +287,7 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
     // Try loading live extrinsics via IPC; fall back to bundled mock
     try {
       const result = await window.ipc?.getExtrinsics();
-      const extrinsics: Extrinsics = result ?? mockExtrinsicsFallback;
+      const extrinsics: Extrinsics = result;
       if (extrinsics?.cameras?.length) {
         const unit = ('m').replace(/[^a-z]/gi, '').toLowerCase();
         const scale = unit === 'mm' ? 0.001 : unit === 'cm' ? 0.01 : 4.5; // 4.5 instead of 1 for unscaled data
@@ -298,12 +297,7 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
         console.log(`[cameras] loaded ${defs.length} cameras from extrinsics (mock=${isMockExtrinsics}, unit=${unit}, scale=${scale})`);
       }
     } catch (err) {
-      console.warn('[cameras] failed to load extrinsics, falling back to mock', err);
-      // Hard fallback — use bundled mock directly
-      isMockExtrinsics = true;
-      defs = mockExtrinsicsFallback.cameras
-        .filter((c: any) => c.success !== false)
-        .map((c: any, i: number) => extrinsicsToDef(c, i, 1));
+      console.warn('[cameras] failed to load extrinsics, falling back to mock', err); 
     }
 
     function loadScenePoints(path: string) {

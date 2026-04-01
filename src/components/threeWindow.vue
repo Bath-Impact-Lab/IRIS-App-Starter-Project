@@ -10,13 +10,7 @@ import { FBXLoader } from 'three/examples/jsm/Addons.js';
 import { useIris } from '@/lib/useIris';
 import { useSceneCameras } from '@/lib/useSceneCameras';
 import { usePlaySpace } from '@/lib/usePlaySpace';
-
-//defining emits for future
-const emit = defineEmits<{
-  giveSphereMesh: [THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null]
-  giveSkeletonMesh: [THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null]
-}>()
-
+ 
 const showPlaySpace = ref(true);
 const showCameras = ref(true);
 
@@ -103,11 +97,8 @@ let bindPelvisWorldOffset: THREE.Vector3 | null = null;
 let spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null = null;
 let skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null  = null;
 const position = new THREE.Object3D()
-
-let avatarRoot: THREE.Object3D | null = null;
-
-const manager = new THREE.LoadingManager();
-let mixer: THREE.AnimationMixer[] | null;
+ 
+const manager = new THREE.LoadingManager(); 
 
 const halpe26_pairs = [
   [0, 1], [0, 2], [1, 3], [2, 4],
@@ -459,8 +450,7 @@ function renderIRISdata(poseInfo: IrisData) {
         // Left Leg (Hip -> Knee, Knee -> Ankle)
         alignBoneFromBindPose('hip_l', person.joint_centers[12], person.joint_centers[14]);
         alignBoneFromBindPose('knee_l', person.joint_centers[14], person.joint_centers[16]);
-
-        skeletonHelper?.update();
+ 
       }
     })
   }
