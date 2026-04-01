@@ -35,6 +35,9 @@ interface Window {
     stopMonitor: () => Promise<{ok: boolean}>;
     checkIrisCli: () => Promise<{found: boolean, path: string}>;
     onIrisCliOutput: (callback: (data: {channel: string; cameraIndex?: number; line: string}) => void) => void;
+    projectCreate: (projectData: any) => Promise<{ok: boolean; canceled?: boolean; error?: string; path?: string; project?: any}>;
+    projectOpen: (filePath?: string) => Promise<{ok: boolean; canceled?: boolean; error?: string; path?: string; project?: any}>;
+    projectSave: (filePath: string, projectData: any) => Promise<{ok: boolean; error?: string; path?: string; project?: any}>;
     connectVR: () => void;
     updatePos: (val: string) => void;
     disconnectVR: () => void;

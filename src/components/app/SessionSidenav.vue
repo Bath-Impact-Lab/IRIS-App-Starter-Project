@@ -31,15 +31,15 @@
         </div>
       </div>
 
-      <div class="session-sidenav-section">
-        <h2 class="session-sidenav-title">Participant 1</h2>
-        <div class="session-sidenav-list">
+      <div v-for="participant in participants" :key="participant.id" class="session-sidenav-section">
+        <h2 class="session-sidenav-title">{{ participant.name }}</h2>
+        <div v-if="participant.sessions.length > 0" class="session-sidenav-list">
 
-          <div v-for="(session, index) in participantSessions" :key="session.id" class="session-group">
+          <div v-for="session in participant.sessions" :key="session.id" class="session-group">
 
             <button
               class="session-sidenav-link date-toggle"
-              @click="toggleSession(index)"
+              @click="toggleSession(session.id)"
               type="button"
             >
               <div class="link-left">
@@ -48,16 +48,16 @@
               </div>
               <svg
                 xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                class="chevron small-chevron" :class="{ 'open': session.isOpen }"
+                class="chevron small-chevron" :class="{ 'open': openSessionIds.includes(session.id) }"
               >
                 <polyline points="6 9 12 15 18 9"></polyline>
               </svg>
             </button>
 
-            <div v-show="session.isOpen" class="nested-list">
+            <div v-show="openSessionIds.includes(session.id)" class="nested-list">
               <button
                 v-for="(exercise, eIndex) in session.exercises"
-                :key="`ex-${index}-${eIndex}`"
+                :key="`ex-${session.id}-${eIndex}`"
                 class="session-sidenav-link nested-link"
                 type="button"
               >
@@ -68,6 +68,9 @@
 
           </div>
 
+        </div>
+        <div v-else class="session-sidenav-empty-state">
+          No sessions yet.
         </div>
       </div>
     </div>
@@ -117,13 +120,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref, watch } from 'vue';
+import type { ProjectParticipant } from '@/lib/useProject';
 
 interface Props {
   activeView: 'capture' | 'analysis' | 'mocap';
+  participants?: ProjectParticipant[];
 }
 
-defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  participants: () => [],
+});
 
 const emit = defineEmits<{
   'open-capture': [];
@@ -134,28 +141,21 @@ const emit = defineEmits<{
 // State for the main cameras dropdown
 const isCamerasOpen = ref(true);
 const cameras = ['Camera 1', 'Camera 2', 'Camera 3', 'Camera 4'];
+const openSessionIds = ref<string[]>([]);
+const participants = computed(() => props.participants);
 
-// Helper to generate random exercises
-const availableExercises = ['Squat', 'Bench Press', 'Deadlift', 'Overhead Press', 'Barbell Row', 'Lunge', 'Plank'];
-const getRandomExercises = () => {
-  // Pick between 2 to 4 random exercises
-  const count = Math.floor(Math.random() * 3) + 2;
-  const shuffled = [...availableExercises].sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, count);
-};
+watch(participants, () => {
+  openSessionIds.value = [];
+}, { deep: true });
 
-// State for Participant Sessions with nested randomized exercises
-const participantSessions = ref([
-  { id: 1, date: '16/4/2026', isOpen: false, exercises: getRandomExercises() },
-  { id: 2, date: '14/4/2026', isOpen: false, exercises: getRandomExercises() },
-  { id: 3, date: '12/4/2026', isOpen: false, exercises: getRandomExercises() },
-  { id: 4, date: '10/4/2026', isOpen: false, exercises: getRandomExercises() },
-]);
+function toggleSession(sessionId: string) {
+  if (openSessionIds.value.includes(sessionId)) {
+    openSessionIds.value = openSessionIds.value.filter((id) => id !== sessionId);
+    return;
+  }
 
-// Toggle function for individual date dropdowns
-const toggleSession = (index: number) => {
-  participantSessions.value[index].isOpen = !participantSessions.value[index].isOpen;
-};
+  openSessionIds.value = [...openSessionIds.value, sessionId];
+}
 </script>
 
 <style scoped>
@@ -217,6 +217,19 @@ const toggleSession = (index: number) => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.session-sidenav-empty-state {
+  margin: 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+[data-theme="light"] .session-sidenav-empty-state {
+  background: rgba(31, 78, 121, 0.04);
 }
 
 /* Dropdown Toggle Styles */

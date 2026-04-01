@@ -26,6 +26,9 @@ contextBridge.exposeInMainWorld('ipc', {
   fsRenameRecording: (oldPath, newName) => ipcRenderer.invoke('fs-rename-recording', oldPath, newName),
   fsGetRecordingData: (recordingPath) => ipcRenderer.invoke('fs-get-recording-data', recordingPath),
   fsGetVideoUrl: (filePath) => ipcRenderer.invoke('fs-get-video-url', filePath),
+  projectCreate: (projectData) => ipcRenderer.invoke('project-create', projectData),
+  projectOpen: (filePath) => ipcRenderer.invoke('project-open', filePath),
+  projectSave: (filePath, projectData) => ipcRenderer.invoke('project-save', filePath, projectData),
 
   connectVR: () => ipcRenderer.invoke('connect-VR'),
   updatePos: (val) => ipcRenderer.invoke('update-pos', val),

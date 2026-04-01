@@ -10,14 +10,16 @@
     <ProjectHome
       v-if="currentScreen === 'home'"
       @quick-demo="openWorkspace"
-      @new-project="openWorkspace"
-      @open-project="openWorkspace"
+      :recent-projects="recentProjects"
+      @new-project="createNewProject"
+      @open-project="handleOpenProject"
       @open-recent="openRecentProject"
     />
 
     <template v-else>
       <SessionSidenav
         :active-view="activeView"
+        :participants="currentProject?.participants ?? []"
         @open-capture="openCaptureView"
         @open-mocap="openMocapView"
         @open-analysis="openAnalysisView"
@@ -139,10 +141,18 @@ import FeedViewPage from './components/FeedViewPage.vue';
 import ProjectHome from './components/ProjectHome.vue';
 import settingsModal from './components/settingsModal.vue';
 import { useIrisStore } from './Stores/irisStore';
+import { useProject, type ProjectDocument } from './lib/useProject';
 
 const appTitle = import.meta.env.VITE_APP_TITLE as string || 'Example App';
 
 const IrisState = useIrisStore()
+const {
+  currentProject,
+  recentProjects,
+  createProject,
+  openProject,
+  updateCurrentProject,
+} = useProject();
 
 // ── Theme ──
 const currentTheme = ref<'dark' | 'light'>('light');
@@ -228,6 +238,7 @@ async function refreshRecordings() {
 // Rename recording modal
 const showRenameModal = ref(false);
 const renameError = ref('');
+const isApplyingProject = ref(false);
 
 function closeRenameModal() {
   showRenameModal.value = false;
@@ -533,6 +544,118 @@ function updatePrimaryCamera(deviceId: string) {
   selectedDeviceId.value = [device.deviceId];
 }
 
+watch(devices, (nextDevices) => {
+  if (!selectedDeviceId.value?.length) return;
+  if (selectedDeviceId.value.every((id) => id.startsWith('fs-playback-'))) return;
+
+  const matchingDevices = nextDevices.filter((device) => selectedDeviceId.value?.includes(device.deviceId));
+  if (matchingDevices.length > 0) {
+    selectedDevices.value = matchingDevices;
+  }
+}, { deep: true });
+
+watch([
+  activeView,
+  currentTheme,
+  selectedResolution,
+  selectedFps,
+  personCount,
+  outputOption,
+  fsRecordingsDir,
+  () => fsSelectedRecording.value?.path ?? null,
+  () => selectedDeviceId.value ? [...selectedDeviceId.value] : [],
+], async () => {
+  if (isApplyingProject.value || !currentProject.value) return;
+
+  await updateCurrentProject({
+    settings: {
+      theme: currentTheme.value,
+      recordingsDir: fsRecordingsDir.value,
+    },
+    workspace: {
+      activeView: activeView.value,
+      selectedCameraIds: selectedDeviceId.value ?? [],
+      selectedRecordingPath: fsSelectedRecording.value?.path ?? null,
+      resolution: selectedResolution.value,
+      fps: selectedFps.value,
+      personCount: personCount.value,
+      outputOption: outputOption.value,
+    },
+  }, { save: true });
+}, { deep: true });
+
+async function applyProject(project: ProjectDocument) {
+  isApplyingProject.value = true;
+
+  currentTheme.value = project.settings.theme;
+  applyTheme(project.settings.theme);
+  currentScreen.value = 'workspace';
+  activeView.value = project.workspace.activeView;
+  selectedResolution.value = project.workspace.resolution;
+  selectedFps.value = project.workspace.fps;
+  personCount.value = project.workspace.personCount;
+  outputOption.value = project.workspace.outputOption;
+  fsRecordingsDir.value = project.settings.recordingsDir;
+
+  if (outputOption.value === 'Filesystem' && !fsRecordingsDir.value) {
+    fsRecordingsDir.value = await window.ipc?.fsGetDefaultRecordingsDir?.() ?? null;
+  }
+
+  selectedDeviceId.value = project.workspace.selectedCameraIds.length > 0
+    ? [...project.workspace.selectedCameraIds]
+    : null;
+  selectedDevices.value = selectedDeviceId.value
+    ? devices.value.filter((device) => selectedDeviceId.value?.includes(device.deviceId))
+    : null;
+
+  if (fsRecordingsDir.value) {
+    await refreshRecordings();
+  }
+
+  if (project.workspace.selectedRecordingPath) {
+    const selectedRecording = fsRecordings.value.find((recording) => recording.path === project.workspace.selectedRecordingPath);
+    fsSelectedRecording.value = selectedRecording ?? {
+      name: project.workspace.selectedRecordingPath.split(/[\\/]/).pop() ?? 'Selected Recording',
+      path: project.workspace.selectedRecordingPath,
+    };
+  } else {
+    fsSelectedRecording.value = null;
+  }
+
+  isApplyingProject.value = false;
+}
+
+function buildProjectSeed(name?: string) {
+  return {
+    name: name || 'Untitled Project',
+    settings: {
+      theme: currentTheme.value,
+      recordingsDir: fsRecordingsDir.value,
+    },
+    workspace: {
+      activeView: 'capture' as const,
+      selectedCameraIds: [],
+      selectedRecordingPath: null,
+      resolution: selectedResolution.value,
+      fps: selectedFps.value,
+      personCount: personCount.value,
+      outputOption: outputOption.value,
+    },
+  };
+}
+
+async function createNewProject() {
+  const project = await createProject(buildProjectSeed());
+  if (!project) return;
+  await applyProject(project);
+}
+
+async function handleOpenProject() {
+  const project = await openProject();
+  if (!project) return;
+  await applyProject(project);
+}
+
 onMounted(() => {
   // Restore saved theme
   const savedTheme = (localStorage.getItem('app-theme') as 'dark' | 'light') || 'light';
@@ -626,8 +749,10 @@ function openWorkspace() {
   activeView.value = 'capture';
 }
 
-function openRecentProject(_path: string) {
-  openWorkspace();
+async function openRecentProject(path: string) {
+  const project = await openProject(path);
+  if (!project) return;
+  await applyProject(project);
 }
 
 function openHome() {

@@ -31,7 +31,7 @@
           </div>
           <div class="card-text">
             <h3>Open Existing</h3>
-            <p>Browse for a saved recording or folder</p>
+            <p>Browse for an existing project file</p>
           </div>
         </button>
       </div>
@@ -42,7 +42,7 @@
         <div v-if="recentProjects.length > 0" class="recent-list">
           <button
             v-for="project in recentProjects"
-            :key="project.id"
+            :key="project.path"
             class="recent-item"
             @click="emit('open-recent', project.path)"
           >
@@ -66,7 +66,16 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed } from 'vue';
+import type { RecentProjectEntry } from '../lib/useProject';
+
+interface Props {
+  recentProjects?: RecentProjectEntry[];
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  recentProjects: () => [],
+});
 
 const emit = defineEmits<{
   'quick-demo': [];
@@ -75,13 +84,30 @@ const emit = defineEmits<{
   'open-recent': [path: string];
 }>();
 
-// Mock data for recent projects - you can replace this with data from IPC / local storage
-const recentProjects = ref([
-  { id: '1', name: 'Gait Analysis - Subject A', date: '2 hours ago', path: 'C:/recordings/gait_A' },
-  { id: '2', name: 'Deadlift Form Correction', date: 'Yesterday', path: 'C:/recordings/deadlift_01' },
-  { id: '3', name: 'Pitching Mechanics Review', date: 'Apr 12, 2026', path: 'C:/recordings/pitching_rev' },
-  { id: '4', name: 'Baseline Flexibility Test', date: 'Apr 08, 2026', path: 'C:/recordings/baseline_flex' },
-]);
+const recentProjects = computed(() =>
+  props.recentProjects.map((project) => ({
+    ...project,
+    date: formatRecentDate(project.lastOpenedAt),
+  }))
+);
+
+function formatRecentDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Recently';
+
+  const diffMs = Date.now() - date.getTime();
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+
+  if (diffHours < 1) return 'Just now';
+  if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+  if (diffHours < 48) return 'Yesterday';
+
+  return date.toLocaleDateString(undefined, {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+  });
+}
 </script>
 
 <style scoped>
