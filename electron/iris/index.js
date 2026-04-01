@@ -1,6 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const fs = require('fs');
 const { ipcMain } = require('electron');
 const { getIrisCliPath } = require('./config');
 const { ProcessManager } = require('./processManager');
@@ -37,32 +38,36 @@ function registerIrisIpc() {
 
   ipcMain.handle('stop-iris', (_event, sessionId) => processManager.stop(sessionId));
 
-  ipcMain.handle('get-hardware-cameras', async (event) => {
-    const irisCliPath = getIrisCliPath(); // Your existing helper
-    
+  ipcMain.handle('get-hardware-cameras', async () => {
+    const irisCliPath = getIrisCliPath();
+
+    if (!fs.existsSync(irisCliPath)) {
+      return { ok: false, error: 'IRIS executable not found.' };
+    }
+
     return new Promise((resolve) => {
-        execFile(irisCliPath, ['show-cameras'], (error, stdout, stderr) => {
-            if (error) {
-                console.error('[iris_cli] show-cameras error:', stderr);
-                resolve({ ok: false, error: stderr || error.message });
-                return;
-            }
-             
-            const cameras = [];
-            const regex = /\[(\d+)\]\s+(.+)/g;
-            let match;
-            
-            while ((match = regex.exec(stdout)) !== null) {
-                cameras.push({
-                    id: parseInt(match[1], 10),
-                    name: match[2].trim()
-                });
-            }
-            
-            resolve({ ok: true, data: cameras });
-        });
+      execFile(irisCliPath, ['show-cameras'], { windowsHide: true }, (error, stdout, stderr) => {
+        if (error) {
+          console.error('[iris_cli] show-cameras error:', stderr || error.message);
+          resolve({ ok: false, error: stderr || error.message });
+          return;
+        }
+
+        const cameras = [];
+        const regex = /\[(\d+)\]\s+(.+)/g;
+        let match;
+
+        while ((match = regex.exec(stdout)) !== null) {
+          cameras.push({
+            id: parseInt(match[1], 10),
+            name: match[2].trim(),
+          });
+        }
+
+        resolve({ ok: true, data: cameras });
+      });
     });
-});
+  });
 }
 
 module.exports = {

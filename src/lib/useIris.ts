@@ -1,5 +1,4 @@
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { useIrisStore } from '@/Stores/irisStore';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'; 
 
 export interface IrisCameraExtrinsics {
   R: number[];
@@ -60,6 +59,11 @@ export interface IrisStartOptions {
   stream?: boolean;
 }
 
+export interface IrisHardwareCamera {
+  id: number;
+  name: string;
+}
+
 const cameras = ref<IrisCamera[]>([]);
 const isLoading = ref(false);
 const error = ref<string | null>(null);
@@ -70,6 +74,7 @@ const stopError = ref<string | null>(null);
 const runtimeFound = ref<boolean | null>(null);
 const runtimePath = ref<string | null>(null);
 const activeSessionIds = ref<string[]>([]);
+const isRunning = ref(false);
 const lastFrame = ref<IrisData[] | IrisData | null>(null);
 const cliOutput = ref<IrisCliOutput[]>([]);
 
@@ -77,6 +82,13 @@ let ipcListenersRegistered = false;
 
 function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value);
+}
+
+function isHardwareCameraEntry(value: unknown): value is IrisHardwareCamera {
+  if (!value || typeof value !== 'object') return false;
+
+  const camera = value as Partial<IrisHardwareCamera>;
+  return isFiniteNumber(camera.id) && typeof camera.name === 'string';
 }
 
 function normalizeExtrinsics(value: unknown): IrisCameraExtrinsics | null {
@@ -118,6 +130,28 @@ export function extractIrisCameras(result: unknown): IrisCamera[] {
     .sort((left, right) => left.id - right.id);
 }
 
+function extractHardwareIrisCameras(result: unknown): IrisCamera[] {
+  if (!result || typeof result !== 'object') return [];
+
+  const response = result as {
+    ok?: boolean;
+    data?: IrisHardwareCamera[];
+  };
+
+  if (response.ok !== true || !Array.isArray(response.data)) return [];
+
+  return response.data
+    .filter(isHardwareCameraEntry)
+    .map((camera) => ({
+      id: camera.id,
+      name: camera.name.trim() || `Camera ${camera.id}`,
+      success: true,
+      reprojectionError: null,
+      extrinsics: null,
+    }))
+    .sort((left, right) => left.id - right.id);
+}
+
 function trimCliOutput(nextLine: IrisCliOutput) {
   const nextOutput = [...cliOutput.value, nextLine];
   cliOutput.value = nextOutput.slice(-200);
@@ -145,14 +179,15 @@ function ensureIpcListeners() {
 
 export function useIris(options: UseIrisOptions = {}) {
   const { autoFetch = true, pollInterval = 0, autoCheck = true } = options;
-  const irisStore = useIrisStore();
-  const isRunning = computed(() => irisStore.running);
+  const isRunning = ref(false);
 
   let pollTimer: ReturnType<typeof setInterval> | null = null;
 
   async function refreshCameras() {
+    const getHardwareCameras = window.ipc?.getHardwareCameras;
     const getExtrinsics = window.ipc?.getExtrinsics;
-    if (!getExtrinsics) {
+
+    if (!getHardwareCameras && !getExtrinsics) {
       cameras.value = [];
       error.value = null;
       return cameras.value;
@@ -162,12 +197,27 @@ export function useIris(options: UseIrisOptions = {}) {
     error.value = null;
 
     try {
-      const result = await getExtrinsics();
-      cameras.value = extractIrisCameras(result);
+      if (getHardwareCameras) {
+        const hardwareResult = await getHardwareCameras();
+        const hardwareCameras = extractHardwareIrisCameras(hardwareResult);
+
+        if (hardwareCameras.length > 0 || hardwareResult?.ok === true) {
+          cameras.value = hardwareCameras;
+          return cameras.value;
+        }
+      }
+
+      if (!getExtrinsics) {
+        cameras.value = [];
+        return cameras.value;
+      }
+
+      const extrinsicsResult = await getExtrinsics();
+      cameras.value = extractIrisCameras(extrinsicsResult);
       return cameras.value;
     } catch (err) {
       cameras.value = [];
-      error.value = err instanceof Error ? err.message : 'Failed to fetch camera data from IRIS.';
+      error.value = err instanceof Error ? err.message : 'Failed to fetch hardware camera data from IRIS.';
       console.warn('[useIris]', error.value, err);
       return cameras.value;
     } finally {
@@ -224,7 +274,7 @@ export function useIris(options: UseIrisOptions = {}) {
 
       if (!startResult?.ok && !mocked) {
         startError.value = startResult?.error ?? 'Failed to start IRIS.';
-        irisStore.setRunningState(false);
+        isRunning.value = false;
         return { ok: false, error: startError.value };
       }
 
@@ -240,7 +290,7 @@ export function useIris(options: UseIrisOptions = {}) {
           startError.value = streamResult?.error ?? 'Failed to start IRIS streaming.';
           await Promise.all(sessionIds.map((sessionId) => window.ipc!.stopIRIS(sessionId)));
           activeSessionIds.value = [];
-          irisStore.setRunningState(false);
+          isRunning.value = false;
           return { ok: false, error: startError.value };
         }
 
@@ -250,13 +300,13 @@ export function useIris(options: UseIrisOptions = {}) {
       }
 
       activeSessionIds.value = sessionIds;
-      irisStore.setRunningState(true);
+      isRunning.value = true;
       await Promise.all([refreshCameras(), checkRuntime()]);
       return { ok: true, mocked, sessionIds: [...sessionIds] };
     } catch (err) {
       await Promise.all(sessionIds.map((sessionId) => window.ipc!.stopIRIS(sessionId)));
       activeSessionIds.value = [];
-      irisStore.setRunningState(false);
+      isRunning.value = false;
       startError.value = err instanceof Error ? err.message : 'Failed to start IRIS.';
       console.warn('[useIris] Failed to start IRIS.', err);
       return { ok: false, error: startError.value };
@@ -283,7 +333,7 @@ export function useIris(options: UseIrisOptions = {}) {
       }
 
       activeSessionIds.value = [];
-      irisStore.setRunningState(false);
+      isRunning.value = false;
       lastFrame.value = null;
       await refreshCameras();
       return { ok: true, sessionIds };
