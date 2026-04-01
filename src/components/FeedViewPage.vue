@@ -11,17 +11,12 @@
           </div>
 
           <div class="video-area" :class="{ 'video-area-empty': !camera.isActive }">
-            <video
-              :ref="(element) => setVideoElement(camera.streamSlot, element as HTMLVideoElement | null)"
-              class="live-stream-video"
-              :class="{ 'live-stream-video-hidden': !camera.isActive }"
-              autoplay
-              muted
-              playsinline
-            ></video>
+            <canvas :ref="(element) => setCanvasElement(camera.streamSlot, element as HTMLCanvasElement | null)"
+              class="live-stream-canvas" :class="{ 'live-stream-canvas-hidden': !camera.isActive }"></canvas>
 
             <div v-if="!camera.isActive" class="empty-video-state">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="empty-video-icon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+                stroke-linecap="round" stroke-linejoin="round" class="empty-video-icon">
                 <rect x="2" y="4" width="15" height="16" rx="2"></rect>
                 <path d="M17 10l5-3v10l-5-3z"></path>
               </svg>
@@ -38,7 +33,8 @@
             <div class="skeleton-actions"></div>
           </div>
           <div class="skeleton-video-area">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="skeleton-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"
+              stroke-linecap="round" stroke-linejoin="round" class="skeleton-icon">
               <rect x="2" y="2" width="20" height="20" rx="2.5" ry="2.5"></rect>
               <line x1="2" y1="12" x2="22" y2="12"></line>
               <line x1="12" y1="2" x2="12" y2="22"></line>
@@ -52,6 +48,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
+
 
 interface FeedCamera {
   id: number | string;
@@ -75,27 +72,32 @@ interface StreamController {
   routeIds: number[];
   routeIndex: number;
   socket: WebSocket | null;
-  mediaSource: MediaSource | null;
-  sourceBuffer: SourceBuffer | null;
-  queue: Uint8Array[];
-  queuedBytes: number;
-  objectUrl: string | null;
-  videoElement: HTMLVideoElement | null;
-  receivedData: boolean;
+  canvasElement: HTMLCanvasElement | null;
+  canvasContext: CanvasRenderingContext2D | null;
+  decoder: VideoDecoder | null;
+  decoderCodec: string | null;
+  naluBuffer: Uint8Array;
+  pendingChunks: Uint8Array[];
+  pendingFrame: VideoFrame | null;
+  renderRequestId: number | null;
+  decodeStartTimes: Map<number, number>;
+  droppingFrames: boolean;
+  receivedBytes: boolean;
+  hasDecodedFrame: boolean;
+  hasReceivedKeyframe: boolean;
   fallbackTimer: ReturnType<typeof setTimeout> | null;
-  updateEndHandler: (() => void) | null;
   destroyed: boolean;
 }
 
-const STREAM_MIME_CANDIDATES = [
-  'video/mp2t; codecs="avc1.64001F"',
-  'video/mp2t; codecs="avc1.4D401F"',
-  'video/mp2t; codecs="avc1.42E01E"',
-  'video/mp2t; codecs="avc1"',
-  'video/mp2t',
+const DEFAULT_CODEC_STRING = 'avc1.64001F'; // High Profile
+const FALLBACK_CODEC_CANDIDATES = [
+  DEFAULT_CODEC_STRING,
+  'avc1.4D401F', // Main Profile
+  'avc1.42E01F', // Baseline Profile
+  'avc1.42E01E',
 ];
 const FIRST_PACKET_TIMEOUT_MS = 2500;
-const MAX_QUEUED_BYTES = 8 * 1024 * 1024;
+const webCodecsSupported = typeof VideoDecoder !== 'undefined' && typeof EncodedVideoChunk !== 'undefined';
 
 const props = withDefaults(defineProps<Props>(), {
   cameras: () => [],
@@ -104,8 +106,12 @@ const props = withDefaults(defineProps<Props>(), {
 
 const streamStates = ref<Record<string, StreamState>>({});
 const controllers = new Map<number, StreamController>();
-const videoElements = new Map<number, HTMLVideoElement>();
-const supportedMimeType = resolveSupportedMimeType();
+const canvasElements = new Map<number, HTMLCanvasElement>();
+const streamConfigKey = computed(() => {
+  const wsPart = typeof props.wsUrl === 'string' ? props.wsUrl : '';
+  const cameraPart = props.cameras.map((camera) => `${camera.id}:${camera.name}`).join('|');
+  return `${wsPart}::${cameraPart}`;
+});
 
 const displayCameras = computed(() => {
   return props.cameras.map((camera, index) => {
@@ -127,19 +133,14 @@ const skeletonCount = computed(() => {
 });
 
 watch(
-  () => ({
-    wsUrl: props.wsUrl,
-    cameras: props.cameras.map((camera) => `${camera.id}:${camera.name}`).join('|'),
-  }),
-  ({ wsUrl }) => {
+  streamConfigKey,
+  () => {
+    const wsUrl = typeof props.wsUrl === 'string' ? props.wsUrl : '';
+
     disconnectAllStreams();
     resetStreamStates();
 
-    if (typeof wsUrl !== 'string' || wsUrl.length === 0) {
-      return;
-    }
-
-    if (!supportedMimeType) {
+    if (wsUrl.length === 0 || !webCodecsSupported) {
       return;
     }
 
@@ -152,14 +153,6 @@ watch(
   { immediate: true },
 );
 
-function resolveSupportedMimeType() {
-  if (typeof MediaSource === 'undefined' || typeof MediaSource.isTypeSupported !== 'function') {
-    return null;
-  }
-
-  return STREAM_MIME_CANDIDATES.find((candidate) => MediaSource.isTypeSupported(candidate)) ?? null;
-}
-
 function defaultStreamState(statusText: string): StreamState {
   return {
     active: false,
@@ -170,8 +163,8 @@ function defaultStreamState(statusText: string): StreamState {
 }
 
 function getIdleStatus() {
-  if (!supportedMimeType) {
-    return 'MPEG-TS playback is not supported in this renderer.';
+  if (!webCodecsSupported) {
+    return 'WebCodecs H.264 playback is not supported in this browser.';
   }
 
   if (typeof props.wsUrl !== 'string' || props.wsUrl.length === 0) {
@@ -203,11 +196,9 @@ function toNumericId(value: number | string) {
   if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
     return value;
   }
-
   if (typeof value === 'string' && /^\d+$/.test(value)) {
     return Number.parseInt(value, 10);
   }
-
   return null;
 }
 
@@ -231,117 +222,67 @@ function buildCameraStreamUrl(baseUrl: string, routeId: number) {
 }
 
 function createStreamController(slot: number, camera: FeedCamera): StreamController {
-  const controller: StreamController = {
+  const canvasElement = canvasElements.get(slot) ?? null;
+  return {
     slot,
     routeIds: buildRouteIds(camera, slot),
     routeIndex: 0,
     socket: null,
-    mediaSource: null,
-    sourceBuffer: null,
-    queue: [],
-    queuedBytes: 0,
-    objectUrl: null,
-    videoElement: videoElements.get(slot) ?? null,
-    receivedData: false,
+    canvasElement,
+    canvasContext: getCanvasContext(canvasElement),
+    decoder: null,
+    decoderCodec: null,
+    naluBuffer: new Uint8Array(0),
+    pendingChunks: [],
+    pendingFrame: null,
+    renderRequestId: null,
+    decodeStartTimes: new Map(),
+    droppingFrames: false,
+    receivedBytes: false,
+    hasDecodedFrame: false,
+    hasReceivedKeyframe: false,
     fallbackTimer: null,
-    updateEndHandler: null,
     destroyed: false,
   };
-
-  attachMediaSource(controller);
-  return controller;
 }
 
-function attachMediaSource(controller: StreamController) {
-  if (!supportedMimeType) {
-    updateStreamState(controller.slot, {
-      error: 'MPEG-TS playback is not supported in this renderer.',
-      statusText: 'MPEG-TS playback is not supported in this renderer.',
-    });
-    return;
+function getCanvasContext(element: HTMLCanvasElement | null) {
+  if (!element) return null;
+  const context = element.getContext('2d', {
+    alpha: false,
+    desynchronized: true,
+  });
+
+  if (context) {
+    context.imageSmoothingEnabled = false;
   }
 
-  const mediaSource = new MediaSource();
-  controller.mediaSource = mediaSource;
-  controller.objectUrl = URL.createObjectURL(mediaSource);
-
-  mediaSource.addEventListener(
-    'sourceopen',
-    () => {
-      if (controller.destroyed || !controller.mediaSource || controller.mediaSource.readyState !== 'open' || controller.sourceBuffer) {
-        return;
-      }
-
-      try {
-        const sourceBuffer = controller.mediaSource.addSourceBuffer(supportedMimeType);
-        sourceBuffer.mode = 'segments';
-        controller.sourceBuffer = sourceBuffer;
-        controller.updateEndHandler = () => {
-          appendNextChunk(controller);
-        };
-        sourceBuffer.addEventListener('updateend', controller.updateEndHandler);
-        sourceBuffer.addEventListener('error', () => {
-          if (controller.destroyed) {
-            return;
-          }
-          updateStreamState(controller.slot, {
-            connected: false,
-            error: 'Video decoder error',
-            statusText: 'Video decoder error',
-          });
-        });
-        appendNextChunk(controller);
-      } catch (err) {
-        updateStreamState(controller.slot, {
-          connected: false,
-          error: 'Unable to initialize MPEG-TS playback',
-          statusText: 'Unable to initialize MPEG-TS playback',
-        });
-        console.warn('[FeedViewPage] Failed to initialize MediaSource.', err);
-      }
-    },
-    { once: true },
-  );
-
-  if (controller.videoElement) {
-    controller.videoElement.src = controller.objectUrl;
-    void controller.videoElement.play().catch(() => {
-      // Autoplay will be retried when data arrives.
-    });
-  }
+  return context;
 }
 
-function setVideoElement(slot: number, element: HTMLVideoElement | null) {
+function setCanvasElement(slot: number, element: HTMLCanvasElement | null) {
   if (element) {
-    videoElements.set(slot, element);
+    canvasElements.set(slot, element);
   } else {
-    videoElements.delete(slot);
+    canvasElements.delete(slot);
   }
 
   const controller = controllers.get(slot);
-  if (!controller) {
-    return;
-  }
+  if (!controller) return;
 
-  controller.videoElement = element;
+  controller.canvasElement = element;
+  controller.canvasContext = getCanvasContext(element);
 
-  if (element && controller.objectUrl) {
-    if (element.src !== controller.objectUrl) {
-      element.src = controller.objectUrl;
-    }
-    void element.play().catch(() => {
-      // Autoplay will be retried when data arrives.
-    });
+  if (controller.pendingFrame && controller.canvasContext) {
+    scheduleFrameRender(controller);
   }
 }
 
 function clearFallbackTimer(controller: StreamController) {
-  if (!controller.fallbackTimer) {
-    return;
+  if (controller.fallbackTimer) {
+    clearTimeout(controller.fallbackTimer);
+    controller.fallbackTimer = null;
   }
-
-  clearTimeout(controller.fallbackTimer);
-  controller.fallbackTimer = null;
 }
 
 function scheduleFallback(controller: StreamController) {
@@ -352,7 +293,7 @@ function scheduleFallback(controller: StreamController) {
   }
 
   controller.fallbackTimer = setTimeout(() => {
-    if (controller.destroyed || controller.receivedData || controller.routeIndex >= controller.routeIds.length - 1) {
+    if (controller.destroyed || controller.receivedBytes || controller.routeIndex >= controller.routeIds.length - 1) {
       return;
     }
 
@@ -368,65 +309,284 @@ function scheduleFallback(controller: StreamController) {
   }, FIRST_PACKET_TIMEOUT_MS);
 }
 
-function trimQueuedChunks(controller: StreamController) {
-  while (controller.queuedBytes > MAX_QUEUED_BYTES && controller.queue.length > 1) {
-    const dropped = controller.queue.shift();
-    if (!dropped) {
-      break;
+function closeDecoder(controller: StreamController) {
+  if (!controller.decoder) return;
+  try {
+    controller.decoder.close();
+  } catch { }
+  controller.decoder = null;
+  controller.decoderCodec = null;
+}
+
+function disposePendingFrame(controller: StreamController) {
+  const { pendingFrame } = controller;
+  if (!pendingFrame) {
+    return;
+  }
+
+  controller.decodeStartTimes.delete(pendingFrame.timestamp);
+
+  try {
+    pendingFrame.close();
+  } catch {
+    // Ignore teardown errors from already-closed frames.
+  }
+
+  controller.pendingFrame = null;
+}
+
+function cancelScheduledRender(controller: StreamController) {
+  if (controller.renderRequestId === null) {
+    return;
+  }
+
+  cancelAnimationFrame(controller.renderRequestId);
+  controller.renderRequestId = null;
+}
+
+function scheduleFrameRender(controller: StreamController) {
+  if (controller.destroyed || controller.renderRequestId !== null || !controller.pendingFrame) {
+    return;
+  }
+
+  controller.renderRequestId = requestAnimationFrame(() => {
+    controller.renderRequestId = null;
+    renderPendingFrame(controller);
+
+    if (controller.pendingFrame) {
+      scheduleFrameRender(controller);
     }
-    controller.queuedBytes -= dropped.byteLength;
+  });
+}
+
+function renderPendingFrame(controller: StreamController) {
+  if (controller.destroyed) {
+    disposePendingFrame(controller);
+    return;
+  }
+
+  const context = controller.canvasContext ?? getCanvasContext(controller.canvasElement);
+  if (!context) {
+    return;
+  }
+
+  controller.canvasContext = context;
+
+  const frame = controller.pendingFrame;
+  if (!frame) {
+    return;
+  }
+
+  const targetWidth = frame.displayWidth || frame.codedWidth;
+  const targetHeight = frame.displayHeight || frame.codedHeight;
+
+  if (targetWidth <= 0 || targetHeight <= 0) {
+    disposePendingFrame(controller);
+    return;
+  }
+
+  controller.pendingFrame = null;
+
+  try {
+    if (context.canvas.width !== targetWidth || context.canvas.height !== targetHeight) {
+      context.canvas.width = targetWidth;
+      context.canvas.height = targetHeight;
+    }
+
+    context.drawImage(frame as unknown as CanvasImageSource, 0, 0, targetWidth, targetHeight);
+
+    controller.hasDecodedFrame = true;
+    controller.decodeStartTimes.delete(frame.timestamp);
+    updateStreamState(controller.slot, {
+      active: true,
+      connected: true,
+      error: null,
+      statusText: 'Live feed',
+    });
+  } finally {
+    try {
+      frame.close();
+    } catch {
+      // Ignore present errors from already-closed frames.
+    }
   }
 }
 
-function appendNextChunk(controller: StreamController) {
-  if (!controller.sourceBuffer || controller.sourceBuffer.updating || controller.queue.length === 0) {
-    return;
-  }
+function initWebCodecs(controller: StreamController) {
+  if (controller.decoder && controller.decoder.state === 'configured') return;
 
-  const nextChunk = controller.queue.shift();
-  if (!nextChunk) {
-    return;
-  }
+  closeDecoder(controller);
 
-  controller.queuedBytes -= nextChunk.byteLength;
-
-  try {
-    controller.sourceBuffer.appendBuffer(nextChunk);
-    if (controller.videoElement) {
-      void controller.videoElement.play().catch(() => {
-        // Playback will resume on the next successful append.
+  for (const candidate of FALLBACK_CODEC_CANDIDATES) {
+    try {
+      const decoder = new VideoDecoder({
+        output(frame) {
+          handleDecodedFrame(controller, frame);
+        },
+        error(error) {
+          if (controller.destroyed) return;
+          console.warn(`[Camera ${controller.slot}] Decoder error for ${candidate}:`, error);
+          updateStreamState(controller.slot, {
+            active: controller.hasDecodedFrame,
+            connected: false,
+            error: 'Video decoder error',
+            statusText: 'Video decoder error',
+          });
+        },
       });
+
+      VideoDecoder.isConfigSupported({
+        codec: candidate,
+        hardwareAcceleration: 'prefer-hardware', // Demand the GPU
+      }).then((support) => {
+        if (!support.supported) {
+          console.warn(`[Camera ${controller.slot}] Warning: Hardware decoding not supported for ${candidate}. Falling back to software (this will lag!).`);
+        } else {
+          console.log(`[Camera ${controller.slot}] Hardware decoding supported for ${candidate}!`);
+        }
+      });
+
+      decoder.configure({
+        codec: candidate,
+        optimizeForLatency: true,
+        hardwareAcceleration: 'prefer-hardware', // Add this flag!
+      });
+
+      controller.decoder = decoder;
+      controller.decoderCodec = candidate;
+      return; // Successfully configured
+    } catch (error) {
+      console.warn(`[Camera ${controller.slot}] Failed to configure decoder for ${candidate}.`);
     }
-  } catch (err) {
-    updateStreamState(controller.slot, {
-      connected: false,
-      error: 'Failed to append video data',
-      statusText: 'Failed to append video data',
-    });
-    console.warn('[FeedViewPage] Failed to append MPEG-TS chunk.', err);
+  }
+
+  updateStreamState(controller.slot, {
+    active: false,
+    connected: false,
+    error: 'Unable to configure H.264 decoder',
+    statusText: 'Unable to configure H.264 decoder',
+  });
+}
+
+function handleDecodedFrame(controller: StreamController, frame: VideoFrame) {
+  if (controller.destroyed) {
+    try {
+      frame.close();
+    } catch {
+      // Ignore teardown errors from already-closed frames.
+    }
+    return;
+  }
+
+  disposePendingFrame(controller);
+  controller.pendingFrame = frame;
+  scheduleFrameRender(controller);
+}
+
+function findStartCode(buf: Uint8Array, start: number) {
+  for (let i = start; i < buf.length - 2; i++) {
+    if (buf[i] === 0 && buf[i + 1] === 0) {
+      if (buf[i + 2] === 1) return { index: i, length: 3 };
+      if (i < buf.length - 3 && buf[i + 2] === 0 && buf[i + 3] === 1) return { index: i, length: 4 };
+    }
+  }
+  return null;
+}
+
+function processWebSocketData(controller: StreamController, newData: Uint8Array) {
+  initWebCodecs(controller);
+
+  const decoder = controller.decoder;
+  if (!decoder || decoder.state !== 'configured') return;
+
+  const buffer = new Uint8Array(controller.naluBuffer.length + newData.length);
+  buffer.set(controller.naluBuffer);
+  buffer.set(newData, controller.naluBuffer.length);
+
+  let offset = 0;
+  let currentStart = findStartCode(buffer, offset);
+
+  while (currentStart !== null) {
+    const nextStart = findStartCode(buffer, currentStart.index + currentStart.length);
+
+    if (nextStart !== null) {
+      // 1. EXTRACT NAL UNIT *WITH* ITS START CODE
+      const nalUnitWithStartCode = buffer.subarray(currentStart.index, nextStart.index);
+      const nalType = buffer[currentStart.index + currentStart.length] & 0x1F;
+      console.log(`[Camera ${controller.slot}] Received NAL unit of type ${nalType} (buffered: ${decoder.decodeQueueSize})`);
+      if (decoder.decodeQueueSize > 2) {
+        controller.droppingFrames = true;
+      }
+
+      // 2. ACCUMULATE METADATA & IMAGE SLICES TOGETHER
+      controller.pendingChunks.push(nalUnitWithStartCode);
+
+      // Type 1 = P/B-Frame Slice, Type 5 = IDR Keyframe Slice
+      // These mark the END of a complete "Access Unit" (a full frame's worth of data)
+      if (nalType === 1 || nalType === 5) {
+        const isKeyframe = (nalType === 5);
+
+        if (isKeyframe) {
+          controller.hasReceivedKeyframe = true;
+          controller.droppingFrames = false; // Reset frame dropper when keyframe arrives
+        }
+
+        if (controller.hasReceivedKeyframe && !controller.droppingFrames) {
+          // Flatten all accumulated NAL units (SPS, PPS, IDR) into one big chunk
+          const totalLength = controller.pendingChunks.reduce((acc, c) => acc + c.length, 0);
+          const combined = new Uint8Array(totalLength);
+          let combineOffset = 0;
+          for (const c of controller.pendingChunks) {
+            combined.set(c, combineOffset);
+            combineOffset += c.length;
+          }
+
+          const timestamp = Math.round(performance.now() * 1000);
+          const chunk = new EncodedVideoChunk({
+            type: isKeyframe ? 'key' : 'delta',
+            timestamp: timestamp,
+            data: combined
+          });
+
+          controller.decodeStartTimes.set(timestamp, performance.now());
+          try {
+            decoder.decode(chunk);
+          } catch (e) {
+            controller.decodeStartTimes.delete(timestamp);
+            console.warn(`[Camera ${controller.slot}] Decode error:`, e);
+          }
+        }
+
+        // Clear the accumulated data for the next frame
+        controller.pendingChunks = [];
+      }
+
+      currentStart = nextStart;
+    } else {
+      break;
+    }
+  }
+
+  if (currentStart !== null) {
+    controller.naluBuffer = buffer.subarray(currentStart.index);
+  } else {
+    if (buffer.length > 1024 * 1024) {
+      controller.naluBuffer = new Uint8Array(0);
+    } else {
+      controller.naluBuffer = buffer;
+    }
   }
 }
 
 async function toUint8Array(data: Blob | ArrayBuffer | ArrayBufferView | string) {
-  if (data instanceof ArrayBuffer) {
-    return new Uint8Array(data);
-  }
-
-  if (ArrayBuffer.isView(data)) {
-    return new Uint8Array(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
-  }
-
-  if (data instanceof Blob) {
-    return new Uint8Array(await data.arrayBuffer());
-  }
-
+  if (data instanceof ArrayBuffer) return new Uint8Array(data);
+  if (ArrayBuffer.isView(data)) return new Uint8Array(data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength));
+  if (data instanceof Blob) return new Uint8Array(await data.arrayBuffer());
   return null;
 }
 
 function openStreamRoute(controller: StreamController, baseUrl: string) {
-  if (controller.destroyed) {
-    return;
-  }
+  if (controller.destroyed) return;
 
   const routeId = controller.routeIds[controller.routeIndex];
   const streamUrl = buildCameraStreamUrl(baseUrl, routeId);
@@ -436,16 +596,14 @@ function openStreamRoute(controller: StreamController, baseUrl: string) {
   socket.binaryType = 'arraybuffer';
 
   updateStreamState(controller.slot, {
-    active: controller.receivedData,
+    active: controller.hasDecodedFrame,
     connected: false,
     error: null,
     statusText: `Connecting to /camera/${routeId}`,
   });
 
   socket.onopen = () => {
-    if (controller.destroyed || controller.socket !== socket) {
-      return;
-    }
+    if (controller.destroyed || controller.socket !== socket) return;
 
     updateStreamState(controller.slot, {
       connected: true,
@@ -455,46 +613,38 @@ function openStreamRoute(controller: StreamController, baseUrl: string) {
   };
 
   socket.onmessage = async (event) => {
-    if (controller.destroyed || controller.socket !== socket) {
-      return;
-    }
+    if (controller.destroyed || controller.socket !== socket) return;
 
     const chunk = await toUint8Array(event.data);
-    if (!chunk || chunk.byteLength === 0) {
-      return;
-    }
+    if (!chunk || chunk.byteLength === 0) return;
 
-    controller.receivedData = true;
+    controller.receivedBytes = true;
     clearFallbackTimer(controller);
-    controller.queue.push(chunk);
-    controller.queuedBytes += chunk.byteLength;
-    trimQueuedChunks(controller);
-    appendNextChunk(controller);
+
+    // Feed the WebCodecs pipeline
+    processWebSocketData(controller, chunk);
 
     updateStreamState(controller.slot, {
-      active: true,
+      active: controller.hasDecodedFrame,
       connected: true,
       error: null,
-      statusText: `Receiving stream from /camera/${routeId}`,
+      statusText: controller.hasDecodedFrame ? `Receiving H.264 from /camera/${routeId}` : 'Buffering H.264 stream',
     });
   };
 
   socket.onerror = () => {
-    if (controller.destroyed || controller.socket !== socket) {
-      return;
-    }
+    if (controller.destroyed || controller.socket !== socket) return;
 
     updateStreamState(controller.slot, {
+      active: controller.hasDecodedFrame,
       connected: false,
-      error: controller.receivedData ? null : 'Video websocket error',
-      statusText: controller.receivedData ? 'Stream interrupted' : 'Video websocket error',
+      error: controller.receivedBytes ? null : 'Video websocket error',
+      statusText: controller.receivedBytes ? 'Stream interrupted' : 'Video websocket error',
     });
   };
 
   socket.onclose = () => {
-    if (controller.destroyed) {
-      return;
-    }
+    if (controller.destroyed) return;
 
     if (controller.socket === socket) {
       controller.socket = null;
@@ -502,18 +652,18 @@ function openStreamRoute(controller: StreamController, baseUrl: string) {
 
     clearFallbackTimer(controller);
 
-    if (!controller.receivedData && controller.routeIds[controller.routeIndex] !== routeId) {
+    if (!controller.receivedBytes && controller.routeIds[controller.routeIndex] !== routeId) {
       openStreamRoute(controller, baseUrl);
       return;
     }
 
-    if (!controller.receivedData && controller.routeIndex < controller.routeIds.length - 1) {
+    if (!controller.receivedBytes && controller.routeIndex < controller.routeIds.length - 1) {
       controller.routeIndex += 1;
       openStreamRoute(controller, baseUrl);
       return;
     }
 
-    if (!controller.receivedData) {
+    if (!controller.receivedBytes) {
       updateStreamState(controller.slot, {
         connected: false,
         error: 'No video received',
@@ -523,7 +673,7 @@ function openStreamRoute(controller: StreamController, baseUrl: string) {
     }
 
     updateStreamState(controller.slot, {
-      active: true,
+      active: controller.hasDecodedFrame,
       connected: false,
       statusText: 'Stream disconnected',
     });
@@ -533,33 +683,31 @@ function openStreamRoute(controller: StreamController, baseUrl: string) {
 function teardownController(controller: StreamController) {
   controller.destroyed = true;
   clearFallbackTimer(controller);
+  cancelScheduledRender(controller);
 
   if (controller.socket) {
     controller.socket.close();
     controller.socket = null;
   }
 
-  if (controller.sourceBuffer && controller.updateEndHandler) {
-    controller.sourceBuffer.removeEventListener('updateend', controller.updateEndHandler);
+  closeDecoder(controller);
+  disposePendingFrame(controller);
+
+  if (controller.canvasContext && controller.canvasElement) {
+    controller.canvasContext.clearRect(0, 0, controller.canvasElement.width, controller.canvasElement.height);
   }
 
-  if (controller.videoElement) {
-    controller.videoElement.pause();
-    controller.videoElement.removeAttribute('src');
-    controller.videoElement.load();
-  }
-
-  if (controller.objectUrl) {
-    URL.revokeObjectURL(controller.objectUrl);
-    controller.objectUrl = null;
-  }
+  controller.canvasContext = null;
+  controller.canvasElement = null;
+  controller.naluBuffer = new Uint8Array(0);
+  controller.pendingChunks = [];
+  controller.decodeStartTimes.clear();
 }
 
 function disconnectAllStreams() {
   for (const controller of controllers.values()) {
     teardownController(controller);
   }
-
   controllers.clear();
 }
 
@@ -648,15 +796,15 @@ onBeforeUnmount(() => {
   background: rgba(31, 78, 121, 0.05);
 }
 
-.live-stream-video {
+.live-stream-canvas {
   width: 100%;
   height: 100%;
-  object-fit: contain;
   display: block;
   background: #000;
+  object-fit: contain;
 }
 
-.live-stream-video-hidden {
+.live-stream-canvas-hidden {
   opacity: 0;
 }
 
@@ -741,14 +889,31 @@ onBeforeUnmount(() => {
 }
 
 @keyframes pulse {
-  0% { opacity: 0.6; }
-  50% { opacity: 0.3; }
-  100% { opacity: 0.6; }
+  0% {
+    opacity: 0.6;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
+
+  100% {
+    opacity: 0.6;
+  }
 }
 
 @keyframes blink {
-  0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(107, 230, 117, 0.8); }
-  50% { opacity: 0.25; box-shadow: none; }
+
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 6px rgba(107, 230, 117, 0.8);
+  }
+
+  50% {
+    opacity: 0.25;
+    box-shadow: none;
+  }
 }
 
 @media (max-width: 768px) {

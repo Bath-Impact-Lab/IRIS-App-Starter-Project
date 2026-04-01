@@ -114,6 +114,56 @@ function normalizeExtrinsics(value: unknown): IrisCameraExtrinsics | null {
   };
 }
 
+function areNumberArraysEqual(left: number[] | null | undefined, right: number[] | null | undefined) {
+  if (left === right) return true;
+  if (!left || !right || left.length !== right.length) return false;
+
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function areExtrinsicsEqual(left: IrisCameraExtrinsics | null, right: IrisCameraExtrinsics | null) {
+  if (left === right) return true;
+  if (!left || !right) return left === right;
+
+  return areNumberArraysEqual(left.R, right.R) && areNumberArraysEqual(left.t, right.t);
+}
+
+function areIrisCamerasEqual(left: IrisCamera[], right: IrisCamera[]) {
+  if (left === right) return true;
+  if (left.length !== right.length) return false;
+
+  for (let index = 0; index < left.length; index += 1) {
+    const leftCamera = left[index];
+    const rightCamera = right[index];
+
+    if (
+      leftCamera.id !== rightCamera.id
+      || leftCamera.name !== rightCamera.name
+      || leftCamera.success !== rightCamera.success
+      || leftCamera.reprojectionError !== rightCamera.reprojectionError
+      || !areExtrinsicsEqual(leftCamera.extrinsics, rightCamera.extrinsics)
+    ) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function setCameraList(nextCameras: IrisCamera[]) {
+  if (!areIrisCamerasEqual(cameras.value, nextCameras)) {
+    cameras.value = nextCameras;
+  }
+
+  return cameras.value;
+}
+
 export function extractIrisCameras(result: unknown): IrisCamera[] {
   if (!result || typeof result !== 'object') return [];
 
@@ -191,7 +241,7 @@ export function useIris(options: UseIrisOptions = {}) {
     const getExtrinsics = window.ipc?.getExtrinsics;
 
     if (!getHardwareCameras && !getExtrinsics) {
-      cameras.value = [];
+      setCameraList([]);
       error.value = null;
       return cameras.value;
     }
@@ -205,22 +255,22 @@ export function useIris(options: UseIrisOptions = {}) {
         const hardwareCameras = extractHardwareIrisCameras(hardwareResult);
 
         if (hardwareCameras.length > 0 || hardwareResult?.ok === true) {
-          cameras.value = hardwareCameras;
+          setCameraList(hardwareCameras);
           return cameras.value;
         }
       }
 
       if (!getExtrinsics) {
-        cameras.value = [];
+        setCameraList([]);
         return cameras.value;
       }
 
       const projectOutputDir = getParentDirectory(currentProject.value?.path);
       const extrinsicsResult = await getExtrinsics(projectOutputDir || undefined);
-      cameras.value = extractIrisCameras(extrinsicsResult);
+      setCameraList(extractIrisCameras(extrinsicsResult));
       return cameras.value;
     } catch (err) {
-      cameras.value = [];
+      setCameraList([]);
       error.value = err instanceof Error ? err.message : 'Failed to fetch hardware camera data from IRIS.';
       console.warn('[useIris]', error.value, err);
       return cameras.value;

@@ -2,6 +2,20 @@
 const dotenv = require('dotenv');
 
 const { app, BrowserWindow, ipcMain, nativeTheme, shell, dialog } = require('electron');
+
+// 1. Force Hardware Acceleration and bypass Chromium's GPU blocklist
+app.commandLine.appendSwitch('ignore-gpu-blocklist');
+app.commandLine.appendSwitch('enable-gpu-rasterization');
+app.commandLine.appendSwitch('enable-zero-copy');
+
+// 2. Explicitly enable WebCodecs features (just in case)
+app.commandLine.appendSwitch('enable-features', 'WebCodecs,WebCodecsVideoEncoder,WebCodecsVideoDecoder');
+
+// 3. STOP CHROMIUM FROM THROTTLING YOUR STREAM!
+// If your app loses focus for even a second, Chromium will throttle WebSockets to 1Hz, causing massive lag.
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+
 const { registerIrisIpc, getIrisCliPath } = require('./iris'); 
 const path = require('path');
 const fs = require('fs');

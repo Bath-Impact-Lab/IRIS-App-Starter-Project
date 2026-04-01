@@ -11,6 +11,7 @@ const { createPipeServer } = require('./pipeServer');
 const { VideoStreamer } = require('./videoStreamer');
 
 const execFileAsync = promisify(execFile);
+const MONITOR_VIDEO_HINT_RE = /(video pipe|video pipes|mpegts|h264|annex|encoder|encoding|failed to open|failed|error|warn|warning|init|initialized)/i;
 
 function waitForChildExit(child, timeoutMs = 2000) {
   return new Promise((resolve) => {
@@ -32,6 +33,19 @@ function waitForChildExit(child, timeoutMs = 2000) {
     child.once('exit', finish);
     child.once('close', finish);
   });
+}
+
+function logMonitorVideoDiagnostics(sessionId, source, text) {
+  const lines = String(text)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  for (const line of lines) {
+    if (MONITOR_VIDEO_HINT_RE.test(line)) {
+      console.log(`[iris:${sessionId}] monitor-video ${source}: ${line}`);
+    }
+  }
 }
 
 class ProcessManager {
@@ -70,11 +84,13 @@ class ProcessManager {
 
     const { tmpDir, cfgPath } = writeTempConfigFile(buildConfigFromOptions(options));
     const cameraCount = options.cameras?.length ?? 1;
-    const videoPipeNames = Array.from({ length: cameraCount }, (_value, index) => (
-      process.platform === 'win32'
-        ? `\\\\.\\pipe\\iris_video_${sessionId}_${index}`
-        : path.join(os.tmpdir(), `iris_video_${sessionId}_${index}.sock`)
-    ));
+    // Define a starting UDP port (e.g., 9000)
+    const baseUdpPort = 9000;
+    const udpPorts = Array.from({ length: cameraCount }, (_, index) => baseUdpPort + index);
+
+    // Generate the FFmpeg UDP URLs for the C++ process
+    const udpUrls = udpPorts.map(port => `udp://127.0.0.1:${port}?pkt_size=1316&flush_packets=1`);
+
     const args = [
       'monitor',
       '--shm-name', 'iris_shm_ipc',
@@ -90,11 +106,13 @@ class ProcessManager {
         onFrame,
       });
 
-      const wsPort = await videoStreamer.start(videoPipeNames);
+      // Pass the plain ports to your video streamer so it knows where to listen
+      const wsPort = await videoStreamer.start(udpPorts);
       const wsUrl = `ws://127.0.0.1:${wsPort}`;
 
-      videoPipeNames.forEach((pipeName, index) => {
-        args.push('--video-pipe', `${index}:${pipeName}`);
+      // Pass the full udp:// URLs to the C++ process
+      udpUrls.forEach((udpUrl, index) => {
+        args.push('--video-pipe', `${index}:${udpUrl}`);
       });
 
       return this.spawnWorker({
@@ -238,6 +256,7 @@ class ProcessManager {
 
   spawnWorker({ sessionId, args, cfgPath, tmpDir, onStdout, onStderr, pipeServer = null, videoStreamer = null, wsUrl = null }) {
     const exePath = this.getExecutablePath();
+    const isMonitorProcess = args[0] === 'monitor';
 
     try {
       const child = spawn(exePath, args, {
@@ -253,11 +272,19 @@ class ProcessManager {
 
       child.stdout.on('data', (data) => {
         onStdout?.(data);
-        console.log(`[iris:${sessionId}] stdout: ${data.toString().trim()}`);
+        const text = data.toString();
+        console.log(`[iris:${sessionId}] stdout: ${text.trim()}`);
+        if (isMonitorProcess) {
+          logMonitorVideoDiagnostics(sessionId, 'stdout', text);
+        }
       });
       child.stderr.on('data', (data) => {
         onStderr?.(data);
-        console.log(`[iris:${sessionId}] stderr: ${data.toString().trim()}`);
+        const text = data.toString();
+        console.log(`[iris:${sessionId}] stderr: ${text.trim()}`);
+        if (isMonitorProcess) {
+          logMonitorVideoDiagnostics(sessionId, 'stderr', text);
+        }
       });
       child.on('error', (err) => {
         onStderr?.(Buffer.from(String(err?.message ?? err)));

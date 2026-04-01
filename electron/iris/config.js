@@ -6,17 +6,21 @@ const path = require('path');
 
 const PIPE_NAME = '\\\\.\\pipe\\iris_ipc';
 
-
 function getIrisHomeFromRegistry() {
   if (process.platform !== 'win32') return null;
   try {
     const { execFileSync } = require('child_process');
     const query = (hive) => {
       try {
-        const out = execFileSync('reg', ['query', hive, '/v', 'IRIS_HOME'], { encoding: 'utf8', windowsHide: true });
+        const out = execFileSync('reg', ['query', hive, '/v', 'IRIS_HOME'], { 
+          encoding: 'utf8', 
+          windowsHide: true,
+          stdio: ['ignore', 'pipe', 'ignore'] // ignore stdin, pipe stdout, ignore stderr
+        });
         const match = out.match(/IRIS_HOME\s+\w+\s+(.+)/);
         return match ? match[1].trim() : null;
       } catch {
+        // Now fails completely silently
         return null;
       }
     };
@@ -42,7 +46,6 @@ function getIrisCliPath() {
   const resolved = process.env.IRIS_CLI_EXE
     || (irisHome && path.join(irisHome, 'bin', 'iris_cli.exe'))
     || path.join(os.homedir(), 'Documents', 'Iris', 'build', 'bin', 'iris_cli.exe');
-  console.log('[Config] Using iris_cli.exe path:', resolved);
   return resolved;
 }
 
@@ -211,7 +214,7 @@ function buildConfigFromOptions(opts = {}) {
         pose_capacity: 256,
         export_shm: true,
         camera_count: Math.max(1, cameras.length),
-        camera_slots: 32,
+        camera_slots: 256,
         camera_width: width,
         camera_height: height
       }
