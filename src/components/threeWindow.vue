@@ -301,13 +301,13 @@ function renderIRISData(poseInfo: IrisData) {
       let idx = 0;
 
       keypoints.forEach((point, index) => {
-        position.position.set(point[0], point[2], point[1]);
+        position.position.set(point[0]*4.5, point[1]*4.5, point[2]*4.5);
         position.updateMatrix();
         spheresMesh?.setMatrixAt(index, position.matrix);
       });
 
       person.joint_centers.forEach((point, index) => {
-        position.position.set(point[0], point[2], point[1]);
+        position.position.set(point[0]*4.5, point[1]*4.5, point[2]*4.5);
         position.updateMatrix();
         spheresMesh?.setMatrixAt(index + 3, position.matrix);
       });
@@ -316,13 +316,13 @@ function renderIRISData(poseInfo: IrisData) {
         const pos1 = person.joint_centers[a];
         const pos2 = person.joint_centers[b];
 
-        positionAttr.array[idx++] = pos1[0];
-        positionAttr.array[idx++] = pos1[2];
-        positionAttr.array[idx++] = pos1[1];
+        positionAttr.array[idx++] = pos1[0] * 4.5;
+        positionAttr.array[idx++] = pos1[1] * 4.5;
+        positionAttr.array[idx++] = pos1[2] * 4.5;
 
-        positionAttr.array[idx++] = pos2[0];
-        positionAttr.array[idx++] = pos2[2];
-        positionAttr.array[idx++] = pos2[1];
+        positionAttr.array[idx++] = pos2[0] * 4.5;
+        positionAttr.array[idx++] = pos2[1] * 4.5;
+        positionAttr.array[idx++] = pos2[2] * 4.5;
       });
 
       positionAttr.needsUpdate = true;

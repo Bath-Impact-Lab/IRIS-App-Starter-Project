@@ -284,7 +284,7 @@ function createSceneCameraStore() {
       isMockExtrinsics = extrinsics?._isMock === true;
       if (extrinsics?.cameras?.length) {
         const unit = (extrinsics.unit_of_measurement ?? 'm').replace(/[^a-z]/gi, '').toLowerCase();
-        const scale = unit === 'mm' ? 0.001 : unit === 'cm' ? 0.01 : 1;
+        const scale = unit === 'mm' ? 0.001 : unit === 'cm' ? 0.01 : 4.5;
         defs = extrinsics.cameras
           .filter((c: any) => c.success !== false)
           .map((c: any, i: number) => extrinsicsToDef(c, i, scale));
