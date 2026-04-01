@@ -176,7 +176,7 @@ function buildConfigFromOptions(opts = {}) {
       buffers: {
         frame_capacity: 256,
         pose_capacity: 256,
-        export_shm: false,
+        export_shm: true,
         camera_count: Math.max(1, cameras.length),
         camera_slots: 32,
         camera_width: width,

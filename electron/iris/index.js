@@ -20,8 +20,8 @@ function registerIrisIpc() {
 
     return processManager.startStandard({
       sessionId,
-      options, 
-      onData: (data) => sendToWindow(targetWindow, 'iris-data', data),
+      options,
+      onCliOutput: (payload) => sendToWindow(targetWindow, 'iris-cli-output', payload),
     });
   });
 

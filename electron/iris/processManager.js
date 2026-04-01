@@ -45,7 +45,7 @@ class ProcessManager {
     return fs.existsSync(this.getExecutablePath());
   }
 
-  async startStandard({ sessionId, options, onData }) {
+  async startStandard({ sessionId, options, onCliOutput }) {
     if (!this.hasExecutable()) {
       return { ok: false, error: 'Executable not found' };
     }
@@ -56,7 +56,8 @@ class ProcessManager {
       args: ['run', cfgPath],
       cfgPath,
       tmpDir,
-      onStdout: onData,
+      onStdout: (data) => onCliOutput?.({ channel: 'run:stdout', line: data.toString() }),
+      onStderr: (data) => onCliOutput?.({ channel: 'run:stderr', line: data.toString() }),
     });
   }
 
@@ -80,7 +81,8 @@ class ProcessManager {
         cfgPath,
         tmpDir,
         pipeServer,
-        onStdout: (data) => onCliOutput({ channel: 'stdout', line: data.toString() }),
+        onStdout: (data) => onCliOutput({ channel: 'monitor:stdout', line: data.toString() }),
+        onStderr: (data) => onCliOutput({ channel: 'monitor:stderr', line: data.toString() }),
       });
     } catch (err) {
       console.error('Failed to start pipe server', err);
@@ -204,7 +206,7 @@ class ProcessManager {
     return true;
   }
 
-  spawnWorker({ sessionId, args, cfgPath, tmpDir, onStdout, pipeServer = null }) {
+  spawnWorker({ sessionId, args, cfgPath, tmpDir, onStdout, onStderr, pipeServer = null }) {
     const exePath = this.getExecutablePath();
 
     try {
@@ -220,8 +222,14 @@ class ProcessManager {
       console.log(`[iris:${sessionId}] exe=${exePath} args=${JSON.stringify(args)}`);
 
       child.stdout.on('data', (data) => onStdout(data));
-      child.stderr.on('data', (data) => console.log(`[iris:${sessionId}] stderr: ${data.toString().trim()}`));
-      child.on('error', (err) => console.error(`[iris:${sessionId}] PROCESS ERROR`, err));
+      child.stderr.on('data', (data) => {
+        onStderr?.(data);
+        console.log(`[iris:${sessionId}] stderr: ${data.toString().trim()}`);
+      });
+      child.on('error', (err) => {
+        onStderr?.(Buffer.from(String(err?.message ?? err)));
+        console.error(`[iris:${sessionId}] PROCESS ERROR`, err);
+      });
 
       this.workers.set(sessionId, { child, tmpDir, cfgPath, pipeServer });
 
