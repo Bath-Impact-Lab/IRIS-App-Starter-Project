@@ -223,7 +223,7 @@ class ProcessManager {
 
       child.stdout.on('data', (data) => {
         onStdout(data)
-        console.error(`[iris:${sessionId}] PROCESS ERROR`, err);
+        console.error(`[iris:${sessionId}] PROCESS ERROR`, data.toString().trim());
       });
       child.stderr.on('data', (data) => {
         onStderr?.(data);
