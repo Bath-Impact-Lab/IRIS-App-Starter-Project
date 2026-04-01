@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const fs = require('fs');
+const path = require('path'); // Ensure path is imported
 const { ipcMain } = require('electron');
 const { getIrisCliPath } = require('./config');
 const { ProcessManager } = require('./processManager');
@@ -68,6 +69,51 @@ function registerIrisIpc() {
       });
     });
   });
+ 
+  ipcMain.handle('get-extrinsics', async () => {
+    const irisCliDir = path.dirname(getIrisCliPath());
+    const outputDir = path.join(irisCliDir, 'output', 'triangulation_da3_startup');
+    
+    // DA3 calibration typically writes to extrinsics.json or cameras.json
+    const extrinsicsPath = path.join(outputDir, 'extrinsics.json');
+    const camerasPath = path.join(outputDir, 'cameras.json');
+    
+    const targetPath = fs.existsSync(extrinsicsPath) ? extrinsicsPath : 
+                       fs.existsSync(camerasPath) ? camerasPath : null;
+
+    if (!targetPath) {
+      return { ok: false, error: `Extrinsics file not found in ${outputDir}` };
+    }
+
+    try {
+      const rawData = fs.readFileSync(targetPath, 'utf8');
+      return { ok: true, data: JSON.parse(rawData), path: targetPath };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('get-scene', async () => {
+    const irisCliDir = path.dirname(getIrisCliPath());
+    const scenePath = path.join(irisCliDir, 'output', 'triangulation_da3_startup', 'scene.ply');
+
+    if (!fs.existsSync(scenePath)) {
+      return { ok: false, error: `scene.ply not found at ${scenePath}` };
+    }
+
+    try { 
+      const buffer = fs.readFileSync(scenePath);
+      return { 
+        ok: true, 
+        data: buffer, 
+        path: scenePath,
+        fileUrl: `file:///${scenePath.replace(/\\/g, '/')}`
+      };
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  });
+ 
 }
 
 module.exports = {
