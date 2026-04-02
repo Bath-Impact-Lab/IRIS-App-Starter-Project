@@ -56,6 +56,7 @@ export interface IrisStartOptions {
   camera_width: number;
   camera_height: number;
   video_fps: number;
+  rotation: number;
   output_dir: string;
   capture_only?: boolean;
   stream?: boolean;

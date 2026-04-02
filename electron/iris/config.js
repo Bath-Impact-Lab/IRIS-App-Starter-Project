@@ -71,6 +71,9 @@ function buildConfigFromOptions(opts = {}) {
 
   const camera_ids = cameras.map((_, index) => index);
   const fps = cameras.length > 0 && cameras[0].fps ? cameras[0].fps : 30;
+  const rotate = Number.isFinite(opts.rotation)
+    ? opts.rotation
+    : (cameras.length > 0 && Number.isFinite(cameras[0].rotation) ? cameras[0].rotation : 0);
   const modelDir = getModelDir().replace(/\\/g, '/'); // Normalize slashes for JSON
 
   // Define the base shared block
@@ -83,7 +86,7 @@ function buildConfigFromOptions(opts = {}) {
         camera_ids: camera_ids,
         width: width,
         height: height,
-        rotate: 90,
+        rotate,
         fps: fps,
         batching: true,
         batch_camera_ids: camera_ids

@@ -134,6 +134,7 @@ function buildIrisOptions(mode: 'capture' | 'mocap'): IrisStartOptions | null {
     camera_width: width,
     camera_height: height,
     video_fps: selectedFps.value,
+    rotation: selectedRotation.value,
     output_dir: projectOutputDir.value,
     capture_only: mode === 'capture',
     stream: true,
