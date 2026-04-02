@@ -35,18 +35,14 @@ function waitForChildExit(child, timeoutMs = 2000) {
   });
 }
 
-function logMonitorVideoDiagnostics(sessionId, source, text) {
-  const lines = String(text)
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  for (const line of lines) {
-    if (MONITOR_VIDEO_HINT_RE.test(line)) {
-      console.log(`[iris:${sessionId}] monitor-video ${source}: ${line}`);
-    }
+function writeDirectly(target, chunk) {
+  if (!target?.writable || chunk == null) {
+    return;
   }
+
+  target.write(chunk);
 }
+
 
 class ProcessManager {
   constructor() {
@@ -256,7 +252,6 @@ class ProcessManager {
 
   spawnWorker({ sessionId, args, cfgPath, tmpDir, onStdout, onStderr, pipeServer = null, videoStreamer = null, wsUrl = null }) {
     const exePath = this.getExecutablePath();
-    const isMonitorProcess = args[0] === 'monitor';
 
     try {
       const child = spawn(exePath, args, {
@@ -272,19 +267,11 @@ class ProcessManager {
 
       child.stdout.on('data', (data) => {
         onStdout?.(data);
-        const text = data.toString();
-        console.log(`[iris:${sessionId}] stdout: ${text.trim()}`);
-        if (isMonitorProcess) {
-          logMonitorVideoDiagnostics(sessionId, 'stdout', text);
-        }
+        writeDirectly(process.stdout, data);
       });
       child.stderr.on('data', (data) => {
         onStderr?.(data);
-        const text = data.toString();
-        console.log(`[iris:${sessionId}] stderr: ${text.trim()}`);
-        if (isMonitorProcess) {
-          logMonitorVideoDiagnostics(sessionId, 'stderr', text);
-        }
+        writeDirectly(process.stderr, data);
       });
       child.on('error', (err) => {
         onStderr?.(Buffer.from(String(err?.message ?? err)));

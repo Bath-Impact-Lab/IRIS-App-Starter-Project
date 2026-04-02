@@ -28,6 +28,14 @@ function waitForMonitorExit(proc, timeoutMs = 3000) {
   });
 }
 
+function writeDirectly(target, chunk) {
+  if (!target?.writable || chunk == null) {
+    return;
+  }
+
+  target.write(chunk);
+}
+
 class MonitorManager {
   constructor() {
     this.monitorProcess = null;
@@ -89,11 +97,11 @@ class MonitorManager {
       this.monitorProcess = child;
       child.stdout.on('data', (data) => {
         options.onStdout?.(data);
-        console.log('[monitor] ' + data.toString().trim());
+        writeDirectly(process.stdout, data);
       });
       child.stderr.on('data', (data) => {
         options.onStderr?.(data);
-        console.log('[monitor stderr] ' + data.toString().trim());
+        writeDirectly(process.stderr, data);
       });
       child.on('exit', () => {
         if (this.monitorProcess === child) {
@@ -117,30 +125,45 @@ class MonitorManager {
     const exitPromise = waitForMonitorExit(proc);
 
     if (process.platform === 'win32' && proc.pid) {
-      try {
-        await execFileAsync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { windowsHide: true });
-      } catch {
-        // Ignore failures from already-exited processes.
+      try { 
+        proc.stdin.write('\n');
+        proc.stdin.end();
+ 
+        const graceful = await Promise.race([
+          exitPromise.then(() => true),
+          new Promise(resolve => setTimeout(() => resolve(false), 1000))
+        ]);
+
+        if (!graceful) {
+          console.log('[MonitorManager] SIGINT failed, trying polite taskkill...');
+          // 3. Try taskkill WITHOUT /F (sends a WM_CLOSE or polite signal)
+          await execFileAsync('taskkill', ['/PID', String(proc.pid), '/T'], { windowsHide: true });
+          
+          // Wait again
+          const taskkillPolite = await Promise.race([
+            exitPromise.then(() => true),
+            new Promise(resolve => setTimeout(() => resolve(false), 2000))
+          ]);
+
+          if (!taskkillPolite) {
+            console.warn('[MonitorManager] Graceful shutdown failed. Force killing...');
+            // 4. Last resort: The "Strong" kill
+            await execFileAsync('taskkill', ['/PID', String(proc.pid), '/T', '/F'], { windowsHide: true });
+          }
+        }
+      } catch (err) {
+        console.error('[MonitorManager] Shutdown error:', err.message);
       }
 
+      console.log('Waiting for monitor process to exit...');
       await exitPromise;
+      console.log('Monitor process exited.');
       return { ok: true };
     }
 
-    try {
-      proc.kill('SIGTERM');
-    } catch {
-      // Ignore missing process errors.
-    }
-
+    // For Linux/macOS
+    proc.kill('SIGTERM');
     await exitPromise;
-
-    try {
-      proc.kill('SIGKILL');
-    } catch {
-      // Ignore missing process errors.
-    }
-
     return { ok: true };
   }
 }
