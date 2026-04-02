@@ -28,6 +28,18 @@ interface Window {
     startIRIS: (options: any) => Promise<any>;
     startIRISStream: (options: any) => Promise<any>;
     stopIRIS: (Id: any) => Promise<any>;
+    startIrisRecord: (options: {
+      projectPath: string;
+      shmName?: string;
+      fps?: number;
+      pipePath?: string;
+      pipeId?: number;
+      savePoses?: boolean;
+      drawBboxes?: boolean;
+      drawKeypoints?: boolean;
+      verbose?: boolean;
+    }) => Promise<{ ok: boolean; outputDir?: string; args?: string[]; error?: string }>;
+    stopIrisRecord: () => Promise<{ ok: boolean; error?: string }>;
     getHardwareCameras: () => Promise<{ ok: boolean; data?: { id: number; name: string }[]; error?: string }>;
     getExtrinsics: (outputDir?: string) => Promise<any>;
     getScene: (outputDir?: string) => Promise<string | null>;

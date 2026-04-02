@@ -22,6 +22,14 @@ function resolveOutputDir(value) {
   return path.join(irisCliDir, 'output', 'triangulation_da3_startup');
 }
 
+function resolveProjectDirectory(projectPath) {
+  if (typeof projectPath !== 'string' || projectPath.trim().length === 0) {
+    return null;
+  }
+
+  return path.dirname(projectPath.trim());
+}
+
 function registerIrisIpc() {
   ipcMain.handle('start-iris', (event, options) => {
     const sessionId = crypto.randomUUID();
@@ -120,6 +128,31 @@ function registerIrisIpc() {
       return null;
     }
   });
+
+  ipcMain.handle('start-iris-record', async (event, options = {}) => {
+    const targetWindow = getTargetWindow(event);
+    const projectDir = resolveProjectDirectory(options.projectPath);
+
+    if (!projectDir) {
+      return { ok: false, error: 'A saved project path is required to start recording.' };
+    }
+
+    return monitorManager.start({
+      outputDir: projectDir,
+      shmName: options.shmName,
+      fps: options.fps,
+      pipePath: options.pipePath,
+      pipeId: options.pipeId,
+      savePoses: options.savePoses,
+      drawBboxes: options.drawBboxes,
+      drawKeypoints: options.drawKeypoints,
+      verbose: options.verbose,
+      onStdout: (data) => sendToWindow(targetWindow, 'iris-cli-output', { channel: 'record:stdout', line: data.toString() }),
+      onStderr: (data) => sendToWindow(targetWindow, 'iris-cli-output', { channel: 'record:stderr', line: data.toString() }),
+    });
+  });
+
+  ipcMain.handle('stop-iris-record', async () => monitorManager.stop());
  
 }
 

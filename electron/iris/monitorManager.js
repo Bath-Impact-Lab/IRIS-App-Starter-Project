@@ -33,9 +33,17 @@ class MonitorManager {
     this.monitorProcess = null;
   }
 
-  async start(outputDir) {
+  async start(options = {}) {
     if (this.monitorProcess) {
       await this.stop();
+    }
+
+    const outputDir = typeof options.outputDir === 'string' && options.outputDir.trim().length > 0
+      ? options.outputDir.trim()
+      : null;
+
+    if (!outputDir) {
+      return { ok: false, error: 'Output directory is required.' };
     }
 
     try {
@@ -52,22 +60,48 @@ class MonitorManager {
     }
 
     try {
-      const child = spawn(exePath, ['monitor', '--output-dir', outputDir], {
+      const args = [
+        'monitor',
+        '--shm-name', typeof options.shmName === 'string' && options.shmName.trim().length > 0 ? options.shmName.trim() : 'iris_shm_ipc',
+        '--output-dir', outputDir,
+        '--fps', String(Number.isFinite(options.fps) ? options.fps : 30),
+      ];
+
+      if (typeof options.pipePath === 'string' && options.pipePath.trim().length > 0) {
+        args.push('--pipe', options.pipePath.trim());
+      }
+
+      if (Number.isFinite(options.pipeId)) {
+        args.push('--pipe-id', String(options.pipeId));
+      }
+
+      if (options.savePoses === true) args.push('--save-poses');
+      if (options.drawBboxes === true) args.push('--draw-bboxes');
+      if (options.drawKeypoints === true) args.push('--draw-keypoints');
+      if (options.verbose === true) args.push('--verbose');
+
+      const child = spawn(exePath, args, {
         cwd: path.dirname(exePath),
         stdio: ['pipe', 'pipe', 'pipe'],
         windowsHide: true,
       });
 
       this.monitorProcess = child;
-      child.stdout.on('data', (data) => console.log('[monitor] ' + data.toString().trim()));
-      child.stderr.on('data', (data) => console.log('[monitor stderr] ' + data.toString().trim()));
+      child.stdout.on('data', (data) => {
+        options.onStdout?.(data);
+        console.log('[monitor] ' + data.toString().trim());
+      });
+      child.stderr.on('data', (data) => {
+        options.onStderr?.(data);
+        console.log('[monitor stderr] ' + data.toString().trim());
+      });
       child.on('exit', () => {
         if (this.monitorProcess === child) {
           this.monitorProcess = null;
         }
       });
 
-      return { ok: true, outputDir };
+      return { ok: true, outputDir, args };
     } catch (err) {
       return { ok: false, error: err.message };
     }
