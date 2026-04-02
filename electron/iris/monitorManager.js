@@ -75,6 +75,8 @@ class MonitorManager {
         '--fps', String(Number.isFinite(options.fps) ? options.fps : 30),
       ];
 
+      console.log('[MonitorManager] Starting monitor with args:', args.join(' '));
+
       if (typeof options.pipePath === 'string' && options.pipePath.trim().length > 0) {
         args.push('--pipe', options.pipePath.trim());
       }
