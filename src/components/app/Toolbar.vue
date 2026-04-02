@@ -84,7 +84,7 @@
       </div>
     </div>
 
-    <template v-if="showStartButton || showStopButton">
+    <template v-if="showStartButton || showStopButton || showRecordButton">
       <div class="toolbar-divider"></div>
 
       <button
@@ -106,6 +106,17 @@
       >
         {{ stopLabel }}
       </button>
+
+      <button
+        v-if="showRecordButton"
+        class="toolbar-action toolbar-action-record"
+        :class="{ 'toolbar-action-recording': isRecording }"
+        type="button"
+        :disabled="recordDisabled"
+        @click="emit('toggle-recording')"
+      >
+        {{ recordLabel }}
+      </button>
     </template>
 
   </div>
@@ -120,11 +131,14 @@ interface Props {
   rotation?: number;
   showStartButton?: boolean;
   showStopButton?: boolean;
+  showRecordButton?: boolean;
   isStartingIris?: boolean;
   isStoppingIris?: boolean;
   isIrisRunning?: boolean;
+  isRecording?: boolean;
   startDisabled?: boolean;
   stopDisabled?: boolean;
+  recordDisabled?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -133,11 +147,14 @@ const props = withDefaults(defineProps<Props>(), {
   rotation: 0,
   showStartButton: false,
   showStopButton: false,
+  showRecordButton: false,
   isStartingIris: false,
   isStoppingIris: false,
   isIrisRunning: false,
+  isRecording: false,
   startDisabled: false,
   stopDisabled: false,
+  recordDisabled: false,
 });
 
 const emit = defineEmits<{
@@ -146,6 +163,7 @@ const emit = defineEmits<{
   'update:rotation': [value: number];
   'start-iris': [];
   'stop-iris': [];
+  'toggle-recording': [];
 }>();
 
 const selectedResolution = ref(props.resolution);
@@ -160,6 +178,7 @@ const stopLabel = computed(() => {
   if (props.isStoppingIris) return 'Stopping IRIS...';
   return 'Stop IRIS';
 });
+const recordLabel = computed(() => props.isRecording ? 'Stop Recording' : 'Record');
 
 // Keep local state in sync if parent updates props
 watch(() => props.resolution, (newVal) => { selectedResolution.value = newVal; });
@@ -332,6 +351,20 @@ watch(() => props.rotation, (newVal) => { selectedRotation.value = newVal; });
   border-color: rgba(255, 107, 107, 0.44);
 }
 
+.toolbar-action-record {
+  border-color: rgba(244, 63, 94, 0.24);
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.22), rgba(251, 113, 133, 0.14));
+}
+
+.toolbar-action-record:hover:not(:disabled) {
+  border-color: rgba(244, 63, 94, 0.44);
+}
+
+.toolbar-action-recording {
+  border-color: rgba(244, 63, 94, 0.52);
+  background: linear-gradient(135deg, rgba(225, 29, 72, 0.32), rgba(251, 113, 133, 0.2));
+}
+
 [data-theme="light"] .toolbar-action {
   color: #1F4E79;
   background: linear-gradient(135deg, rgba(46, 134, 193, 0.16), rgba(56, 189, 248, 0.14));
@@ -341,6 +374,17 @@ watch(() => props.rotation, (newVal) => { selectedRotation.value = newVal; });
 [data-theme="light"] .toolbar-action-danger {
   background: linear-gradient(135deg, rgba(220, 38, 38, 0.14), rgba(249, 115, 22, 0.14));
   border-color: rgba(185, 28, 28, 0.18);
+}
+
+[data-theme="light"] .toolbar-action-record {
+  color: #9f1239;
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.12), rgba(251, 113, 133, 0.1));
+  border-color: rgba(190, 24, 93, 0.22);
+}
+
+[data-theme="light"] .toolbar-action-recording {
+  background: linear-gradient(135deg, rgba(225, 29, 72, 0.2), rgba(251, 113, 133, 0.16));
+  border-color: rgba(190, 24, 93, 0.34);
 }
 
 /* Mobile Responsiveness */

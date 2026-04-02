@@ -42,6 +42,8 @@ const activeView = computed(() => currentProject.value?.workspace.activeView || 
 const showSettings = ref(false);
 const currentTheme = ref<'dark' | 'light'>('light');
 const irisRunMode = ref<'capture' | 'mocap' | null>(null);
+const isRecording = ref(false);
+const isRecordingBusy = ref(false);
 
 // Apply theme to document root for global CSS variable targeting
 watchEffect(() => {
@@ -84,6 +86,11 @@ const canStartMocapIris = computed(() =>
 );
 const canStopIris = computed(() =>
   isIrisRunning.value && !isStoppingIris.value && !isStartingIris.value
+);
+const canToggleRecording = computed(() =>
+  !!currentProject.value?.path
+  && !isRecordingBusy.value
+  && (isRecording.value || isIrisRunning.value)
 );
 
 function updateResolution(value: string) {
@@ -177,6 +184,21 @@ watch(isIrisRunning, (running) => {
   }
 });
 
+watch(() => currentProject.value?.path ?? null, async (nextPath, previousPath) => {
+  if (!previousPath || nextPath === previousPath || !isRecording.value) return;
+  if (!window.ipc?.stopIrisRecord) return;
+
+  isRecordingBusy.value = true;
+  try {
+    const result = await window.ipc.stopIrisRecord();
+    if (result?.ok) {
+      isRecording.value = false;
+    }
+  } finally {
+    isRecordingBusy.value = false;
+  }
+});
+
 async function handleStartCaptureIris() {
   await startIrisForMode('capture');
 }
@@ -189,6 +211,35 @@ async function handleStopIris() {
   const result = await stopIris();
   if (result?.ok) {
     irisRunMode.value = null;
+  }
+}
+
+async function handleToggleRecording() {
+  if (!currentProject.value?.path || isRecordingBusy.value) return;
+  if (!window.ipc?.startIrisRecord || !window.ipc?.stopIrisRecord) return;
+
+  isRecordingBusy.value = true;
+
+  try {
+    if (isRecording.value) {
+      const result = await window.ipc.stopIrisRecord();
+      if (result?.ok) {
+        isRecording.value = false;
+      }
+      return;
+    }
+
+    const result = await window.ipc.startIrisRecord({
+      projectPath: currentProject.value.path,
+      fps: selectedFps.value,
+      savePoses: true,
+    });
+
+    if (result?.ok) {
+      isRecording.value = true;
+    }
+  } finally {
+    isRecordingBusy.value = false;
   }
 }
 </script>
@@ -229,16 +280,20 @@ async function handleStopIris() {
               :rotation="selectedRotation"
               :show-start-button="true"
               :show-stop-button="true"
+              :show-record-button="true"
               :is-starting-iris="isStartingIris"
               :is-stopping-iris="isStoppingIris"
               :is-iris-running="isCaptureIrisRunning"
+              :is-recording="isRecording"
               :start-disabled="!canStartCaptureIris"
               :stop-disabled="!canStopIris"
+              :record-disabled="!canToggleRecording"
               @update:resolution="updateResolution"
               @update:fps="updateFps"
               @update:rotation="updateRotation"
               @start-iris="handleStartCaptureIris"
               @stop-iris="handleStopIris"
+              @toggle-recording="handleToggleRecording"
             />
           </div>
           <FeedViewPage
@@ -254,16 +309,20 @@ async function handleStopIris() {
               :rotation="selectedRotation"
               :show-start-button="true"
               :show-stop-button="true"
+              :show-record-button="true"
               :is-starting-iris="isStartingIris"
               :is-stopping-iris="isStoppingIris"
               :is-iris-running="isMocapIrisRunning"
+              :is-recording="isRecording"
               :start-disabled="!canStartMocapIris"
               :stop-disabled="!canStopIris"
+              :record-disabled="!canToggleRecording"
               @update:resolution="updateResolution"
               @update:fps="updateFps"
               @update:rotation="updateRotation"
               @start-iris="handleStartIris"
               @stop-iris="handleStopIris"
+              @toggle-recording="handleToggleRecording"
             />
           </div>
           <ThreeWindow />
