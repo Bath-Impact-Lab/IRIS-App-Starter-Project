@@ -3,7 +3,6 @@ import { computed, ref } from 'vue';
 export interface ProjectSessionTemplate {
   id: string;
   name: string;
-  exercises: string[];
 }
 
 export interface ProjectPreset {
@@ -28,23 +27,23 @@ function createDefaultPresetStore(): ProjectPresetStore {
       id: 'preset-standard',
       name: 'Standard Capture',
       templates: [
-        { id: 'template-baseline', name: 'Baseline', exercises: ['Static calibration'] },
-        { id: 'template-walk', name: 'Walking Trial', exercises: ['Walk', 'Turn', 'Return'] },
-        { id: 'template-balance', name: 'Balance Trial', exercises: ['Single leg stance'] },
+        { id: 'template-baseline', name: 'Baseline' },
+        { id: 'template-walk', name: 'Walking Trial' },
+        { id: 'template-balance', name: 'Balance Trial' },
       ],
     }],
   };
 }
 
 function sanitizeTemplate(template: Partial<ProjectSessionTemplate> | null | undefined, index: number): ProjectSessionTemplate {
+  const legacyExercises = Array.isArray((template as { exercises?: unknown[] } | null | undefined)?.exercises)
+    ? (template as { exercises?: unknown[] }).exercises?.filter((value): value is string => typeof value === 'string' && value.trim().length > 0) ?? []
+    : [];
   return {
     id: template?.id || createId(`template-${index + 1}`),
     name: typeof template?.name === 'string' && template.name.trim()
       ? template.name.trim()
-      : `Template ${index + 1}`,
-    exercises: Array.isArray(template?.exercises)
-      ? template.exercises.filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
-      : [],
+      : (legacyExercises[0] ?? `Template ${index + 1}`),
   };
 }
 
@@ -81,7 +80,6 @@ function clonePresetStore(store: ProjectPresetStore): ProjectPresetStore {
       templates: preset.templates.map((template) => ({
         id: template.id,
         name: template.name,
-        exercises: [...template.exercises],
       })),
     })),
   };

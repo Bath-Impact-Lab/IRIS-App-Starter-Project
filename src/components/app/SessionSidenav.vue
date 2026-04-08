@@ -52,66 +52,28 @@
       <div v-for="participant in participants" :key="participant.id" class="session-sidenav-section">
         <h2 class="session-sidenav-title">{{ participant.name }}</h2>
 
-        <div v-if="sessionTemplates.length > 0" class="session-sidenav-list session-template-list">
+        <div v-if="participant.sessions.length > 0" class="session-sidenav-list">
           <button
-            v-for="template in sessionTemplates"
-            :key="template.id"
-            class="session-sidenav-link session-template-link"
+            v-for="session in participant.sessions"
+            :key="session.id"
+            class="session-sidenav-link session-trial-link"
+            :class="{ 'session-trial-link--complete': session.completed }"
             type="button"
-            :title="`Right click to record ${template.name}`"
-            @click="emit('add-session-template', { participantId: participant.id, templateId: template.id })"
-            @contextmenu.prevent="openTemplateMenu($event, participant.id, template.id)"
+            :title="`Right click to record ${session.name}`"
+            @click="emit('toggle-session-complete', { participantId: participant.id, sessionId: session.id })"
+            @contextmenu.prevent="openSessionMenu($event, participant.id, session.id)"
           >
             <div class="link-left">
-              <span class="indicator indicator-template"></span>
+              <span class="indicator" :class="{ 'indicator-complete': session.completed }"></span>
               <div class="session-meta">
-                <span class="session-name">{{ template.name }}</span>
-                <span class="session-date">
-                  {{ template.exercises.length > 0 ? `${template.exercises.length} exercise${template.exercises.length === 1 ? '' : 's'}` : 'No exercises yet' }}
-                </span>
+                <span class="session-name">{{ session.name }}</span>
+                <span class="session-date">{{ formatSessionDate(session.date) }}</span>
               </div>
+              <span class="session-status">
+                {{ session.completed ? 'Complete' : 'Pending' }}
+              </span>
             </div>
           </button>
-        </div>
-
-        <div v-if="participant.sessions.length > 0" class="session-sidenav-list">
-
-          <div v-for="session in participant.sessions" :key="session.id" class="session-group">
-
-            <button
-              class="session-sidenav-link date-toggle"
-              @click="toggleSession(session.id)"
-              type="button"
-            >
-              <div class="link-left">
-                <span class="indicator"></span>
-                <div class="session-meta">
-                  <span class="session-name">{{ session.name }}</span>
-                  <span class="session-date">{{ formatSessionDate(session.date) }}</span>
-                </div>
-              </div>
-              <svg
-                xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                class="chevron small-chevron" :class="{ 'open': openSessionIds.includes(session.id) }"
-              >
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </button>
-
-            <div v-show="openSessionIds.includes(session.id)" class="nested-list">
-              <button
-                v-for="(exercise, eIndex) in session.exercises"
-                :key="`ex-${session.id}-${eIndex}`"
-                class="session-sidenav-link nested-link"
-                type="button"
-              >
-                <span class="nested-dash">-</span>
-                {{ exercise }}
-              </button>
-            </div>
-
-          </div>
-
         </div>
         <div v-else class="session-sidenav-empty-state">
           No sessions yet.
@@ -162,56 +124,48 @@
     </div>
 
     <div
-      v-if="templateMenu.visible"
+      v-if="sessionMenu.visible"
       class="template-context-menu"
-      :style="{ left: `${templateMenu.x}px`, top: `${templateMenu.y}px` }"
+      :style="{ left: `${sessionMenu.x}px`, top: `${sessionMenu.y}px` }"
     >
-      <button class="template-context-action" type="button" @click="addTemplateSessionFromMenu">
-        Add Session
-      </button>
-      <button class="template-context-action" type="button" @click="recordTemplateSessionFromMenu">
-        Record Session
+      <button class="template-context-action" type="button" @click="recordSessionFromMenu">
+        Record Trial
       </button>
     </div>
   </aside>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useIris } from '@/lib/useIris';
 import type { ProjectParticipant } from '@/lib/useProject';
-import type { ProjectSessionTemplate } from '@/lib/useProjectPresets';
 
 interface Props {
   activeView: 'capture' | 'analysis' | 'mocap';
   participants?: ProjectParticipant[];
-  sessionTemplates?: ProjectSessionTemplate[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
   participants: () => [],
-  sessionTemplates: () => [],
 });
 
 const emit = defineEmits<{
   'open-capture': [];
   'open-analysis': [];
   'open-mocap': [];
-  'add-session-template': [{ participantId: string; templateId: string }];
-  'record-session-template': [{ participantId: string; templateId: string }];
+  'toggle-session-complete': [{ participantId: string; sessionId: string }];
+  'record-session': [{ participantId: string; sessionId: string }];
 }>();
 
 // State for the main cameras dropdown
 const isCamerasOpen = ref(true);
-const openSessionIds = ref<string[]>([]);
 const participants = computed(() => props.participants);
-const sessionTemplates = computed(() => props.sessionTemplates);
-const templateMenu = ref({
+const sessionMenu = ref({
   visible: false,
   x: 0,
   y: 0,
   participantId: '',
-  templateId: '',
+  sessionId: '',
 });
 const {
   cameras: irisCameras,
@@ -227,30 +181,17 @@ const irisCameraErrorMessage = computed(() =>
   irisCamerasError.value ? 'Unable to load IRIS cameras.' : ''
 );
 
-watch(participants, () => {
-  openSessionIds.value = [];
-}, { deep: true });
-
 onMounted(() => {
-  window.addEventListener('click', closeTemplateMenu);
-  window.addEventListener('blur', closeTemplateMenu);
-  window.addEventListener('scroll', closeTemplateMenu, true);
+  window.addEventListener('click', closeSessionMenu);
+  window.addEventListener('blur', closeSessionMenu);
+  window.addEventListener('scroll', closeSessionMenu, true);
 });
 
 onBeforeUnmount(() => {
-  window.removeEventListener('click', closeTemplateMenu);
-  window.removeEventListener('blur', closeTemplateMenu);
-  window.removeEventListener('scroll', closeTemplateMenu, true);
+  window.removeEventListener('click', closeSessionMenu);
+  window.removeEventListener('blur', closeSessionMenu);
+  window.removeEventListener('scroll', closeSessionMenu, true);
 });
-
-function toggleSession(sessionId: string) {
-  if (openSessionIds.value.includes(sessionId)) {
-    openSessionIds.value = openSessionIds.value.filter((id) => id !== sessionId);
-    return;
-  }
-
-  openSessionIds.value = [...openSessionIds.value, sessionId];
-}
 
 function formatSessionDate(value: string) {
   const date = new Date(value);
@@ -265,41 +206,33 @@ function formatSessionDate(value: string) {
   });
 }
 
-function openTemplateMenu(event: MouseEvent, participantId: string, templateId: string) {
-  templateMenu.value = {
+function openSessionMenu(event: MouseEvent, participantId: string, sessionId: string) {
+  sessionMenu.value = {
     visible: true,
     x: event.clientX,
     y: event.clientY,
     participantId,
-    templateId,
+    sessionId,
   };
 }
 
-function closeTemplateMenu() {
-  if (!templateMenu.value.visible) return;
-  templateMenu.value = {
+function closeSessionMenu() {
+  if (!sessionMenu.value.visible) return;
+  sessionMenu.value = {
     visible: false,
     x: 0,
     y: 0,
     participantId: '',
-    templateId: '',
+    sessionId: '',
   };
 }
 
-function addTemplateSessionFromMenu() {
-  emit('add-session-template', {
-    participantId: templateMenu.value.participantId,
-    templateId: templateMenu.value.templateId,
+function recordSessionFromMenu() {
+  emit('record-session', {
+    participantId: sessionMenu.value.participantId,
+    sessionId: sessionMenu.value.sessionId,
   });
-  closeTemplateMenu();
-}
-
-function recordTemplateSessionFromMenu() {
-  emit('record-session-template', {
-    participantId: templateMenu.value.participantId,
-    templateId: templateMenu.value.templateId,
-  });
-  closeTemplateMenu();
+  closeSessionMenu();
 }
 </script>
 
@@ -429,17 +362,6 @@ function recordTemplateSessionFromMenu() {
   gap: 4px;
 }
 
-.session-template-list {
-  margin-bottom: 8px;
-}
-
-/* Group container for dates + nested items */
-.session-group {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
 .session-sidenav-link {
   display: flex;
   align-items: center;
@@ -460,15 +382,12 @@ function recordTemplateSessionFromMenu() {
   transition: all 0.2s ease;
 }
 
-.date-toggle {
-  justify-content: space-between;
-}
-
 .link-left {
   display: flex;
   align-items: center;
   gap: 10px;
   min-width: 0;
+  width: 100%;
 }
 
 .session-meta {
@@ -492,11 +411,26 @@ function recordTemplateSessionFromMenu() {
   color: var(--muted, #94a3b8);
 }
 
-.session-template-link {
-  border: 1px dashed rgba(107, 230, 117, 0.2);
+.session-status {
+  margin-left: auto;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted, #94a3b8);
 }
 
-.indicator-template {
+.session-trial-link {
+  border: 1px solid rgba(107, 230, 117, 0.25);
+  border-radius: 8px;
+}
+
+.session-trial-link--complete {
+  border-color: transparent;
+  background: transparent;
+}
+
+.indicator-complete {
   background-color: rgba(107, 230, 117, 0.75);
 }
 
@@ -546,26 +480,6 @@ function recordTemplateSessionFromMenu() {
 
 .session-sidenav-link:hover .indicator:not(.camera-indicator) {
   background-color: var(--accent, #3b82f6);
-}
-
-/* Nested List Styles */
-.nested-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding-left: 18px; /* Indent child items */
-  margin-top: 2px;
-}
-
-.nested-link {
-  font-size: 0.85rem;
-  padding: 6px 12px;
-  color: var(--sidenav-link-muted, #6b7280);
-}
-
-.nested-dash {
-  opacity: 0.5;
-  font-weight: bold;
 }
 
 .template-context-menu {

@@ -72,14 +72,7 @@
                       v-model="template.name"
                       type="text"
                       class="settings-input"
-                      placeholder="Session template name"
-                    />
-                    <input
-                      :value="template.exercises.join(', ')"
-                      type="text"
-                      class="settings-input"
-                      placeholder="Exercises, comma separated"
-                      @input="updateTemplateExercises(presetIndex, templateIndex, ($event.target as HTMLInputElement).value)"
+                      placeholder="Trial name"
                     />
                     <button class="btn-chip btn-chip-danger" type="button" @click="removeTemplate(presetIndex, templateIndex)">
                       Remove
@@ -88,11 +81,11 @@
                 </div>
 
                 <div v-else class="settings-help">
-                  No session templates yet.
+                  No trials yet.
                 </div>
 
                 <button class="btn-secondary btn-secondary-inline" type="button" @click="addTemplate(presetIndex)">
-                  Add Session Template
+                  Add Trial
                 </button>
               </div>
             </div>
@@ -188,7 +181,6 @@ function clonePresetStore(store: ProjectPresetStore): ProjectPresetStore {
       templates: preset.templates.map((template) => ({
         id: template.id,
         name: template.name,
-        exercises: [...template.exercises],
       })),
     })),
   };
@@ -277,22 +269,12 @@ function addTemplate(presetIndex: number) {
 
   preset.templates.push({
     id: createId('template'),
-    name: `Session Template ${preset.templates.length + 1}`,
-    exercises: [],
+    name: `Trial ${preset.templates.length + 1}`,
   });
 }
 
 function removeTemplate(presetIndex: number, templateIndex: number) {
   presetDraft.value.presets[presetIndex]?.templates.splice(templateIndex, 1);
-}
-
-function updateTemplateExercises(presetIndex: number, templateIndex: number, value: string) {
-  const template = presetDraft.value.presets[presetIndex]?.templates[templateIndex];
-  if (!template) return;
-  template.exercises = value
-    .split(',')
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
 }
 
 function handleSavePresetChanges() {
@@ -455,7 +437,7 @@ function toggleTheme() {
 
 .template-editor {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
 }

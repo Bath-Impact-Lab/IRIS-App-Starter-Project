@@ -1,7 +1,7 @@
 ﻿<script setup lang="ts">
 import { ref, computed, watch, watchEffect } from 'vue';
 import { useProject, type ProjectParticipant, type ProjectSession } from '@/lib/useProject';
-import { useProjectPresets, type ProjectPresetStore, type ProjectSessionTemplate } from '@/lib/useProjectPresets';
+import { useProjectPresets, type ProjectPreset, type ProjectPresetStore } from '@/lib/useProjectPresets';
 import { useIris, type IrisStartOptions } from '@/lib/useIris';
 
 // ── Layout & Core UI ─────────────────────────────────────────────────────────
@@ -146,59 +146,113 @@ function createEntityId(prefix: string) {
   return globalThis.crypto?.randomUUID?.() ?? `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function findTemplateById(templateId: string) {
-  return activeProjectPreset.value?.templates.find((template) => template.id === templateId) ?? null;
-}
-
-function createSessionFromTemplate(participantId: string, template: ProjectSessionTemplate): ProjectSession {
+function createSessionFromTemplate(participantId: string, template: ProjectPreset['templates'][number]): ProjectSession {
   return {
     id: createEntityId(`${participantId}-session`),
     name: template.name,
     date: new Date().toISOString(),
+    completed: false,
     templateId: template.id,
-    exercises: [...template.exercises],
+    exercises: [template.name],
   };
 }
 
-async function createProjectWithDefaultPreset() {
-  await createProject({
-    settings: {
-      presetId: defaultPresetId.value ?? null,
-    },
+function syncParticipantSessionsWithPreset(participant: ProjectParticipant, preset: ProjectPreset): ProjectParticipant {
+  const preservedSessions = participant.sessions.filter((session) =>
+    !session.templateId || !preset.templates.some((template) => template.id === session.templateId)
+  );
+
+  const templatedSessions = preset.templates.map((template) => {
+    const existingSession = participant.sessions.find((session) =>
+      session.templateId === template.id || (!session.templateId && session.name === template.name)
+    );
+
+    return existingSession
+      ? {
+        ...existingSession,
+        name: template.name,
+        templateId: template.id,
+      }
+      : createSessionFromTemplate(participant.id, template);
+  });
+
+  return {
+    ...participant,
+    sessions: [...templatedSessions, ...preservedSessions],
+  };
+}
+
+function syncParticipantsWithPreset(participants: ProjectParticipant[], preset: ProjectPreset | null): ProjectParticipant[] {
+  if (!preset) return participants;
+  return participants.map((participant) => syncParticipantSessionsWithPreset(participant, preset));
+}
+
+function projectNeedsPresetSync(participants: ProjectParticipant[], preset: ProjectPreset | null) {
+  if (!preset) return false;
+
+  return participants.some((participant) => {
+    const templateIds = participant.sessions
+      .map((session) => session.templateId)
+      .filter((value): value is string => typeof value === 'string');
+
+    return preset.templates.some((template) => !templateIds.includes(template.id));
   });
 }
 
-async function addSessionTemplateToParticipant(participantId: string, templateId: string) {
-  if (!currentProject.value) return null;
+async function applyPresetToCurrentProject(preset: ProjectPreset | null, options: { save?: boolean } = {}) {
+  if (!currentProject.value || !preset) return null;
 
-  const template = findTemplateById(templateId);
-  if (!template) return null;
+  const nextParticipants = syncParticipantsWithPreset(currentProject.value.participants, preset);
+  return updateCurrentProject({
+    participants: nextParticipants,
+    settings: {
+      presetId: preset.id,
+    },
+  }, { save: options.save ?? true });
+}
 
-  let createdSession: ProjectSession | null = null;
-  const nextParticipants: ProjectParticipant[] = currentProject.value.participants.map((participant) => {
+async function createProjectWithDefaultPreset() {
+  const preset = presets.value.find((entry) => entry.id === defaultPresetId.value) ?? presets.value[0] ?? null;
+  const participants = preset
+    ? syncParticipantsWithPreset([{
+      id: 'participant-1',
+      name: 'Participant 1',
+      sessions: [],
+    }], preset)
+    : undefined;
+
+  await createProject({
+    settings: {
+      presetId: preset?.id ?? null,
+    },
+    participants,
+  });
+}
+
+async function toggleSessionCompletion(participantId: string, sessionId: string) {
+  if (!currentProject.value) return;
+
+  const nextParticipants = currentProject.value.participants.map((participant) => {
     if (participant.id !== participantId) {
       return participant;
     }
 
-    const nextSession = createSessionFromTemplate(participantId, template);
-    createdSession = nextSession;
     return {
       ...participant,
-      sessions: [...participant.sessions, nextSession],
+      sessions: participant.sessions.map((session) =>
+        session.id === sessionId
+          ? { ...session, completed: !session.completed }
+          : session
+      ),
     };
   });
 
-  if (!createdSession) return null;
   await updateCurrentProject({ participants: nextParticipants }, { save: true });
-  return createdSession;
 }
 
-async function handleAddSessionTemplate(participantId: string, templateId: string) {
-  await addSessionTemplateToParticipant(participantId, templateId);
-}
-
-async function handleRecordSessionTemplate(participantId: string, templateId: string) {
-  const session = await addSessionTemplateToParticipant(participantId, templateId);
+async function handleRecordSession(participantId: string, sessionId: string) {
+  const participant = currentProject.value?.participants.find((entry) => entry.id === participantId);
+  const session = participant?.sessions.find((entry) => entry.id === sessionId);
   if (!session) return;
 
   setView('capture');
@@ -215,23 +269,16 @@ async function handleSavePresetSettings(nextStore: ProjectPresetStore) {
 
   if (!currentProject.value) return;
 
-  const currentPresetId = currentProject.value.settings.presetId;
-  if (currentPresetId && !result.store.presets.some((preset) => preset.id === currentPresetId)) {
-    await updateCurrentProject({
-      settings: {
-        presetId: result.store.defaultPresetId ?? null,
-      },
-    }, { save: true });
-  }
+  const nextPresetId = currentProject.value.settings.presetId ?? result.store.defaultPresetId ?? null;
+  const nextPreset = result.store.presets.find((preset) => preset.id === nextPresetId) ?? result.store.presets[0] ?? null;
+  await applyPresetToCurrentProject(nextPreset, { save: true });
 }
 
 async function handleSetProjectPreset(presetId: string | null) {
-  if (!currentProject.value) return;
-  await updateCurrentProject({
-    settings: {
-      presetId,
-    },
-  }, { save: true });
+  const resolvedPresetId = presetId ?? defaultPresetId.value ?? null;
+  const nextPreset = presets.value.find((preset) => preset.id === resolvedPresetId) ?? presets.value[0] ?? null;
+  if (!nextPreset) return;
+  await applyPresetToCurrentProject(nextPreset, { save: true });
 }
 
 function buildIrisOptions(mode: 'capture' | 'mocap'): IrisStartOptions | null {
@@ -292,6 +339,15 @@ watch(isIrisRunning, (running) => {
     irisRunMode.value = null;
   }
 });
+
+watch(
+  () => [currentProject.value?.id ?? null, activeProjectPreset.value?.id ?? null] as const,
+  async () => {
+    if (!currentProject.value || !activeProjectPreset.value) return;
+    if (!projectNeedsPresetSync(currentProject.value.participants, activeProjectPreset.value)) return;
+    await applyPresetToCurrentProject(activeProjectPreset.value, { save: true });
+  },
+);
 
 watch(() => currentProject.value?.path ?? null, async (nextPath, previousPath) => {
   if (!previousPath || nextPath === previousPath || !isRecording.value) return;
@@ -375,12 +431,11 @@ async function handleToggleRecording() {
       <SessionSidenav 
         :activeView="activeView"
         :participants="currentProject.participants"
-        :sessionTemplates="activeProjectPreset?.templates ?? []"
         @open-capture="setView('capture')"
         @open-mocap="setView('mocap')"
         @open-analysis="setView('analysis')"
-        @add-session-template="handleAddSessionTemplate($event.participantId, $event.templateId)"
-        @record-session-template="handleRecordSessionTemplate($event.participantId, $event.templateId)"
+        @toggle-session-complete="toggleSessionCompletion($event.participantId, $event.sessionId)"
+        @record-session="handleRecordSession($event.participantId, $event.sessionId)"
       />
 
       <main class="workspace-content">

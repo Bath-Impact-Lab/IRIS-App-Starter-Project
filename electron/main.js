@@ -46,9 +46,9 @@ function getDefaultPresetStore() {
             id: 'preset-standard',
             name: 'Standard Capture',
             templates: [
-                { id: 'template-baseline', name: 'Baseline', exercises: ['Static calibration'] },
-                { id: 'template-walk', name: 'Walking Trial', exercises: ['Walk', 'Turn', 'Return'] },
-                { id: 'template-balance', name: 'Balance Trial', exercises: ['Single leg stance'] },
+                { id: 'template-baseline', name: 'Baseline' },
+                { id: 'template-walk', name: 'Walking Trial' },
+                { id: 'template-balance', name: 'Balance Trial' },
             ],
         }],
     };
@@ -59,12 +59,14 @@ function getPresetStorePath() {
 }
 
 function sanitizePresetTemplate(template = {}, index = 0) {
+    const legacyExercises = Array.isArray(template.exercises)
+        ? template.exercises.filter((value) => typeof value === 'string' && value.trim().length > 0)
+        : [];
     return {
         id: typeof template.id === 'string' && template.id.trim() ? template.id : createAppEntityId(`template-${index + 1}`),
-        name: typeof template.name === 'string' && template.name.trim() ? template.name.trim() : `Template ${index + 1}`,
-        exercises: Array.isArray(template.exercises)
-            ? template.exercises.filter((value) => typeof value === 'string' && value.trim().length > 0)
-            : [],
+        name: typeof template.name === 'string' && template.name.trim()
+            ? template.name.trim()
+            : (legacyExercises[0] || `Template ${index + 1}`),
     };
 }
 
@@ -281,6 +283,7 @@ function ensureProjectPayload(projectData = {}, filePath = null, options = {}) {
                     date: typeof session?.date === 'string' && session.date.trim()
                         ? session.date.trim()
                         : now,
+                    completed: session?.completed === true,
                     templateId: typeof session?.templateId === 'string' ? session.templateId : null,
                     exercises: Array.isArray(session?.exercises)
                         ? session.exercises.filter((value) => typeof value === 'string')
