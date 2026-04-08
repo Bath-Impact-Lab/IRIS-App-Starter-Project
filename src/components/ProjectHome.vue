@@ -113,21 +113,67 @@ function formatRecentDate(value: string) {
 <style scoped>
 /* Container & Background */
 .project-home {
+  --home-ink: #e8f0f9;
+  --home-muted: #a6b7cb;
+  --home-accent: #57a9ff;
+  --home-card-bg: rgba(16, 26, 40, 0.78);
+  --home-card-border: rgba(139, 177, 220, 0.2);
+  --home-surface: rgba(255, 255, 255, 0.03);
+  --home-shadow: 0 18px 36px rgba(0, 0, 0, 0.24);
   position: absolute;
   inset: var(--app-topbar-height, 63px) 0 0 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(120% 120% at 50% -10%, rgba(45, 87, 138, 0.15) 0%, var(--bg) 60%);
+  background:
+    radial-gradient(90% 70% at 50% -10%, rgba(87, 169, 255, 0.16) 0%, rgba(24, 42, 63, 0) 70%),
+    linear-gradient(180deg, #0f1a28 0%, #111e2d 52%, #132536 100%);
   overflow-y: auto;
   padding: 40px 20px;
+  isolation: isolate;
 }
 
 [data-theme="light"] .project-home {
-  background: radial-gradient(120% 120% at 50% -10%, rgba(46, 134, 193, 0.08) 0%, var(--bg) 60%);
+  --home-ink: #13314b;
+  --home-muted: #647a92;
+  --home-accent: #1f7ed7;
+  --home-card-bg: #fbfdff;
+  --home-card-border: rgba(22, 82, 136, 0.14);
+  --home-surface: rgba(255, 255, 255, 0.68);
+  --home-shadow: 0 22px 44px rgba(23, 80, 128, 0.11);
+  background:
+    radial-gradient(82% 55% at 50% -8%, rgba(74, 150, 218, 0.16) 0%, rgba(174, 213, 241, 0) 76%),
+    linear-gradient(180deg, #f8fcff 0%, #f0f6fb 62%, #ebf2f8 100%);
+}
+
+.project-home::before,
+.project-home::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.project-home::before {
+  background:
+    radial-gradient(58% 32% at 16% 18%, rgba(84, 162, 228, 0.2) 0%, rgba(84, 162, 228, 0) 100%),
+    radial-gradient(64% 34% at 86% 78%, rgba(62, 146, 220, 0.12) 0%, rgba(62, 146, 220, 0) 100%);
+}
+
+.project-home::after {
+  opacity: 0.33;
+  background:
+    repeating-linear-gradient(
+      115deg,
+      rgba(31, 126, 215, 0.06) 0 2px,
+      transparent 2px 26px
+    );
 }
 
 .home-container {
+  position: relative;
+  z-index: 1;
   width: 100%;
   max-width: 640px;
   display: flex;
@@ -138,6 +184,7 @@ function formatRecentDate(value: string) {
 
 /* Header */
 .home-header {
+  position: relative;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -145,37 +192,41 @@ function formatRecentDate(value: string) {
 }
 
 .home-title {
-  margin: 0 0 8px 0;
-  font-size: 2rem;
-  font-weight: 800;
-  color: var(--fg);
-  letter-spacing: -0.02em;
+  margin: 0 0 10px 0;
+  font-size: clamp(2.1rem, 4.1vw, 2.8rem);
+  font-weight: 700;
+  color: var(--home-ink);
+  letter-spacing: -0.028em;
+  line-height: 1.05;
 }
 
 .home-subtitle {
   margin: 0;
-  font-size: 1.05rem;
-  color: var(--muted);
+  font-size: clamp(0.98rem, 2vw, 1.06rem);
+  color: var(--home-muted);
+  line-height: 1.55;
+  max-width: 540px;
 }
 
 .quick-demo-button {
-  margin-top: 20px;
-  padding: 12px 20px;
-  border: 1px solid rgba(107, 230, 117, 0.28);
+  margin-top: 22px;
+  padding: 12px 22px;
+  border: 1px solid rgba(31, 126, 215, 0.33);
   border-radius: 999px;
-  background: linear-gradient(135deg, rgba(107, 230, 117, 0.24), rgba(68, 176, 255, 0.18));
-  color: var(--fg);
+  background: linear-gradient(135deg, rgba(31, 126, 215, 0.2), rgba(75, 163, 234, 0.12));
+  color: var(--home-ink);
   font-size: 0.92rem;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.02em;
   cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, background 0.22s ease;
 }
 
 .quick-demo-button:hover {
   transform: translateY(-2px);
-  border-color: rgba(107, 230, 117, 0.5);
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.18);
+  border-color: rgba(31, 126, 215, 0.56);
+  background: linear-gradient(135deg, rgba(31, 126, 215, 0.26), rgba(75, 163, 234, 0.16));
+  box-shadow: 0 14px 28px rgba(13, 54, 88, 0.24);
 }
 
 .quick-demo-button:active {
@@ -183,8 +234,8 @@ function formatRecentDate(value: string) {
 }
 
 [data-theme="light"] .quick-demo-button {
-  background: linear-gradient(135deg, rgba(46, 134, 193, 0.16), rgba(56, 189, 248, 0.14));
-  border-color: rgba(31, 78, 121, 0.18);
+  background: linear-gradient(135deg, rgba(31, 126, 215, 0.18), rgba(85, 170, 237, 0.12));
+  border-color: rgba(22, 82, 136, 0.24);
 }
 
 /* Action Cards */
@@ -201,31 +252,24 @@ function formatRecentDate(value: string) {
   text-align: left;
   gap: 16px;
   padding: 24px;
-  background: rgba(20, 30, 44, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--home-card-bg);
+  border: 1px solid var(--home-card-border);
   border-radius: 16px;
-  backdrop-filter: blur(12px);
+  box-shadow: var(--home-shadow);
   cursor: pointer;
   transition: transform 0.25s ease, background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
-[data-theme="light"] .action-card {
-  background: #ffffff;
-  border-color: rgba(31, 78, 121, 0.12);
-  box-shadow: 0 4px 20px rgba(31, 78, 121, 0.05);
-}
-
 .action-card:hover {
   transform: translateY(-4px);
-  background: rgba(28, 42, 60, 0.8);
-  border-color: rgba(107, 230, 117, 0.3);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+  border-color: rgba(31, 126, 215, 0.34);
+  box-shadow: 0 20px 34px rgba(13, 54, 88, 0.2);
 }
 
 [data-theme="light"] .action-card:hover {
-  background: #f8fbff;
-  border-color: var(--accent);
-  box-shadow: 0 12px 30px rgba(31, 78, 121, 0.1);
+  background: #ffffff;
+  border-color: rgba(31, 126, 215, 0.32);
+  box-shadow: 0 20px 36px rgba(20, 76, 124, 0.14);
 }
 
 .action-card:active {
@@ -242,36 +286,37 @@ function formatRecentDate(value: string) {
 }
 
 .new-icon {
-  background: rgba(107, 230, 117, 0.15);
-  color: #6be675;
+  background: rgba(31, 126, 215, 0.12);
+  color: var(--home-accent);
 }
 
 .open-icon {
-  background: rgba(68, 176, 255, 0.15);
-  color: #44b0ff;
+  background: rgba(31, 126, 215, 0.16);
+  color: #2b95ed;
 }
 
 [data-theme="light"] .new-icon {
-  background: rgba(46, 134, 193, 0.12);
-  color: #2E86C1;
+  background: rgba(31, 126, 215, 0.11);
+  color: #1f7ed7;
 }
 [data-theme="light"] .open-icon {
-  background: rgba(56, 189, 248, 0.15);
-  color: #0284c7;
+  background: rgba(55, 145, 219, 0.13);
+  color: #1972c1;
 }
 
 .card-text h3 {
   margin: 0 0 6px 0;
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: var(--fg);
+  font-size: 1.18rem;
+  font-weight: 650;
+  color: var(--home-ink);
+  letter-spacing: -0.01em;
 }
 
 .card-text p {
   margin: 0;
-  font-size: 0.85rem;
-  color: var(--muted);
-  line-height: 1.4;
+  font-size: 0.86rem;
+  color: var(--home-muted);
+  line-height: 1.5;
 }
 
 /* Recent Projects */
@@ -283,13 +328,13 @@ function formatRecentDate(value: string) {
 
 .section-title {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
+  letter-spacing: 0.14em;
+  color: color-mix(in srgb, var(--home-muted) 78%, transparent);
   padding-bottom: 8px;
-  border-bottom: 1px solid var(--divider-line);
+  border-bottom: 1px solid color-mix(in srgb, var(--home-muted) 26%, transparent);
 }
 
 .recent-list {
@@ -304,22 +349,23 @@ function formatRecentDate(value: string) {
   justify-content: space-between;
   width: 100%;
   padding: 14px 16px;
-  background: transparent;
-  border: 1px solid transparent;
+  background: var(--home-surface);
+  border: 1px solid color-mix(in srgb, var(--home-muted) 22%, transparent);
   border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(6, 29, 49, 0.08);
   cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .recent-item:hover {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(31, 126, 215, 0.28);
+  box-shadow: 0 12px 28px rgba(13, 54, 88, 0.16);
 }
 
 [data-theme="light"] .recent-item:hover {
   background: #ffffff;
-  border-color: rgba(31, 78, 121, 0.12);
-  box-shadow: 0 2px 8px rgba(31, 78, 121, 0.04);
+  border-color: rgba(22, 82, 136, 0.2);
+  box-shadow: 0 14px 28px rgba(20, 76, 124, 0.11);
 }
 
 .recent-info {
@@ -329,33 +375,33 @@ function formatRecentDate(value: string) {
 }
 
 .recent-icon {
-  color: var(--muted);
+  color: var(--home-accent);
 }
 
 .recent-name {
   font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--fg);
+  font-weight: 620;
+  color: var(--home-ink);
 }
 
 .recent-date {
   font-size: 0.8rem;
-  color: var(--muted);
+  color: var(--home-muted);
 }
 
 .empty-state {
   padding: 24px;
   text-align: center;
   font-size: 0.9rem;
-  color: var(--muted);
-  background: rgba(255, 255, 255, 0.02);
+  color: var(--home-muted);
+  background: var(--home-surface);
   border-radius: 12px;
-  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border: 1px dashed color-mix(in srgb, var(--home-muted) 36%, transparent);
 }
 
 [data-theme="light"] .empty-state {
-  background: rgba(31, 78, 121, 0.02);
-  border-color: rgba(31, 78, 121, 0.15);
+  background: rgba(255, 255, 255, 0.74);
+  border-color: rgba(22, 82, 136, 0.24);
 }
 
 /* Animations */
@@ -377,7 +423,12 @@ function formatRecentDate(value: string) {
   }
 
   .home-title {
-    font-size: 1.6rem;
+    font-size: 1.9rem;
+  }
+
+  .hero-motif {
+    height: 92px;
+    margin-bottom: 12px;
   }
 
   .recent-item {
