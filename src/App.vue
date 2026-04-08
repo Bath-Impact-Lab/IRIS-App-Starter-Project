@@ -249,7 +249,7 @@ async function handleToggleRecording() {
     
     <AppTopBar 
       appTitle="ReCapture" 
-      :disabled="!hasCurrentProject"
+      :homeDisabled="!hasCurrentProject"
       @toggle-settings="showSettings = !showSettings" 
       @navigate-home="setCurrentProject(null)"
     />
