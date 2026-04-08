@@ -1,6 +1,7 @@
 ﻿<script setup lang="ts">
 import { ref, computed, watch, watchEffect } from 'vue';
-import { useProject } from '@/lib/useProject';
+import { useProject, type ProjectParticipant, type ProjectSession } from '@/lib/useProject';
+import { useProjectPresets, type ProjectPresetStore, type ProjectSessionTemplate } from '@/lib/useProjectPresets';
 import { useIris, type IrisStartOptions } from '@/lib/useIris';
 
 // ── Layout & Core UI ─────────────────────────────────────────────────────────
@@ -23,8 +24,16 @@ const {
   recentProjects,
   createProject, 
   openProject,
+  updateCurrentProject,
   setCurrentProject
 } = useProject();
+const {
+  presetStore,
+  presets,
+  defaultPresetId,
+  loadPresetStore,
+  savePresetStore,
+} = useProjectPresets();
 const {
   cameras: irisCameras,
   isRunning: isIrisRunning,
@@ -34,6 +43,8 @@ const {
   start: startIris,
   stop: stopIris,
 } = useIris({ autoFetch: true, autoCheck: false });
+
+void loadPresetStore();
 
 // View State Routing
 const activeView = computed(() => currentProject.value?.workspace.activeView || 'capture');
@@ -61,6 +72,12 @@ const selectedResolution = computed(() => currentProject.value?.workspace.resolu
 const selectedFps = computed(() => currentProject.value?.workspace.fps ?? 30);
 const selectedRotation = computed(() => currentProject.value?.workspace.rotation ?? 0);
 const selectedCameraIds = computed(() => currentProject.value?.workspace.selectedCameraIds ?? []);
+const activeProjectPresetId = computed(() =>
+  currentProject.value?.settings.presetId ?? defaultPresetId.value ?? null
+);
+const activeProjectPreset = computed(() =>
+  presets.value.find((preset) => preset.id === activeProjectPresetId.value) ?? presets.value[0] ?? null
+);
 const projectOutputDir = computed(() => getParentDirectory(currentProject.value?.path));
 const availableIrisCameras = computed(() => {
   if (selectedCameraIds.value.length === 0) return irisCameras.value;
@@ -123,6 +140,98 @@ function parseResolution(value: string) {
 function getParentDirectory(filePath: string | null | undefined) {
   if (typeof filePath !== 'string' || filePath.trim().length === 0) return '';
   return filePath.replace(/[\\/][^\\/]+$/, '');
+}
+
+function createEntityId(prefix: string) {
+  return globalThis.crypto?.randomUUID?.() ?? `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function findTemplateById(templateId: string) {
+  return activeProjectPreset.value?.templates.find((template) => template.id === templateId) ?? null;
+}
+
+function createSessionFromTemplate(participantId: string, template: ProjectSessionTemplate): ProjectSession {
+  return {
+    id: createEntityId(`${participantId}-session`),
+    name: template.name,
+    date: new Date().toISOString(),
+    templateId: template.id,
+    exercises: [...template.exercises],
+  };
+}
+
+async function createProjectWithDefaultPreset() {
+  await createProject({
+    settings: {
+      presetId: defaultPresetId.value ?? null,
+    },
+  });
+}
+
+async function addSessionTemplateToParticipant(participantId: string, templateId: string) {
+  if (!currentProject.value) return null;
+
+  const template = findTemplateById(templateId);
+  if (!template) return null;
+
+  let createdSession: ProjectSession | null = null;
+  const nextParticipants: ProjectParticipant[] = currentProject.value.participants.map((participant) => {
+    if (participant.id !== participantId) {
+      return participant;
+    }
+
+    const nextSession = createSessionFromTemplate(participantId, template);
+    createdSession = nextSession;
+    return {
+      ...participant,
+      sessions: [...participant.sessions, nextSession],
+    };
+  });
+
+  if (!createdSession) return null;
+  await updateCurrentProject({ participants: nextParticipants }, { save: true });
+  return createdSession;
+}
+
+async function handleAddSessionTemplate(participantId: string, templateId: string) {
+  await addSessionTemplateToParticipant(participantId, templateId);
+}
+
+async function handleRecordSessionTemplate(participantId: string, templateId: string) {
+  const session = await addSessionTemplateToParticipant(participantId, templateId);
+  if (!session) return;
+
+  setView('capture');
+
+  const startResult = await startIrisForMode('capture');
+  if (!startResult?.ok || isRecording.value) return;
+
+  await handleToggleRecording();
+}
+
+async function handleSavePresetSettings(nextStore: ProjectPresetStore) {
+  const result = await savePresetStore(nextStore);
+  if (!result.ok || !result.store) return;
+
+  if (!currentProject.value) return;
+
+  const currentPresetId = currentProject.value.settings.presetId;
+  if (currentPresetId && !result.store.presets.some((preset) => preset.id === currentPresetId)) {
+    await updateCurrentProject({
+      settings: {
+        presetId: result.store.defaultPresetId ?? null,
+      },
+    }, { save: true });
+  }
+}
+
+async function handleSetProjectPreset(presetId: string | null) {
+  if (!currentProject.value) return;
+  await updateCurrentProject({
+    settings: {
+      presetId,
+    },
+  }, { save: true });
 }
 
 function buildIrisOptions(mode: 'capture' | 'mocap'): IrisStartOptions | null {
@@ -257,7 +366,7 @@ async function handleToggleRecording() {
     <ProjectHome 
       v-if="!hasCurrentProject" 
       :recentProjects="recentProjects"
-      @new-project="createProject()" 
+      @new-project="createProjectWithDefaultPreset()" 
       @open-project="openProject()"
       @open-recent="openProject($event)"
     />
@@ -266,9 +375,12 @@ async function handleToggleRecording() {
       <SessionSidenav 
         :activeView="activeView"
         :participants="currentProject.participants"
+        :sessionTemplates="activeProjectPreset?.templates ?? []"
         @open-capture="setView('capture')"
         @open-mocap="setView('mocap')"
         @open-analysis="setView('analysis')"
+        @add-session-template="handleAddSessionTemplate($event.participantId, $event.templateId)"
+        @record-session-template="handleRecordSessionTemplate($event.participantId, $event.templateId)"
       />
 
       <main class="workspace-content">
@@ -335,8 +447,13 @@ async function handleToggleRecording() {
     <SettingsModal 
       :showSettings="showSettings" 
       :currentTheme="currentTheme"
+      :presetStore="presetStore"
+      :currentProjectPresetId="currentProject?.settings.presetId ?? null"
+      :hasCurrentProject="hasCurrentProject"
       @settings="showSettings = $event" 
       @setTheme="currentTheme = $event"
+      @save-presets="handleSavePresetSettings"
+      @set-project-preset="handleSetProjectPreset"
     />
     
   </div>

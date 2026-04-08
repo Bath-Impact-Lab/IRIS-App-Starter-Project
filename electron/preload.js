@@ -24,6 +24,8 @@ contextBridge.exposeInMainWorld('ipc', {
   projectCreate: (projectData) => ipcRenderer.invoke('project-create', projectData),
   projectOpen: (filePath) => ipcRenderer.invoke('project-open', filePath),
   projectSave: (filePath, projectData) => ipcRenderer.invoke('project-save', filePath, projectData),
+  presetStoreLoad: () => ipcRenderer.invoke('preset-store-load'),
+  presetStoreSave: (store) => ipcRenderer.invoke('preset-store-save', store),
  
 })
 

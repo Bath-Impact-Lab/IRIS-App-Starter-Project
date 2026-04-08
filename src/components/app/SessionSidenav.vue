@@ -51,6 +51,29 @@
 
       <div v-for="participant in participants" :key="participant.id" class="session-sidenav-section">
         <h2 class="session-sidenav-title">{{ participant.name }}</h2>
+
+        <div v-if="sessionTemplates.length > 0" class="session-sidenav-list session-template-list">
+          <button
+            v-for="template in sessionTemplates"
+            :key="template.id"
+            class="session-sidenav-link session-template-link"
+            type="button"
+            :title="`Right click to record ${template.name}`"
+            @click="emit('add-session-template', { participantId: participant.id, templateId: template.id })"
+            @contextmenu.prevent="openTemplateMenu($event, participant.id, template.id)"
+          >
+            <div class="link-left">
+              <span class="indicator indicator-template"></span>
+              <div class="session-meta">
+                <span class="session-name">{{ template.name }}</span>
+                <span class="session-date">
+                  {{ template.exercises.length > 0 ? `${template.exercises.length} exercise${template.exercises.length === 1 ? '' : 's'}` : 'No exercises yet' }}
+                </span>
+              </div>
+            </div>
+          </button>
+        </div>
+
         <div v-if="participant.sessions.length > 0" class="session-sidenav-list">
 
           <div v-for="session in participant.sessions" :key="session.id" class="session-group">
@@ -62,7 +85,10 @@
             >
               <div class="link-left">
                 <span class="indicator"></span>
-                {{ session.date }}
+                <div class="session-meta">
+                  <span class="session-name">{{ session.name }}</span>
+                  <span class="session-date">{{ formatSessionDate(session.date) }}</span>
+                </div>
               </div>
               <svg
                 xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
@@ -134,33 +160,59 @@
         />
       </div>
     </div>
+
+    <div
+      v-if="templateMenu.visible"
+      class="template-context-menu"
+      :style="{ left: `${templateMenu.x}px`, top: `${templateMenu.y}px` }"
+    >
+      <button class="template-context-action" type="button" @click="addTemplateSessionFromMenu">
+        Add Session
+      </button>
+      <button class="template-context-action" type="button" @click="recordTemplateSessionFromMenu">
+        Record Session
+      </button>
+    </div>
   </aside>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useIris } from '@/lib/useIris';
 import type { ProjectParticipant } from '@/lib/useProject';
+import type { ProjectSessionTemplate } from '@/lib/useProjectPresets';
 
 interface Props {
   activeView: 'capture' | 'analysis' | 'mocap';
   participants?: ProjectParticipant[];
+  sessionTemplates?: ProjectSessionTemplate[];
 }
 
 const props = withDefaults(defineProps<Props>(), {
   participants: () => [],
+  sessionTemplates: () => [],
 });
 
 const emit = defineEmits<{
   'open-capture': [];
   'open-analysis': [];
   'open-mocap': [];
+  'add-session-template': [{ participantId: string; templateId: string }];
+  'record-session-template': [{ participantId: string; templateId: string }];
 }>();
 
 // State for the main cameras dropdown
 const isCamerasOpen = ref(true);
 const openSessionIds = ref<string[]>([]);
 const participants = computed(() => props.participants);
+const sessionTemplates = computed(() => props.sessionTemplates);
+const templateMenu = ref({
+  visible: false,
+  x: 0,
+  y: 0,
+  participantId: '',
+  templateId: '',
+});
 const {
   cameras: irisCameras,
   isLoading: areIrisCamerasLoading,
@@ -179,6 +231,18 @@ watch(participants, () => {
   openSessionIds.value = [];
 }, { deep: true });
 
+onMounted(() => {
+  window.addEventListener('click', closeTemplateMenu);
+  window.addEventListener('blur', closeTemplateMenu);
+  window.addEventListener('scroll', closeTemplateMenu, true);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('click', closeTemplateMenu);
+  window.removeEventListener('blur', closeTemplateMenu);
+  window.removeEventListener('scroll', closeTemplateMenu, true);
+});
+
 function toggleSession(sessionId: string) {
   if (openSessionIds.value.includes(sessionId)) {
     openSessionIds.value = openSessionIds.value.filter((id) => id !== sessionId);
@@ -186,6 +250,56 @@ function toggleSession(sessionId: string) {
   }
 
   openSessionIds.value = [...openSessionIds.value, sessionId];
+}
+
+function formatSessionDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: '2-digit',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function openTemplateMenu(event: MouseEvent, participantId: string, templateId: string) {
+  templateMenu.value = {
+    visible: true,
+    x: event.clientX,
+    y: event.clientY,
+    participantId,
+    templateId,
+  };
+}
+
+function closeTemplateMenu() {
+  if (!templateMenu.value.visible) return;
+  templateMenu.value = {
+    visible: false,
+    x: 0,
+    y: 0,
+    participantId: '',
+    templateId: '',
+  };
+}
+
+function addTemplateSessionFromMenu() {
+  emit('add-session-template', {
+    participantId: templateMenu.value.participantId,
+    templateId: templateMenu.value.templateId,
+  });
+  closeTemplateMenu();
+}
+
+function recordTemplateSessionFromMenu() {
+  emit('record-session-template', {
+    participantId: templateMenu.value.participantId,
+    templateId: templateMenu.value.templateId,
+  });
+  closeTemplateMenu();
 }
 </script>
 
@@ -315,6 +429,10 @@ function toggleSession(sessionId: string) {
   gap: 4px;
 }
 
+.session-template-list {
+  margin-bottom: 8px;
+}
+
 /* Group container for dates + nested items */
 .session-group {
   display: flex;
@@ -350,6 +468,36 @@ function toggleSession(sessionId: string) {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
+}
+
+.session-meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.session-name,
+.session-date {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.session-name {
+  font-size: 0.9rem;
+}
+
+.session-date {
+  font-size: 0.75rem;
+  color: var(--muted, #94a3b8);
+}
+
+.session-template-link {
+  border: 1px dashed rgba(107, 230, 117, 0.2);
+}
+
+.indicator-template {
+  background-color: rgba(107, 230, 117, 0.75);
 }
 
 .indicator {
@@ -418,6 +566,41 @@ function toggleSession(sessionId: string) {
 .nested-dash {
   opacity: 0.5;
   font-weight: bold;
+}
+
+.template-context-menu {
+  position: fixed;
+  z-index: 2000;
+  min-width: 180px;
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(17, 24, 39, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+:global([data-theme="light"]) .template-context-menu {
+  background: rgba(255, 255, 255, 0.98);
+  border-color: rgba(31, 78, 121, 0.12);
+}
+
+.template-context-action {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 10px 12px;
+  border-radius: 8px;
+  text-align: left;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.template-context-action:hover {
+  background: var(--sidenav-hover, rgba(255, 255, 255, 0.06));
 }
 
 .session-sidenav-divider {

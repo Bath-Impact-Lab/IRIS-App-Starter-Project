@@ -20,6 +20,7 @@ const { registerIrisIpc, getIrisCliPath } = require('./iris');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { randomUUID } = require('crypto');
 const { spawn, execFile, exec } = require('child_process')
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
@@ -28,6 +29,97 @@ let mainWindow;
 let mockTimer = null;
 const PROJECT_DIRECTORY_NAME = 'ReCapture Projects';
 const PROJECT_EXTENSION = 'recapture.json';
+const PRESET_STORE_FILENAME = 'project-presets.json';
+
+function createAppEntityId(prefix) {
+    try {
+        return randomUUID();
+    } catch {
+        return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    }
+}
+
+function getDefaultPresetStore() {
+    return {
+        defaultPresetId: 'preset-standard',
+        presets: [{
+            id: 'preset-standard',
+            name: 'Standard Capture',
+            templates: [
+                { id: 'template-baseline', name: 'Baseline', exercises: ['Static calibration'] },
+                { id: 'template-walk', name: 'Walking Trial', exercises: ['Walk', 'Turn', 'Return'] },
+                { id: 'template-balance', name: 'Balance Trial', exercises: ['Single leg stance'] },
+            ],
+        }],
+    };
+}
+
+function getPresetStorePath() {
+    return path.join(app.getPath('userData'), PRESET_STORE_FILENAME);
+}
+
+function sanitizePresetTemplate(template = {}, index = 0) {
+    return {
+        id: typeof template.id === 'string' && template.id.trim() ? template.id : createAppEntityId(`template-${index + 1}`),
+        name: typeof template.name === 'string' && template.name.trim() ? template.name.trim() : `Template ${index + 1}`,
+        exercises: Array.isArray(template.exercises)
+            ? template.exercises.filter((value) => typeof value === 'string' && value.trim().length > 0)
+            : [],
+    };
+}
+
+function sanitizePreset(preset = {}, index = 0) {
+    return {
+        id: typeof preset.id === 'string' && preset.id.trim() ? preset.id : createAppEntityId(`preset-${index + 1}`),
+        name: typeof preset.name === 'string' && preset.name.trim() ? preset.name.trim() : `Preset ${index + 1}`,
+        templates: Array.isArray(preset.templates)
+            ? preset.templates.map((template, templateIndex) => sanitizePresetTemplate(template, templateIndex))
+            : [],
+    };
+}
+
+function sanitizePresetStore(raw = {}) {
+    const fallback = getDefaultPresetStore();
+    const presets = Array.isArray(raw.presets) && raw.presets.length > 0
+        ? raw.presets.map((preset, index) => sanitizePreset(preset, index))
+        : fallback.presets;
+    const defaultPresetId = typeof raw.defaultPresetId === 'string' && presets.some((preset) => preset.id === raw.defaultPresetId)
+        ? raw.defaultPresetId
+        : (presets[0]?.id ?? null);
+
+    return {
+        version: 1,
+        defaultPresetId,
+        presets,
+    };
+}
+
+function readPresetStore() {
+    const filePath = getPresetStorePath();
+    const fallback = sanitizePresetStore(getDefaultPresetStore());
+
+    try {
+        if (!fs.existsSync(filePath)) {
+            fs.mkdirSync(path.dirname(filePath), { recursive: true });
+            fs.writeFileSync(filePath, JSON.stringify(fallback, null, 2), 'utf8');
+            return fallback;
+        }
+
+        const raw = fs.readFileSync(filePath, 'utf8');
+        return sanitizePresetStore(JSON.parse(raw));
+    } catch (error) {
+        console.error('[presets] Failed to read preset store:', error);
+        return fallback;
+    }
+}
+
+function writePresetStore(store) {
+    const filePath = getPresetStorePath();
+    const payload = sanitizePresetStore(store);
+    fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
+    return payload;
+}
  
 function createWindow() {
     mainWindow = new BrowserWindow({
@@ -142,6 +234,22 @@ ipcMain.handle('check-iris-cli', () => {
     console.log(`[iris-cli] check: ${found ? 'found' : 'NOT found'} at ${irisCliPath}`);
     return { found, path: irisCliPath };
 });
+
+ipcMain.handle('preset-store-load', async () => {
+    try {
+        return { ok: true, store: readPresetStore() };
+    } catch (error) {
+        return { ok: false, error: error.message, store: sanitizePresetStore(getDefaultPresetStore()) };
+    }
+});
+
+ipcMain.handle('preset-store-save', async (event, store) => {
+    try {
+        return { ok: true, store: writePresetStore(store) };
+    } catch (error) {
+        return { ok: false, error: error.message };
+    }
+});
  
 function getDefaultProjectsDir() {
     const documentsDir = app.getPath('documents');
@@ -167,9 +275,13 @@ function ensureProjectPayload(projectData = {}, filePath = null, options = {}) {
             sessions: Array.isArray(participant?.sessions)
                 ? participant.sessions.map((session, sessionIndex) => ({
                     id: session?.id || `participant-${index + 1}-session-${sessionIndex + 1}`,
+                    name: typeof session?.name === 'string' && session.name.trim()
+                        ? session.name.trim()
+                        : (typeof session?.date === 'string' && session.date.trim() ? session.date.trim() : 'Untitled Session'),
                     date: typeof session?.date === 'string' && session.date.trim()
                         ? session.date.trim()
-                        : 'Untitled Session',
+                        : now,
+                    templateId: typeof session?.templateId === 'string' ? session.templateId : null,
                     exercises: Array.isArray(session?.exercises)
                         ? session.exercises.filter((value) => typeof value === 'string')
                         : [],
@@ -192,6 +304,7 @@ function ensureProjectPayload(projectData = {}, filePath = null, options = {}) {
         settings: {
             theme: projectData.settings?.theme === 'dark' ? 'dark' : 'light',
             recordingsDir: projectData.settings?.recordingsDir ?? null,
+            presetId: typeof projectData.settings?.presetId === 'string' ? projectData.settings.presetId : null,
         },
         workspace: {
             activeView: ['capture', 'mocap', 'analysis'].includes(projectData.workspace?.activeView)

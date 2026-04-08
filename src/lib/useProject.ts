@@ -6,6 +6,7 @@ export type ProjectTheme = 'dark' | 'light';
 export interface ProjectSettings {
   theme: ProjectTheme;
   recordingsDir: string | null;
+  presetId: string | null;
 }
 
 export interface ProjectWorkspaceState {
@@ -21,7 +22,9 @@ export interface ProjectWorkspaceState {
 
 export interface ProjectSession {
   id: string;
+  name: string;
   date: string;
+  templateId: string | null;
   exercises: string[];
 }
 
@@ -106,7 +109,9 @@ function sanitizeProjectParticipants(participants: unknown): ProjectParticipant[
           const maybeSession = session as Partial<ProjectSession> | null | undefined;
           return {
             id: maybeSession?.id || `${name.toLowerCase().replace(/\s+/g, '-')}-session-${sessionIndex + 1}`,
-            date: maybeSession?.date || 'Untitled Session',
+            name: maybeSession?.name?.trim() || maybeSession?.date || 'Untitled Session',
+            date: maybeSession?.date || nowIso(),
+            templateId: typeof maybeSession?.templateId === 'string' ? maybeSession.templateId : null,
             exercises: Array.isArray(maybeSession?.exercises)
               ? maybeSession.exercises.filter((value): value is string => typeof value === 'string')
               : [],
@@ -131,6 +136,7 @@ function sanitizeProjectFile(raw: Partial<ProjectFile> | null | undefined, fileP
     settings: {
       theme: sanitizeProjectTheme(raw?.settings?.theme),
       recordingsDir: raw?.settings?.recordingsDir ?? null,
+      presetId: typeof raw?.settings?.presetId === 'string' ? raw.settings.presetId : null,
     },
     workspace: {
       activeView: sanitizeProjectView(raw?.workspace?.activeView),
@@ -160,6 +166,7 @@ function toProjectFile(project: ProjectDocument | ProjectFile): ProjectFile {
     settings: {
       theme: project.settings.theme,
       recordingsDir: project.settings.recordingsDir,
+      presetId: project.settings.presetId,
     },
     workspace: {
       activeView: project.workspace.activeView,
@@ -176,7 +183,9 @@ function toProjectFile(project: ProjectDocument | ProjectFile): ProjectFile {
       name: participant.name,
       sessions: participant.sessions.map((session) => ({
         id: session.id,
+        name: session.name,
         date: session.date,
+        templateId: session.templateId,
         exercises: [...session.exercises],
       })),
     })),

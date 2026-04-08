@@ -24,6 +24,86 @@
               </button>
             </div>
           </div>
+
+          <div class="settings-group">
+            <label>Project Presets</label>
+            <div class="preset-toolbar">
+              <p class="settings-help">Presets are stored in application data and can be reused across projects.</p>
+              <button class="btn-secondary" type="button" @click="addPreset">New Preset</button>
+            </div>
+
+            <div v-if="props.hasCurrentProject" class="preset-assignment">
+              <span class="preset-assignment-label">Current Project Preset</span>
+              <select v-model="projectPresetDraft" class="settings-select">
+                <option :value="null">Use app default</option>
+                <option v-for="preset in presetDraft.presets" :key="preset.id" :value="preset.id">
+                  {{ preset.name }}
+                </option>
+              </select>
+            </div>
+
+            <div class="preset-list">
+              <div v-for="(preset, presetIndex) in presetDraft.presets" :key="preset.id" class="preset-card">
+                <div class="preset-card-header">
+                  <input
+                    v-model="preset.name"
+                    type="text"
+                    class="settings-input preset-name-input"
+                    placeholder="Preset name"
+                  />
+                  <div class="preset-card-actions">
+                    <button
+                      class="btn-chip"
+                      :class="{ active: presetDraft.defaultPresetId === preset.id }"
+                      type="button"
+                      @click="presetDraft.defaultPresetId = preset.id"
+                    >
+                      {{ presetDraft.defaultPresetId === preset.id ? 'Default' : 'Set Default' }}
+                    </button>
+                    <button class="btn-chip btn-chip-danger" type="button" @click="removePreset(presetIndex)">
+                      Remove
+                    </button>
+                  </div>
+                </div>
+
+                <div v-if="preset.templates.length > 0" class="template-editor-list">
+                  <div v-for="(template, templateIndex) in preset.templates" :key="template.id" class="template-editor">
+                    <input
+                      v-model="template.name"
+                      type="text"
+                      class="settings-input"
+                      placeholder="Session template name"
+                    />
+                    <input
+                      :value="template.exercises.join(', ')"
+                      type="text"
+                      class="settings-input"
+                      placeholder="Exercises, comma separated"
+                      @input="updateTemplateExercises(presetIndex, templateIndex, ($event.target as HTMLInputElement).value)"
+                    />
+                    <button class="btn-chip btn-chip-danger" type="button" @click="removeTemplate(presetIndex, templateIndex)">
+                      Remove
+                    </button>
+                  </div>
+                </div>
+
+                <div v-else class="settings-help">
+                  No session templates yet.
+                </div>
+
+                <button class="btn-secondary btn-secondary-inline" type="button" @click="addTemplate(presetIndex)">
+                  Add Session Template
+                </button>
+              </div>
+            </div>
+
+            <div class="preset-footer">
+              <button class="btn-save" type="button" @click="handleSavePresetChanges">
+                Save Presets
+              </button>
+            </div>
+          </div>
+
           <div class="settings-group">
             <label>License Management</label>
             <div class="license-input-wrapper">
@@ -69,23 +149,58 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, watch, nextTick, computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useLicense } from './../lib/useLicense';
+import type { ProjectPresetStore } from '@/lib/useProjectPresets';
 
 interface Props {
   showSettings: boolean,
   currentTheme?: 'dark' | 'light',
+  presetStore: ProjectPresetStore,
+  currentProjectPresetId?: string | null,
+  hasCurrentProject?: boolean,
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  currentTheme: 'light',
+  currentProjectPresetId: null,
+  hasCurrentProject: false,
+});
 
 const emit = defineEmits<{
   settings: [boolean]
   licenseKey: [string]
   setTheme: ['dark' | 'light']
+  'save-presets': [ProjectPresetStore]
+  'set-project-preset': [string | null]
 }>()
 
+function createId(prefix: string) {
+  return globalThis.crypto?.randomUUID?.() ?? `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
+function clonePresetStore(store: ProjectPresetStore): ProjectPresetStore {
+  return {
+    defaultPresetId: store.defaultPresetId,
+    presets: store.presets.map((preset) => ({
+      id: preset.id,
+      name: preset.name,
+      templates: preset.templates.map((template) => ({
+        id: template.id,
+        name: template.name,
+        exercises: [...template.exercises],
+      })),
+    })),
+  };
+}
+
+function syncPresetDraft() {
+  presetDraft.value = clonePresetStore(props.presetStore);
+  projectPresetDraft.value = props.currentProjectPresetId;
+}
+
+const presetDraft = ref<ProjectPresetStore>(clonePresetStore(props.presetStore));
+const projectPresetDraft = ref<string | null>(props.currentProjectPresetId);
 const licenseKeyInput = ref('');
 const {
   licenseKey: storedLicenseKey,
@@ -97,6 +212,28 @@ const {
   logout: licenseLogout
 } = useLicense();
 
+watch(() => props.showSettings, (isOpen) => {
+  if (isOpen) {
+    syncPresetDraft();
+  }
+});
+
+watch(() => props.presetStore, () => {
+  if (props.showSettings) {
+    syncPresetDraft();
+  }
+}, { deep: true });
+
+watch(() => props.currentProjectPresetId, (value) => {
+  if (props.showSettings) {
+    projectPresetDraft.value = value;
+  }
+});
+
+watch(storedLicenseKey, (value) => {
+  licenseKeyInput.value = value ?? '';
+}, { immediate: true });
+
 const isPaidLicense = computed(() => {
   if (!isValidLicense.value) return false;
   const plan = planType.value?.toLowerCase();
@@ -106,6 +243,63 @@ const isPaidLicense = computed(() => {
 async function handleLicenseSubmit() {
   await validateLicense(licenseKeyInput.value);
   emit('licenseKey', licenseKeyInput.value)
+}
+
+function addPreset() {
+  const presetId = createId('preset');
+  presetDraft.value.presets.push({
+    id: presetId,
+    name: `Preset ${presetDraft.value.presets.length + 1}`,
+    templates: [],
+  });
+
+  if (!presetDraft.value.defaultPresetId) {
+    presetDraft.value.defaultPresetId = presetId;
+  }
+}
+
+function removePreset(index: number) {
+  const [removedPreset] = presetDraft.value.presets.splice(index, 1);
+  if (!removedPreset) return;
+
+  if (presetDraft.value.defaultPresetId === removedPreset.id) {
+    presetDraft.value.defaultPresetId = presetDraft.value.presets[0]?.id ?? null;
+  }
+
+  if (projectPresetDraft.value === removedPreset.id) {
+    projectPresetDraft.value = null;
+  }
+}
+
+function addTemplate(presetIndex: number) {
+  const preset = presetDraft.value.presets[presetIndex];
+  if (!preset) return;
+
+  preset.templates.push({
+    id: createId('template'),
+    name: `Session Template ${preset.templates.length + 1}`,
+    exercises: [],
+  });
+}
+
+function removeTemplate(presetIndex: number, templateIndex: number) {
+  presetDraft.value.presets[presetIndex]?.templates.splice(templateIndex, 1);
+}
+
+function updateTemplateExercises(presetIndex: number, templateIndex: number, value: string) {
+  const template = presetDraft.value.presets[presetIndex]?.templates[templateIndex];
+  if (!template) return;
+  template.exercises = value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function handleSavePresetChanges() {
+  emit('save-presets', clonePresetStore(presetDraft.value));
+  if (props.hasCurrentProject) {
+    emit('set-project-preset', projectPresetDraft.value);
+  }
 }
 
 async function buyLicense() {
@@ -161,10 +355,12 @@ function toggleTheme() {
   border-radius: 20px;
   width: 100%;
   max-width: 480px;
+  max-height: min(85vh, 860px);
   padding: 32px;
   position: relative;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
   transition: background 0.3s ease, border-color 0.3s ease;
+  overflow-y: auto;
 }
 
 .modal-close {
@@ -189,6 +385,130 @@ function toggleTheme() {
 .settings-section { display: flex; flex-direction: column; gap: 24px; }
 .settings-group { display: flex; flex-direction: column; gap: 12px; }
 .settings-group label { font-size: 14px; font-weight: 600; color: var(--label-color); text-transform: uppercase; letter-spacing: 0.5px; }
+.settings-help { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
+
+.settings-input,
+.settings-select {
+  width: 100%;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  color: var(--input-color);
+  font-size: 14px;
+}
+
+.settings-select {
+  appearance: none;
+}
+
+.preset-toolbar,
+.preset-card-header,
+.preset-card-actions,
+.preset-assignment,
+.preset-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.preset-assignment {
+  flex-wrap: wrap;
+}
+
+.preset-assignment-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.preset-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--input-border);
+  border-radius: 14px;
+}
+
+:global([data-theme="light"]) .preset-card {
+  background: rgba(31, 78, 121, 0.03);
+}
+
+.preset-name-input {
+  font-weight: 600;
+}
+
+.template-editor-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.template-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.btn-secondary,
+.btn-save,
+.btn-chip {
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.2s ease, background 0.2s ease, opacity 0.2s ease;
+}
+
+.btn-secondary,
+.btn-chip {
+  background: transparent;
+  color: var(--fg);
+}
+
+.btn-secondary:hover,
+.btn-chip:hover {
+  border-color: var(--accent);
+}
+
+.btn-secondary-inline {
+  align-self: flex-start;
+}
+
+.btn-save {
+  background: var(--accent);
+  color: #0b0f14;
+  border-color: transparent;
+}
+
+.btn-chip {
+  padding: 8px 12px;
+}
+
+.btn-chip.active {
+  background: rgba(107, 230, 117, 0.14);
+  border-color: rgba(107, 230, 117, 0.32);
+}
+
+.btn-chip-danger {
+  color: #ff8b8b;
+}
+
+.btn-chip-danger:hover {
+  border-color: rgba(255, 59, 48, 0.45);
+}
 
 .license-input-wrapper { display: flex; gap: 12px; }
 
@@ -361,6 +681,32 @@ function toggleTheme() {
 .theme-toggle.light .theme-toggle-thumb {
   transform: translateX(22px);
   background: #ffffff;
+}
+
+@media (max-width: 720px) {
+  .modal-content {
+    max-width: calc(100vw - 24px);
+    padding: 24px;
+  }
+
+  .preset-toolbar,
+  .preset-card-header,
+  .preset-card-actions,
+  .preset-assignment,
+  .preset-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .template-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .btn-secondary,
+  .btn-save,
+  .btn-chip {
+    width: 100%;
+  }
 }
 
 </style>
