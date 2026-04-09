@@ -286,7 +286,13 @@ async function saveCurrentProject() {
   trackRecentProject(nextProject);
 
   if (nextProject.path && window.ipc?.projectSave) {
-    return window.ipc.projectSave(nextProject.path, toProjectFile(nextProject));
+    const result = await window.ipc.projectSave(nextProject.path, toProjectFile(nextProject));
+    if (result?.ok && result.project) {
+      const persistedProject = sanitizeProjectFile(result.project, result.path ?? nextProject.path);
+      currentProject.value = persistedProject;
+      trackRecentProject(persistedProject);
+    }
+    return result;
   }
 
   return { ok: true, path: nextProject.path };

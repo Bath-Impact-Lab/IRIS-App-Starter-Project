@@ -30,6 +30,7 @@ let mockTimer = null;
 const PROJECT_DIRECTORY_NAME = 'ReCapture Projects';
 const PROJECT_EXTENSION = 'recapture.json';
 const PRESET_STORE_FILENAME = 'project-presets.json';
+const UNTITLED_PROJECT_NAME = 'Untitled Project';
 
 function createAppEntityId(prefix) {
     try {
@@ -262,12 +263,27 @@ function getDefaultProjectsDir() {
     return projectsDir;
 }
 
+function inferProjectNameFromPath(filePath) {
+    if (!filePath) {
+        return UNTITLED_PROJECT_NAME;
+    }
+
+    return path.basename(filePath).replace(/\.json$/i, '').replace(/\.recapture$/i, '');
+}
+
+function resolveProjectName(projectName, filePath) {
+    const trimmedName = typeof projectName === 'string' ? projectName.trim() : '';
+
+    if (!trimmedName || trimmedName === UNTITLED_PROJECT_NAME) {
+        return inferProjectNameFromPath(filePath);
+    }
+
+    return trimmedName;
+}
+
 function ensureProjectPayload(projectData = {}, filePath = null, options = {}) {
     const touch = options.touch ?? false;
     const now = new Date().toISOString();
-    const fallbackName = filePath
-        ? path.basename(filePath).replace(/\.json$/i, '').replace(/\.recapture$/i, '')
-        : 'Untitled Project';
     const participants = Array.isArray(projectData.participants) && projectData.participants.length > 0
         ? projectData.participants.map((participant, index) => ({
             id: participant?.id || `participant-${index + 1}`,
@@ -301,7 +317,7 @@ function ensureProjectPayload(projectData = {}, filePath = null, options = {}) {
         format: 'recapture-project',
         version: 1,
         id: projectData.id || `project-${Date.now()}`,
-        name: typeof projectData.name === 'string' && projectData.name.trim() ? projectData.name.trim() : fallbackName,
+        name: resolveProjectName(projectData.name, filePath),
         createdAt: projectData.createdAt || now,
         updatedAt: touch ? now : (projectData.updatedAt || projectData.createdAt || now),
         settings: {
@@ -329,7 +345,7 @@ function ensureProjectPayload(projectData = {}, filePath = null, options = {}) {
 
 ipcMain.handle('project-create', async (event, projectData) => {
     const defaultDir = getDefaultProjectsDir();
-    const defaultName = (projectData?.name || 'Untitled Project').replace(/[<>:"/\\|?*]+/g, '').trim() || 'Untitled Project';
+    const defaultName = resolveProjectName(projectData?.name, null).replace(/[<>:"/\\|?*]+/g, '').trim() || UNTITLED_PROJECT_NAME;
     const result = await dialog.showSaveDialog(getEventWindow(event), {
         title: 'Create Project',
         defaultPath: path.join(defaultDir, `${defaultName}.${PROJECT_EXTENSION}`),
