@@ -12,6 +12,8 @@ const { execFile } = require('child_process');
 
 const processManager = new ProcessManager();
 const monitorManager = new MonitorManager();
+const PROJECT_FILE_SUFFIX_RE = /\.recapture\.json$/i;
+const INVALID_PATH_SEGMENT_RE = /[<>:"/\\|?*\x00-\x1f]/g;
 
 function resolveOutputDir(value) {
   if (typeof value === 'string' && value.trim().length > 0) {
@@ -28,6 +30,60 @@ function resolveProjectDirectory(projectPath) {
   }
 
   return path.dirname(projectPath.trim());
+}
+
+function inferProjectName(projectPath) {
+  if (typeof projectPath !== 'string' || projectPath.trim().length === 0) {
+    return 'Untitled Project';
+  }
+
+  const fileName = path.basename(projectPath.trim());
+  return fileName
+    .replace(PROJECT_FILE_SUFFIX_RE, '')
+    .replace(/\.json$/i, '')
+    .trim() || 'Untitled Project';
+}
+
+function sanitizePathSegment(value, fallback = 'Untitled Project') {
+  const cleaned = typeof value === 'string'
+    ? value.replace(INVALID_PATH_SEGMENT_RE, ' ').replace(/\s+/g, ' ').trim()
+    : '';
+
+  return cleaned || fallback;
+}
+
+function formatTimestamp(date = new Date()) {
+  const pad = (value) => String(value).padStart(2, '0');
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+  ].join('-') + '_' + [
+    pad(date.getHours()),
+    pad(date.getMinutes()),
+    pad(date.getSeconds()),
+  ].join('-');
+}
+
+function resolveRecordingOutputDir(projectPath) {
+  const projectDir = resolveProjectDirectory(projectPath);
+  if (!projectDir) {
+    return null;
+  }
+
+  const projectFolderName = sanitizePathSegment(inferProjectName(projectPath));
+  const recordingsRootDir = path.join(projectDir, 'recordings', projectFolderName);
+  const timestamp = formatTimestamp();
+
+  let candidateDir = path.join(recordingsRootDir, timestamp);
+  let suffix = 2;
+
+  while (fs.existsSync(candidateDir)) {
+    candidateDir = path.join(recordingsRootDir, `${timestamp}-${suffix}`);
+    suffix += 1;
+  }
+
+  return candidateDir;
 }
 
 function registerIrisIpc() {
@@ -131,14 +187,14 @@ function registerIrisIpc() {
 
   ipcMain.handle('start-iris-record', async (event, options = {}) => {
     const targetWindow = getTargetWindow(event);
-    const projectDir = resolveProjectDirectory(options.projectPath);
+    const outputDir = resolveRecordingOutputDir(options.projectPath);
 
-    if (!projectDir) {
+    if (!outputDir) {
       return { ok: false, error: 'A saved project path is required to start recording.' };
     }
 
     return monitorManager.start({
-      outputDir: projectDir,
+      outputDir,
       shmName: options.shmName,
       fps: options.fps,
       pipePath: options.pipePath,
