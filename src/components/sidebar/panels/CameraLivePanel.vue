@@ -20,7 +20,6 @@
           :style="{
             width: '100%',
             boxShadow: deviceColour[d.deviceId] ? `inset 4px 0 0 ${deviceColour[d.deviceId]}` : 'none',
-            paddingLeft: deviceColour[d.deviceId] ? '8px' : '0',
           }"
         >
           <div class="camera-text">
