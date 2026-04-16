@@ -26,6 +26,7 @@ contextBridge.exposeInMainWorld('ipc', {
   projectSave: (filePath, projectData) => ipcRenderer.invoke('project-save', filePath, projectData),
   presetStoreLoad: () => ipcRenderer.invoke('preset-store-load'),
   presetStoreSave: (store) => ipcRenderer.invoke('preset-store-save', store),
+  augmentMarkers: (posesPath, outputDir) => ipcRenderer.invoke('augment-markers', { posesPath, outputDir }),
  
 })
 

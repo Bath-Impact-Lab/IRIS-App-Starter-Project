@@ -16,7 +16,8 @@ app.commandLine.appendSwitch('enable-features', 'WebCodecs,WebCodecsVideoEncoder
 app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 
-const { registerIrisIpc, getIrisCliPath } = require('./iris'); 
+const { registerIrisIpc, getIrisCliPath } = require('./iris');
+const { runMarkerAugmentation } = require('./marker-augmenter/augmenter');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -236,6 +237,18 @@ ipcMain.handle('check-iris-cli', () => {
     const found = fs.existsSync(irisCliPath);
     console.log(`[iris-cli] check: ${found ? 'found' : 'NOT found'} at ${irisCliPath}`);
     return { found, path: irisCliPath };
+});
+
+ipcMain.handle('augment-markers', async (_event, options = {}) => {
+    try {
+        const posesPath = typeof options.posesPath === 'string' ? options.posesPath : '';
+        const outputDir = typeof options.outputDir === 'string' ? options.outputDir : '';
+        const result = await runMarkerAugmentation(posesPath, outputDir);
+        return { ok: true, ...result };
+    } catch (error) {
+        console.error('[augment-markers] failed:', error);
+        return { ok: false, error: error.message };
+    }
 });
 
 ipcMain.handle('preset-store-load', async () => {

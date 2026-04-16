@@ -52,6 +52,7 @@ interface Window {
     projectSave: (filePath: string, projectData: any) => Promise<{ ok: boolean; error?: string; path?: string; project?: any }>;
     presetStoreLoad: () => Promise<{ ok: boolean; error?: string; store?: any }>;
     presetStoreSave: (store: any) => Promise<{ ok: boolean; error?: string; store?: any }>;
+    augmentMarkers: (posesPath: string, outputDir?: string) => Promise<{ ok: boolean; outputPath?: string; dims?: number[]; error?: string }>;
 
   }
 } 
