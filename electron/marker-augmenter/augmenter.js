@@ -235,35 +235,40 @@ async function runMarkerAugmentation(posesPath, outputDir) {
     const outputName = session.outputNames[0];
     const outputTensor = results[outputName];
     const reshaped = reshapeOutput(outputTensor);
-  
-    // --- CORRECTED OUTPUT MATH (GLOBAL ALIGNMENT) ---
+   
     const cos0 = Math.cos(firstFrameTheta);
     const sin0 = Math.sin(firstFrameTheta);
+     
+    const TARGET_METRIC_HEIGHT = 1.77; 
 
     for (let i = 0; i < reshaped.frames.length; i++) {
         let frame = reshaped.frames[i];
-        
-        let heightForThisFrame = frameHeights[i] || 1.0; 
+         
+        let originalHeight = frameHeights[i] || 1.0; 
+        let scaleRatio = TARGET_METRIC_HEIGHT / originalHeight;
+
         let midHip = frameMidHips[i] || [0, 0, 0];
         let theta = frameThetas[i] || 0;
 
         let cosInv = Math.cos(-theta);
         let sinInv = Math.sin(-theta);
-
-        for (let j = 0; j < frame.length; j += 3) { 
-            let localX = frame[j] * heightForThisFrame;
-            let localY = frame[j + 1] * heightForThisFrame;
-            let localZ = frame[j + 2] * heightForThisFrame;
  
+        let metricDeltaHipX = (midHip[0] - firstFrameMidHip[0]) * scaleRatio;
+        let metricDeltaHipY = midHip[1] * scaleRatio; 
+        let metricDeltaHipZ = (midHip[2] - firstFrameMidHip[2]) * scaleRatio;
+
+        for (let j = 0; j < frame.length; j += 3) {  
+            let localX = frame[j] * TARGET_METRIC_HEIGHT;
+            let localY = frame[j + 1] * TARGET_METRIC_HEIGHT;
+            let localZ = frame[j + 2] * TARGET_METRIC_HEIGHT;
+  
             let camX = localX * cosInv - localZ * sinInv;
             let camZ = localX * sinInv + localZ * cosInv;
- 
-            let absX = camX + midHip[0];
-            let absY = localY + midHip[1];
-            let absZ = camZ + midHip[2]; 
-            let seqX = absX - firstFrameMidHip[0];
-            let seqY = absY; 
-            let seqZ = absZ - firstFrameMidHip[2]; 
+  
+            let seqX = camX + metricDeltaHipX;
+            let seqY = localY + metricDeltaHipY;
+            let seqZ = camZ + metricDeltaHipZ; 
+             
             frame[j] = seqX * cos0 - seqZ * sin0;
             frame[j + 1] = seqY;
             frame[j + 2] = seqX * sin0 + seqZ * cos0;

@@ -57,13 +57,13 @@ async function runOpenSimPipeline({ staticTrcPath, motionTrcPath, subjectMass, s
     // ==========================================
     let scaleXml = fs.readFileSync(scaleTemplatePath, 'utf8');
     
-    // Use RegEx to replace the XML contents directly
-    scaleXml = scaleXml.replace(/<mass>.*?<\/mass>/g, `<mass>${subjectMass || 75.0}</mass>`);
-    scaleXml = scaleXml.replace(/<model_file>.*?<\/model_file>/g, `<model_file>${genericModelPath}</model_file>`);
-    scaleXml = scaleXml.replace(/<marker_set_file>.*?<\/marker_set_file>/g, `<marker_set_file>${markerSetPath}</marker_set_file>`);
-    scaleXml = scaleXml.replace(/<marker_file>.*?<\/marker_file>/g, `<marker_file>${staticTrcPath}</marker_file>`); // Targets both ModelScaler & MarkerPlacer
-    scaleXml = scaleXml.replace(/<output_model_file>.*?<\/output_model_file>/g, `<output_model_file>${scaledModelOutput}</output_model_file>`);
-    scaleXml = scaleXml.replace(/<time_range>.*?<\/time_range>/g, `<time_range>-1 9999</time_range>`); // Extend time range to capture the TRC
+    // Use RegEx to replace the XML contents directly (now handling self-closing tags)
+    scaleXml = scaleXml.replace(/<mass>.*?<\/mass>|<mass\s*\/>/g, `<mass>${subjectMass || 75.0}</mass>`);
+    scaleXml = scaleXml.replace(/<model_file>.*?<\/model_file>|<model_file\s*\/>/g, `<model_file>${genericModelPath}</model_file>`);
+    scaleXml = scaleXml.replace(/<marker_set_file>.*?<\/marker_set_file>|<marker_set_file\s*\/>/g, `<marker_set_file>${markerSetPath}</marker_set_file>`);
+    scaleXml = scaleXml.replace(/<marker_file>.*?<\/marker_file>|<marker_file\s*\/>/g, `<marker_file>${staticTrcPath}</marker_file>`);
+    scaleXml = scaleXml.replace(/<output_model_file>.*?<\/output_model_file>|<output_model_file\s*\/>/g, `<output_model_file>${scaledModelOutput}</output_model_file>`);
+    scaleXml = scaleXml.replace(/<time_range>.*?<\/time_range>|<time_range\s*\/>/g, `<time_range>-1 9999</time_range>`);
 
     const tempScaleSetup = path.join(os.tmpdir(), `Setup_Scale_${Date.now()}.xml`);
     fs.writeFileSync(tempScaleSetup, scaleXml);
@@ -71,20 +71,17 @@ async function runOpenSimPipeline({ staticTrcPath, motionTrcPath, subjectMass, s
     console.log('--- Starting Scaling ---');
     await runOpenSimTool(exePath, tempScaleSetup);
     
-    // Optional: Keep this file for debugging if it fails, delete it if successful
-    // fs.unlinkSync(tempScaleSetup); 
 
     // ==========================================
     // STEP 2: RUN INVERSE KINEMATICS
     // ==========================================
     let ikXml = fs.readFileSync(ikTemplatePath, 'utf8');
 
-    // RegEx replacements for IK
-    ikXml = ikXml.replace(/<model_file>.*?<\/model_file>/g, `<model_file>${scaledModelOutput}</model_file>`);
-    ikXml = ikXml.replace(/<marker_file>.*?<\/marker_file>/g, `<marker_file>${motionTrcPath}</marker_file>`);
-    ikXml = ikXml.replace(/<output_motion_file>.*?<\/output_motion_file>/g, `<output_motion_file>${ikMotionOutput}</output_motion_file>`);
-    ikXml = ikXml.replace(/<results_directory>.*?<\/results_directory>/g, `<results_directory>${outputDir}</results_directory>`);
-
+    // RegEx replacements for IK (handling self-closing tags)
+    ikXml = ikXml.replace(/<model_file>.*?<\/model_file>|<model_file\s*\/>/g, `<model_file>${scaledModelOutput}</model_file>`);
+    ikXml = ikXml.replace(/<marker_file>.*?<\/marker_file>|<marker_file\s*\/>/g, `<marker_file>${motionTrcPath}</marker_file>`);
+    ikXml = ikXml.replace(/<output_motion_file>.*?<\/output_motion_file>|<output_motion_file\s*\/>/g, `<output_motion_file>${ikMotionOutput}</output_motion_file>`);
+    ikXml = ikXml.replace(/<results_directory>.*?<\/results_directory>|<results_directory\s*\/>/g, `<results_directory>${outputDir}</results_directory>`);
     const tempIkSetup = path.join(os.tmpdir(), `Setup_IK_${Date.now()}.xml`);
     fs.writeFileSync(tempIkSetup, ikXml);
 
