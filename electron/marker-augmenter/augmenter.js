@@ -84,10 +84,25 @@ async function runMarkerAugmentation(posesPath, outputDir) {
     if (!fs.existsSync(inputPath)) {
         throw new Error(`poses.json not found at ${inputPath}`);
     }
+    
     const raw = fs.readFileSync(inputPath, 'utf8');
-    const parsed = JSON.parse(raw);
-    const frames = normalizeInputPayload(parsed);
+    
+    let parsed;
+    if (inputPath.endsWith('.jsonl')) {
+        parsed = raw.split('\n')
+            .filter(line => line.trim().length > 0) 
+            .map(line => JSON.parse(line))          
+            .filter(obj => obj.people && obj.people.length > 0) 
+            .map(obj => {
+                const targetData = obj.people[0].joint_centers;  
+                return targetData.flat(); 
+            });
+    } else {
+        parsed = JSON.parse(raw); 
+    }
 
+    const frames = normalizeInputPayload(parsed);
+ 
     if (!frames) {
         throw new Error('Unsupported poses.json format. Expected an array of frames or { frames: [...] }.');
     }
