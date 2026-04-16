@@ -148,27 +148,22 @@ async function runMarkerAugmentation(posesPath, outputDir) {
             .filter(obj => obj.people && obj.people.length > 0)
             .map(obj => {
                 const halpeJoints = obj.people[0].joint_centers; 
-
-                // --- A. CALCULATE MID-HIP ---
+ 
                 const midHipX = (halpeJoints[11][0] + halpeJoints[12][0]) / 2;
                 const midHipY = (halpeJoints[11][1] + halpeJoints[12][1]) / 2;
                 const midHipZ = (halpeJoints[11][2] + halpeJoints[12][2]) / 2;
                 frameMidHips.push([midHipX, midHipY, midHipZ]);
-
-                // --- B. CALCULATE PELVIS YAW (Angle to +X Forward) ---
-                const dx = halpeJoints[11][0] - halpeJoints[12][0]; // LHipX - RHipX
-                const dz = halpeJoints[11][2] - halpeJoints[12][2]; // LHipZ - RHipZ
-                // Calculate the rotation needed to point the pelvis at (1, 0)
+ 
+                const dx = halpeJoints[11][0] - halpeJoints[12][0]; 
+                const dz = halpeJoints[11][2] - halpeJoints[12][2]; 
                 const theta = -Math.atan2(dx, -dz);
                 frameThetas.push(theta);
-
-                // Save the very first frame's position to anchor the global trajectory
+ 
                 if (!firstFrameMidHip) {
                     firstFrameMidHip = [midHipX, midHipY, midHipZ];
                     firstFrameTheta = theta;
                 }
-
-                // --- C. CALCULATE HEIGHT ---
+ 
                 const crown = halpeJoints[17]; 
                 const heelX = (halpeJoints[24][0] + halpeJoints[25][0]) / 2;
                 const heelY = (halpeJoints[24][1] + halpeJoints[25][1]) / 2;
@@ -180,43 +175,35 @@ async function runMarkerAugmentation(posesPath, outputDir) {
                 const calculatedHeight = Math.sqrt(hdx*hdx + hdy*hdy + hdz*hdz);
                 const safeHeight = calculatedHeight > 0.001 ? calculatedHeight : 1.0;
                 frameHeights.push(safeHeight);
-
-                // --- D. EXTRACT, CENTER, SWAP AXES & ROTATE --- 
+ 
                 const targetIndices = [18,6,5,12,11,14,13,16,15,25,24,23,22,21,20];
                 let frameFeatures = [];
                 let rawMarkerFrame = []; 
-                let transformedInputFrame = []; // Renamed from rawMarkerFrame for clarity
+                let transformedInputFrame = []; 
                 
                 const cosT = Math.cos(theta);
                 const sinT = Math.sin(theta);
 
                 for (let i = 0; i < targetIndices.length; i++) {
                     const idx = targetIndices[i]; 
-                    
-                    // 1. Keep the raw coordinates for your input TRC
+                     
                     rawMarkerFrame.push(halpeJoints[idx][0]);
                     rawMarkerFrame.push(halpeJoints[idx][1]);
                     rawMarkerFrame.push(halpeJoints[idx][2]);
-
-                    // 2. Center the joints
+ 
                     let cx = halpeJoints[idx][0] - midHipX;
                     let cy = halpeJoints[idx][1] - midHipY;
                     let cz = halpeJoints[idx][2] - midHipZ;
-
-                    // 3. Rotate to face +X
+ 
                     let rotX = cx * cosT - cz * sinT;
                     let rotY = cy;
-                    let rotZ = cx * sinT + cz * cosT;
-
-                    transformedInputFrame.push(rotX / safeHeight);
-                    transformedInputFrame.push(rotY / safeHeight);
-                    transformedInputFrame.push(rotZ / safeHeight);
+                    let rotZ = cx * sinT + cz * cosT; 
 
                     frameFeatures.push(rotX / safeHeight);
                     frameFeatures.push(rotY / safeHeight);
                     frameFeatures.push(rotZ / safeHeight);
                 } 
-                inputTrcFrames.push(transformedInputFrame); 
+                inputTrcFrames.push(rawMarkerFrame); 
 
                 // --- E. APPEND SCALARS & Z-SCORE ---
                 const nominalMetricHeight = 1.70; 
@@ -259,36 +246,35 @@ async function runMarkerAugmentation(posesPath, outputDir) {
     const cos0 = Math.cos(firstFrameTheta);
     const sin0 = Math.sin(firstFrameTheta);
 
-    // for (let i = 0; i < reshaped.frames.length; i++) {
-    //     let frame = reshaped.frames[i];
+    for (let i = 0; i < reshaped.frames.length; i++) {
+        let frame = reshaped.frames[i];
         
-    //     let heightForThisFrame = frameHeights[i] || 1.0; 
-    //     let midHip = frameMidHips[i] || [0, 0, 0];
-    //     let theta = frameThetas[i] || 0;
+        let heightForThisFrame = frameHeights[i] || 1.0; 
+        let midHip = frameMidHips[i] || [0, 0, 0];
+        let theta = frameThetas[i] || 0;
 
-    //     let cosInv = Math.cos(-theta);
-    //     let sinInv = Math.sin(-theta);
+        let cosInv = Math.cos(-theta);
+        let sinInv = Math.sin(-theta);
 
-    //     for (let j = 0; j < frame.length; j += 3) {
-    //         // 1. Un-normalize height (Markers are now at 0,0,0 facing +X)
-    //         let localX = frame[j] * heightForThisFrame;
-    //         let localY = frame[j + 1] * heightForThisFrame;
-    //         let localZ = frame[j + 2] * heightForThisFrame;
+        for (let j = 0; j < frame.length; j += 3) { 
+            let localX = frame[j] * heightForThisFrame;
+            let localY = frame[j + 1] * heightForThisFrame;
+            let localZ = frame[j + 2] * heightForThisFrame;
  
-    //         let camX = localX * cosInv - localZ * sinInv;
-    //         let camZ = localX * sinInv + localZ * cosInv;
+            let camX = localX * cosInv - localZ * sinInv;
+            let camZ = localX * sinInv + localZ * cosInv;
  
-    //         let absX = camX + midHip[0];
-    //         let absY = localY + midHip[1];
-    //         let absZ = camZ + midHip[2]; 
-    //         let seqX = absX - firstFrameMidHip[0];
-    //         let seqY = absY; 
-    //         let seqZ = absZ - firstFrameMidHip[2]; 
-    //         frame[j] = seqX * cos0 - seqZ * sin0;
-    //         frame[j + 1] = seqY;
-    //         frame[j + 2] = seqX * sin0 + seqZ * cos0;
-    //     }
-    // }
+            let absX = camX + midHip[0];
+            let absY = localY + midHip[1];
+            let absZ = camZ + midHip[2]; 
+            let seqX = absX - firstFrameMidHip[0];
+            let seqY = absY; 
+            let seqZ = absZ - firstFrameMidHip[2]; 
+            frame[j] = seqX * cos0 - seqZ * sin0;
+            frame[j + 1] = seqY;
+            frame[j + 2] = seqX * sin0 + seqZ * cos0;
+        }
+    }
 
     const targetDir = outputDir && outputDir.trim().length > 0
         ? outputDir.trim()
@@ -312,7 +298,7 @@ async function runMarkerAugmentation(posesPath, outputDir) {
     const trcOutputPath = path.join(targetDir, 'augmented-poses.trc');
     const inputTrcOutputPath = path.join(targetDir, 'input-poses.trc');
      
-    const framerate = 30; 
+    const framerate = 100; 
     writeTRC(reshaped.frames, markerNames, framerate, trcOutputPath);
 
     if (Array.isArray(inputTrcFrames) && inputTrcFrames.length > 0) {
