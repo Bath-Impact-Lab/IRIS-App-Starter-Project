@@ -30,7 +30,9 @@ function writeTRC(frames, markerNames, fps, outputPath) {
         let row = `${i + 1}\t${time}`;
         
         for (let j = 0; j < frame.length; j++) {
-            row += `\t${Number(frame[j]).toFixed(5)}`;
+            // Safely handle NaN values so OpenSim can parse missing markers
+            const val = Number(frame[j]);
+            row += `\t${Number.isNaN(val) ? 'NaN' : val.toFixed(5)}`;
         }
         trc += row + '\n';
     }
@@ -48,7 +50,6 @@ async function getSession() {
     if (!cachedSession) {
         cachedSession = await ort.InferenceSession.create(MODEL_PATH);
     }
-
     return cachedSession;
 }
 
@@ -56,11 +57,9 @@ function normalizeInputPayload(raw) {
     if (Array.isArray(raw)) {
         return raw;
     }
-
     if (raw && Array.isArray(raw.frames)) {
         return raw.frames;
     }
-
     return null;
 }
 
@@ -126,8 +125,6 @@ async function runMarkerAugmentation(posesPath, outputDir) {
     
     const raw = fs.readFileSync(inputPath, 'utf8');
     
-    // 1. Load your JSON Reference objects
-    // Assuming they are simple flat arrays: [num, num, num...]
     const refMean = require('./reference_trainFeatures_mean.json');
     const refStd = require('./reference_trainFeatures_std.json');
 
@@ -179,7 +176,6 @@ async function runMarkerAugmentation(posesPath, outputDir) {
                 const targetIndices = [18,6,5,12,11,14,13,16,15,25,24,23,22,21,20];
                 let frameFeatures = [];
                 let rawMarkerFrame = []; 
-                let transformedInputFrame = []; 
                 
                 const cosT = Math.cos(theta);
                 const sinT = Math.sin(theta);
@@ -205,7 +201,6 @@ async function runMarkerAugmentation(posesPath, outputDir) {
                 } 
                 inputTrcFrames.push(rawMarkerFrame); 
 
-                // --- E. APPEND SCALARS & Z-SCORE ---
                 const nominalMetricHeight = 1.70; 
                 const nominalWeight = 75.0; 
                 frameFeatures.push(nominalMetricHeight, nominalWeight);
@@ -241,7 +236,6 @@ async function runMarkerAugmentation(posesPath, outputDir) {
     const outputTensor = results[outputName];
     const reshaped = reshapeOutput(outputTensor);
   
- 
     // --- CORRECTED OUTPUT MATH (GLOBAL ALIGNMENT) ---
     const cos0 = Math.cos(firstFrameTheta);
     const sin0 = Math.sin(firstFrameTheta);
@@ -273,6 +267,27 @@ async function runMarkerAugmentation(posesPath, outputDir) {
             frame[j] = seqX * cos0 - seqZ * sin0;
             frame[j + 1] = seqY;
             frame[j + 2] = seqX * sin0 + seqZ * cos0;
+        }
+    }
+
+    // --- PAD MISSING ARM MARKERS IF NEEDED ---
+    // If the model generates 35 markers (105 features), we must pad the 8 missing
+    // arm markers with NaN so the TRC file contains the expected 43 markers (129 features).
+    if (reshaped.frames.length > 0 && reshaped.frames[0].length === 105) {
+        for (let i = 0; i < reshaped.frames.length; i++) {
+            const frame = reshaped.frames[i];
+            const paddedFrame = [];
+            
+            // 1. Copy the first 21 markers (63 features)
+            for (let j = 0; j < 63; j++) paddedFrame.push(frame[j]);
+            
+            // 2. Inject NaN for the 8 missing arm markers (24 features)
+            for (let j = 0; j < 24; j++) paddedFrame.push(NaN);
+            
+            // 3. Copy the remaining 14 markers (42 features)
+            for (let j = 63; j < 105; j++) paddedFrame.push(frame[j]);
+            
+            reshaped.frames[i] = paddedFrame;
         }
     }
 
