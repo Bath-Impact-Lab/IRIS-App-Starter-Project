@@ -90,12 +90,31 @@ async function runMarkerAugmentation(posesPath, outputDir) {
     let parsed;
     if (inputPath.endsWith('.jsonl')) {
         parsed = raw.split('\n')
-            .filter(line => line.trim().length > 0) 
-            .map(line => JSON.parse(line))          
-            .filter(obj => obj.people && obj.people.length > 0) 
+            .filter(line => line.trim().length > 0)
+            .map(line => JSON.parse(line))
+            .filter(obj => obj.people && obj.people.length > 0)
             .map(obj => {
-                const targetData = obj.people[0].joint_centers;  
-                return targetData.flat(); 
+                const halpeJoints = obj.people[0].joint_centers;
+                
+                const targetIndices = [18, 6, 5, 19, 12, 11, 14, 13, 16, 15, 25, 24, 21, 20, 0]; 
+                
+                let frameFeatures = [];
+                 
+                for (let i = 0; i < targetIndices.length; i++) {
+                    const idx = targetIndices[i];
+                    frameFeatures.push(halpeJoints[idx][0]); // X
+                    frameFeatures.push(halpeJoints[idx][1]); // Y
+                    frameFeatures.push(halpeJoints[idx][2]); // Z
+                }
+
+                
+                const subjectHeight = 1.80; 
+                const subjectWeight = 75.0; 
+                
+                frameFeatures.push(subjectHeight);
+                frameFeatures.push(subjectWeight);
+ 
+                return frameFeatures; 
             });
     } else {
         parsed = JSON.parse(raw); 
