@@ -42,3 +42,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('window-state', handler);
   },
 })
+
+contextBridge.exposeInMainWorld('opensimAPI', {
+  runPipeline: (params) => ipcRenderer.invoke('run-opensim', params),
+})

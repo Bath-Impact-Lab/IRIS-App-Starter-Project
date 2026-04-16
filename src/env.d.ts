@@ -24,6 +24,15 @@ interface Window {
     isWindowMaximized: () => Promise<{ isMaximized: boolean }>;
     onWindowStateChange: (callback: (data: { isMaximized: boolean }) => void) => () => void;
   }
+  opensimAPI?: {
+    runPipeline: (params: {
+      staticTrcPath: string;
+      motionTrcPath: string;
+      subjectMass?: number;
+      subjectHeight?: number;
+      outputDir: string;
+    }) => Promise<{ success: boolean; scaledModelPath?: string; ikMotionPath?: string; error?: string }>;
+  }
   ipc?: {
     startIRIS: (options: any) => Promise<any>;
     startIRISStream: (options: any) => Promise<any>;

@@ -18,6 +18,7 @@ app.commandLine.appendSwitch('disable-renderer-backgrounding');
 
 const { registerIrisIpc, getIrisCliPath } = require('./iris');
 const { runMarkerAugmentation } = require('./marker-augmenter/augmenter');
+const { runOpenSimPipeline } = require('./opensim/opensimManager');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -248,6 +249,15 @@ ipcMain.handle('augment-markers', async (_event, options = {}) => {
     } catch (error) {
         console.error('[augment-markers] failed:', error);
         return { ok: false, error: error.message };
+    }
+});
+
+ipcMain.handle('run-opensim', async (_event, args) => {
+    try {
+        const result = await runOpenSimPipeline(args || {});
+        return result;
+    } catch (error) {
+        return { success: false, error: error.message };
     }
 });
 
