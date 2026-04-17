@@ -24,6 +24,7 @@ const VIDEO_FILE_FILTERS = [
     extensions: ['*'],
   },
 ];
+const VIDEO_FILE_EXTENSIONS = new Set(VIDEO_FILE_FILTERS[0].extensions.map((extension) => extension.toLowerCase()));
 
 function resolveOutputDir(value) {
   if (typeof value === 'string' && value.trim().length > 0) {
@@ -68,6 +69,86 @@ function resolveMotionOutputDir(options = {}) {
 
   const baseName = sanitizePathSegment(options.sessionName, 'Motion');
   return path.join(motionsDir, baseName);
+}
+
+function isSupportedVideoFile(filePath) {
+  const extension = path.extname(filePath).slice(1).toLowerCase();
+  return VIDEO_FILE_EXTENSIONS.has(extension);
+}
+
+function resolveIngestVideoPaths(recordingPath) {
+  if (typeof recordingPath !== 'string' || recordingPath.trim().length === 0) {
+    return [];
+  }
+
+  const resolvedRecordingPath = recordingPath.trim();
+  if (!fs.existsSync(resolvedRecordingPath)) {
+    return [];
+  }
+
+  return fs.readdirSync(resolvedRecordingPath, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && isSupportedVideoFile(entry.name))
+    .map((entry) => path.join(resolvedRecordingPath, entry.name))
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function buildIngestCameraOptions(options = {}, videoPaths = []) {
+  const templateCameras = Array.isArray(options.cameras) ? options.cameras : [];
+  const fallbackCamera = templateCameras[0] ?? {};
+  const fallbackWidth = Number.isFinite(options.camera_width) ? options.camera_width : 1920;
+  const fallbackHeight = Number.isFinite(options.camera_height) ? options.camera_height : 1080;
+  const fallbackFps = Number.isFinite(options.video_fps) ? options.video_fps : 30;
+  const fallbackRotation = Number.isFinite(options.rotation) ? options.rotation : 0;
+
+  return videoPaths.map((videoPath, index) => {
+    const templateCamera = templateCameras[index] ?? fallbackCamera;
+
+    return {
+      uri: path.basename(videoPath),
+      width: Number.isFinite(templateCamera?.width) ? templateCamera.width : fallbackWidth,
+      height: Number.isFinite(templateCamera?.height) ? templateCamera.height : fallbackHeight,
+      fps: fallbackFps,
+      rotation: fallbackRotation,
+    };
+  });
+}
+
+function resolveIrisStartOptions(options = {}) {
+  const nextOptions = options && typeof options === 'object'
+    ? { ...options }
+    : {};
+
+  if (nextOptions.is_ingest !== true) {
+    return { ok: true, options: nextOptions };
+  }
+
+  const explicitVideoPaths = Array.isArray(nextOptions.video_paths)
+    ? nextOptions.video_paths
+      .filter((value) => typeof value === 'string' && value.trim().length > 0)
+      .map((value) => value.trim())
+    : [];
+  const recordingPath = typeof nextOptions.recordingPath === 'string' ? nextOptions.recordingPath.trim() : '';
+  const videoPaths = explicitVideoPaths.length > 0
+    ? explicitVideoPaths
+    : resolveIngestVideoPaths(recordingPath);
+
+  if (videoPaths.length === 0) {
+    return {
+      ok: false,
+      error: recordingPath
+        ? 'No video files were found in the linked motion folder.'
+        : 'A linked motion folder is required to start IRIS ingest.',
+    };
+  }
+
+  return {
+    ok: true,
+    options: {
+      ...nextOptions,
+      video_paths: videoPaths,
+      cameras: buildIngestCameraOptions(nextOptions, videoPaths),
+    },
+  };
 }
 
 function resolveUniqueDestinationPath(directory, fileName) {
@@ -118,24 +199,34 @@ function clearMotionDirectory(targetDir) {
 function registerIrisIpc() {
   let activeRecordingOutputDir = null;
 
-  ipcMain.handle('start-iris', (event, options) => {
+  ipcMain.handle('start-iris', async (event, options = {}) => {
     const sessionId = crypto.randomUUID();
     const targetWindow = getTargetWindow(event);
+    const resolvedOptions = resolveIrisStartOptions(options);
+
+    if (!resolvedOptions.ok) {
+      return resolvedOptions;
+    }
 
     return processManager.startStandard({
       sessionId,
-      options,
+      options: resolvedOptions.options,
       onCliOutput: (payload) => sendToWindow(targetWindow, 'iris-cli-output', payload),
     });
   });
 
-  ipcMain.handle('start-iris-stream', async (event, options) => {
+  ipcMain.handle('start-iris-stream', async (event, options = {}) => {
     const sessionId = crypto.randomUUID();
     const targetWindow = getTargetWindow(event);
+    const resolvedOptions = resolveIrisStartOptions(options);
+
+    if (!resolvedOptions.ok) {
+      return resolvedOptions;
+    }
 
     return processManager.startStream({
       sessionId,
-      options, 
+      options: resolvedOptions.options, 
       onFrame: (frame) => sendToWindow(targetWindow, 'iris-data', frame),
       onCliOutput: (payload) => sendToWindow(targetWindow, 'iris-cli-output', payload),
     });

@@ -327,6 +327,32 @@ async function handleLinkRecordings(participantId: string, sessionId: string) {
   await saveSessionRecordingPath(participantId, sessionId, result.outputDir);
 }
 
+async function handleStartSessionIris(participantId: string, sessionId: string) {
+  const participant = currentProject.value?.participants.find((entry) => entry.id === participantId);
+  const session = participant?.sessions.find((entry) => entry.id === sessionId);
+  const recordingPath = typeof session?.recordingPath === 'string' ? session.recordingPath.trim() : '';
+
+  if (!session || !recordingPath) return;
+
+  const result = await startIrisWithOptions(
+    'mocap',
+    buildIrisIngestOptions(recordingPath),
+    { allowReuseSameMode: false },
+  );
+
+  if (!result?.ok) return;
+
+  setView('mocap');
+
+  if (currentProject.value?.workspace.selectedRecordingPath !== recordingPath) {
+    await updateCurrentProject({
+      workspace: {
+        selectedRecordingPath: recordingPath,
+      },
+    }, { save: true });
+  }
+}
+
 async function handleSavePresetSettings({
   store,
   projectPresetId,
@@ -367,12 +393,42 @@ function buildIrisOptions(mode: 'capture' | 'mocap'): IrisStartOptions | null {
   };
 }
 
-async function startIrisForMode(mode: 'capture' | 'mocap') {
+function buildIrisIngestOptions(recordingPath: string): IrisStartOptions | null {
+  if (!currentProject.value) return null;
+
+  const trimmedRecordingPath = recordingPath.trim();
+  if (!trimmedRecordingPath) return null;
+
+  const { width, height } = parseResolution(selectedResolution.value);
+  return {
+    kp_format: 'halpe26',
+    subjects: currentProject.value.workspace.personCount,
+    cameras: [],
+    camera_width: width,
+    camera_height: height,
+    video_fps: selectedFps.value,
+    rotation: selectedRotation.value,
+    output_dir: projectOutputDir.value,
+    is_ingest: true,
+    recordingPath: trimmedRecordingPath,
+    stream: true,
+  };
+}
+
+async function startIrisWithOptions(
+  mode: 'capture' | 'mocap',
+  options: IrisStartOptions | null,
+  { allowReuseSameMode = true }: { allowReuseSameMode?: boolean } = {},
+) {
   if (isStartingIris.value || isStoppingIris.value) {
     return { ok: false, error: 'IRIS is busy.' };
   }
 
-  if (isIrisRunning.value && irisRunMode.value === mode) {
+  if (!options) {
+    return { ok: false, error: 'Unable to build IRIS options.' };
+  }
+
+  if (allowReuseSameMode && isIrisRunning.value && irisRunMode.value === mode) {
     return { ok: true, alreadyRunning: true };
   }
 
@@ -384,17 +440,21 @@ async function startIrisForMode(mode: 'capture' | 'mocap') {
     irisRunMode.value = null;
   }
 
-  const options = buildIrisOptions(mode);
-  if (!options) {
-    return { ok: false, error: 'No available cameras.' };
-  }
-
   const result = await startIris(options);
   if (result?.ok) {
     irisRunMode.value = mode;
   }
 
   return result;
+}
+
+async function startIrisForMode(mode: 'capture' | 'mocap') {
+  const options = buildIrisOptions(mode);
+  if (!options) {
+    return { ok: false, error: 'No available cameras.' };
+  }
+
+  return startIrisWithOptions(mode, options, { allowReuseSameMode: true });
 }
 
 watch(isIrisRunning, (running) => {
@@ -537,6 +597,7 @@ async function handleToggleRecording(target: RecordingTarget = {}) {
         @open-mocap="setView('mocap')"
         @open-analysis="setView('analysis')"
         @record-session="handleRecordSession($event.participantId, $event.sessionId)"
+        @start-session-iris="handleStartSessionIris($event.participantId, $event.sessionId)"
         @link-recordings="handleLinkRecordings($event.participantId, $event.sessionId)"
         @resize-sidebar="handleResizeSessionSidenav"
       />

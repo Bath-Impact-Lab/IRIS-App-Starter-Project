@@ -76,9 +76,12 @@ function buildConfigFromOptions(opts = {}) {
   const captureOnly = opts.capture_only === true;
   const isIngest = opts.is_ingest === true; 
   const outputDir = getDa3StartupCalibrationOutputDir().replace(/\\/g, '/');
+  const da3FrameSource = isIngest ? 'ingest' : 'frame_batch';
 
   const camera_ids = cameras.map((_, index) => index);
-  const fps = cameras.length > 0 && cameras[0].fps ? cameras[0].fps : 30;
+  const fps = Number.isFinite(opts.video_fps)
+    ? opts.video_fps
+    : (cameras.length > 0 && Number.isFinite(cameras[0].fps) ? cameras[0].fps : 30);
   const rotate = Number.isFinite(opts.rotation)
     ? opts.rotation
     : (cameras.length > 0 && Number.isFinite(cameras[0].rotation) ? cameras[0].rotation : 0);
@@ -147,7 +150,7 @@ function buildConfigFromOptions(opts = {}) {
 
   // Define the Source Stage dynamically (Ingest vs. Capture)
   const sourceStage = isIngest ? {
-    ingest: {
+    multi_video_ingestion: {
       id: "ingest",
       camera_group: "capture_rig",
       ...(opts.video_paths && { video_paths: opts.video_paths }) // Optional payload for ingest
@@ -191,7 +194,7 @@ function buildConfigFromOptions(opts = {}) {
         da3_startup_calibration: {
           engine: `${modelDir}/DA3-LARGE-1.1.engine`,
           output_dir: outputDir,
-          frame_source: "frame_batch",
+          frame_source: da3FrameSource,
           viewer_align: true,
           save_ply: "scene.ply"
         },

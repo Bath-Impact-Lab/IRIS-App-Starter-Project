@@ -130,6 +130,14 @@
       <button class="template-context-action" type="button" @click="recordSessionFromMenu">
         Record Trial
       </button>
+      <button
+        class="template-context-action"
+        :disabled="!canStartSessionIris"
+        type="button"
+        @click="startSessionIrisFromMenu"
+      >
+        Start IRIS
+      </button>
       <button class="template-context-action" type="button" @click="linkRecordingsFromMenu">
         Link Recordings
       </button>
@@ -167,6 +175,7 @@ const emit = defineEmits<{
   'open-analysis': [];
   'open-mocap': [];
   'record-session': [{ participantId: string; sessionId: string }];
+  'start-session-iris': [{ participantId: string; sessionId: string }];
   'link-recordings': [{ participantId: string; sessionId: string }];
   'resize-sidebar': [width: number];
 }>();
@@ -195,6 +204,13 @@ const irisCameraErrorMessage = computed(() =>
   irisCamerasError.value ? 'Unable to load IRIS cameras.' : ''
 );
 const isResizing = ref(false);
+const selectedSession = computed(() => {
+  if (!sessionMenu.value.visible) return null;
+
+  const participant = participants.value.find((entry) => entry.id === sessionMenu.value.participantId);
+  return participant?.sessions.find((entry) => entry.id === sessionMenu.value.sessionId) ?? null;
+});
+const canStartSessionIris = computed(() => hasSessionRecording(selectedSession.value));
 
 onMounted(() => {
   window.addEventListener('click', closeSessionMenu);
@@ -222,8 +238,8 @@ function formatSessionDate(value: string) {
   });
 }
 
-function hasSessionRecording(session: ProjectSession) {
-  return typeof session.recordingPath === 'string' && session.recordingPath.trim().length > 0;
+function hasSessionRecording(session: ProjectSession | null | undefined) {
+  return !!session && typeof session.recordingPath === 'string' && session.recordingPath.trim().length > 0;
 }
 
 function openSessionMenu(event: MouseEvent, participantId: string, sessionId: string) {
@@ -249,6 +265,16 @@ function closeSessionMenu() {
 
 function recordSessionFromMenu() {
   emit('record-session', {
+    participantId: sessionMenu.value.participantId,
+    sessionId: sessionMenu.value.sessionId,
+  });
+  closeSessionMenu();
+}
+
+function startSessionIrisFromMenu() {
+  if (!canStartSessionIris.value) return;
+
+  emit('start-session-iris', {
     participantId: sessionMenu.value.participantId,
     sessionId: sessionMenu.value.sessionId,
   });
@@ -603,6 +629,15 @@ function stopResize() {
 
 .template-context-action:hover {
   background: var(--sidenav-hover, rgba(255, 255, 255, 0.06));
+}
+
+.template-context-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.template-context-action:disabled:hover {
+  background: transparent;
 }
 
 .session-sidenav-divider {

@@ -58,6 +58,9 @@ export interface IrisStartOptions {
   rotation: number;
   output_dir: string;
   capture_only?: boolean;
+  is_ingest?: boolean;
+  recordingPath?: string;
+  video_paths?: string[];
   stream?: boolean;
 }
 
