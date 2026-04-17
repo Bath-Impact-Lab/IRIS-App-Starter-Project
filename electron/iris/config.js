@@ -5,137 +5,225 @@ const os = require('os');
 const path = require('path');
 
 const PIPE_NAME = '\\\\.\\pipe\\iris_ipc';
-const DEV_IRIS_CLI_EXE = process.env.IRIS_CLI_EXE || path.join(os.homedir(), 'Documents', 'Iris', 'build', 'bin', 'iris_cli.exe');
+
+function getIrisHomeFromRegistry() {
+  if (process.platform !== 'win32') return null;
+  try {
+    const { execFileSync } = require('child_process');
+    const query = (hive) => {
+      try {
+        const out = execFileSync('reg', ['query', hive, '/v', 'IRIS_HOME'], { 
+          encoding: 'utf8', 
+          windowsHide: true,
+          stdio: ['ignore', 'pipe', 'ignore'] // ignore stdin, pipe stdout, ignore stderr
+        });
+        const match = out.match(/IRIS_HOME\s+\w+\s+(.+)/);
+        return match ? match[1].trim() : null;
+      } catch {
+        // Now fails completely silently
+        return null;
+      }
+    };
+    return query('HKCU\\Environment') || query('HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Environment');
+  } catch {
+    return null;
+  }
+}
+
+function getIrisHome() {
+  return process.env.IRIS_HOME || getIrisHomeFromRegistry();
+}
+
+const DEV_IRIS_CLI_EXE = process.env.IRIS_CLI_EXE
+  || (getIrisHome() && path.join(getIrisHome(), 'bin', 'iris_cli.exe'))
+  || path.join(os.homedir(), 'Documents', 'Iris', 'build', 'bin', 'iris_cli.exe');
 
 function getIrisCliPath() {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'app.asar.unpacked', 'iris_runtime_bundle', 'iris_cli.exe');
   }
-  console.log('[Config] Using iris_cli.exe path:', process.env.IRIS_CLI_EXE );
-  return process.env.IRIS_CLI_EXE || path.join(os.homedir(), 'Documents', 'Iris', 'build', 'bin', 'iris_cli.exe');
+  const irisHome = getIrisHome();
+  const resolved = process.env.IRIS_CLI_EXE
+    || (irisHome && path.join(irisHome, 'bin', 'iris_cli.exe'))
+    || path.join(os.homedir(), 'Documents', 'Iris', 'build', 'bin', 'iris_cli.exe');
+  return resolved;
 }
-
 
 function getModelDir() {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'app.asar.unpacked', 'iris_runtime_bundle', 'models');
   }
-
-  return process.env.IRIS_MODELS_DIR || path.join(os.homedir(), 'Documents', 'Iris', 'models');
+  const irisHome = getIrisHome();
+  return process.env.IRIS_MODELS_DIR
+    || (irisHome && path.join(irisHome, 'models'))
+    || path.join(os.homedir(), 'Documents', 'Iris', 'models');
 }
-
 
 function buildConfigFromOptions(opts = {}) {
   const run_id = opts.run_id || `run-${Date.now()}`;
   const width = opts.camera_width ?? 1920;
   const height = opts.camera_height ?? 1080;
   const cameras = opts.cameras || [];
+  const captureOnly = opts.capture_only === true;
+  const outputDir = typeof opts.output_dir === 'string' && opts.output_dir.trim().length > 0
+    ? opts.output_dir.trim().replace(/\\/g, '/')
+    : 'output/triangulation_da3_startup';
 
-  const modelDir = getModelDir();
+  const camera_ids = cameras.map((_, index) => index);
+  const fps = cameras.length > 0 && cameras[0].fps ? cameras[0].fps : 30;
+  const rotate = Number.isFinite(opts.rotation)
+    ? opts.rotation
+    : (cameras.length > 0 && Number.isFinite(cameras[0].rotation) ? cameras[0].rotation : 0);
+  const modelDir = getModelDir().replace(/\\/g, '/'); // Normalize slashes for JSON
+
+  // Define the base shared block
+  const shared = {
+    execution: {
+      device_id: 0
+    },
+    camera_groups: {
+      capture_rig: {
+        camera_ids: camera_ids,
+        width: width,
+        height: height,
+        rotate,
+        fps: fps,
+        batching: true,
+        batch_camera_ids: camera_ids
+      }
+    },
+    defaults: {
+      output: {
+        shm_name: "iris_shm_ipc",
+        capacity: 120
+      }
+    }
+  };
+
+  // Only inject models and detection defaults if we are running the full pipeline
+  if (!captureOnly) {
+    shared.models = {
+      detection: {
+        rtmdet_people: {
+          type: "rtmdet",
+          rtmdet_engine_path: `${modelDir}/rtmdet_t_bs4_fp16.trt`,
+          rtmdet_input_width: 640,
+          rtmdet_input_height: 640,
+          rtmdet_conf_threshold: 0.7,
+          rtmdet_iou_threshold: 0.45
+        }
+      },
+      reid: {
+        osnet_x05: {
+          enabled: true,
+          engine_path: `${modelDir}/osnet_x05_fp16.trt`,
+          min_detection_confidence: 0.55
+        }
+      },
+      pose: {
+        rtmpose_people: {
+          engine: `${modelDir}/rtmpose_bs16_fp16.trt`,
+          batch: 16,
+          input_w: 192,
+          input_h: 256,
+          split_ratio: 2.0
+        }
+      }
+    };
+    shared.defaults.detection = {
+      batch_size: 4,
+      detection_skip_enabled: true,
+      detection_skip_frames: 20
+    };
+  }
+
+  // Define pipelines based on the flag
+  const captureOnlyPipeline = {
+    capture: {
+      id: "capture",
+      camera_group: "capture_rig",
+      id_prefix: "cap"
+    },
+    output: {
+      id: "output",
+      camera_group: "capture_rig"
+    }
+  };
+
+  const fullPipeline = {
+    capture: {
+      id: "capture",
+      camera_group: "capture_rig",
+      id_prefix: "cap"
+    },
+    detection: {
+      id: "det0",
+      model: "rtmdet_people",
+      reid_model: "osnet_x05"
+    },
+    global_reid_tracking: {
+      id: "global_track",
+      single_person_mode: false,
+      max_age: 200,
+      min_hits: 1,
+      min_detection_confidence: 0.5,
+      appearance_threshold: 0.45,
+      cross_camera_unconfirmed_threshold: 0.55
+    },
+    pose_estimation: {
+      id: "pose0",
+      model: "rtmpose_people"
+    },
+    triangulation: {
+      id: "tri0",
+      pose_source: "pose0",
+      camera_group: "capture_rig",
+      da3_startup_calibration: {
+        engine: `${modelDir}/DA3-LARGE-1.1.engine`,
+        output_dir: outputDir,
+        frame_source: "frame_batch",
+        viewer_align: true,
+        save_ply: "scene.ply"
+      },
+      compute_reprojection: true,
+      store_reprojection_error: true,
+      gate_by_reprojection_error: true,
+      max_reprojection_error_px: 50.0,
+      smoothing: {
+        enabled: true,
+        freq: 100.0,
+        min_cutoff: 1.0,
+        beta: 0.5,
+        d_cutoff: 1.0,
+        cleanup_interval: 300
+      }
+    },
+    output: {
+      id: "output",
+      camera_group: "capture_rig"
+    }
+  };
 
   return {
     run_id,
-    devices: { gpu: 0, cuda_streams: 2, nvenc: false },
-    buffers: {
-      frame_capacity: 256,
-      pose_capacity: 256,
-      export_shm: false,
-      camera_count: cameras.length,
-      camera_slots: 1,
-      camera_width: width,
-      camera_height: height,
-    },
-    capture: cameras.map((c, index) => ({
-      name: `cap${index}`,
-      params: {
-        camera_id: index,
-        width: c.width,
-        height: c.height,
-        rotate: c.rotation,
-        format: 'BGR8',
-        fps: c.fps,
-        use_camera: true,
-        device_id: 0,
-        batching: true,
-        batch_cameras: cameras.map((_, idx) => idx),
+    runtime: {
+      devices: {
+        gpu: 0,
+        cuda_streams: 2,
+        nvenc: false
       },
-    })),
-    detection: {
-      name: 'det0',
-      params: {
-        device_id: 0,
-        batch_size: 4,
-        rtmdet_engine_path: `${modelDir}/rtmdet_t_bs4_fp16.trt`,
-        rtmdet_input_width: 640,
-        rtmdet_input_height: 640,
-        rtmdet_conf_threshold: 0.7,
-        rtmdet_iou_threshold: 0.45,
-        detection_skip_enabled: true,
-        detection_skip_frames: 20,
-        reid_enabled: true,
-        osnet_engine_path: `${modelDir}/osnet_x05_fp16.trt`,
-        reid_min_detection_conf: 0.55,
-      },
+      buffers: {
+        frame_capacity: 256,
+        pose_capacity: 256,
+        export_shm: true,
+        camera_count: Math.max(1, cameras.length),
+        camera_slots: 256,
+        camera_width: width,
+        camera_height: height
+      }
     },
-    global_reid_tracking: {
-      name: 'global_track',
-      params: {
-        single_person_mode: false,
-        max_age: 200,
-        min_hits: 1,
-        min_detection_confidence: 0.5,
-        appearance_threshold: 0.45,
-        cross_camera_unconfirmed_threshold: 0.55,
-        use_motion_prediction: false,
-      },
-    },
-    pose_estimation: {
-      name: 'pose0',
-      params: {
-        device_id: 0,
-        batch: 16,
-        engine: `${modelDir}/rtmpose_bs16_fp16.trt`,
-        input_w: 192,
-        input_h: 256,
-        split_ratio: 2.0,
-      },
-    },
-    triangulation: {
-      name: 'tri0',
-      params: {
-        pose_sources: 'pose0',
-        camera_ids: cameras.map((_, idx) => idx),
-        da3_startup_calibration: {
-          engine: "models/DA3-LARGE-1.1.engine",
-          output_dir: "output/triangulation_da3_startup",
-          frame_source: "ingestion",
-          viewer_align: true,
-          save_ply: "scene.ply"
-        },
-        compute_reprojection: true,
-        store_reprojection_error: true,
-        gate_by_reprojection_error: true,
-        max_reprojection_error_px: 50.0,
-        smoothing: {
-          enabled: true,
-          freq: 100.0,
-          min_cutoff: 1.0,
-          beta: 0.5,
-          d_cutoff: 1.0,
-          cleanup_interval: 300,
-        },
-      },
-    },
-    output: {
-      name: 'output',
-      params: {
-        shm_name: 'iris_shm_ipc',
-        capacity: 120,
-        frame_width: width,
-        frame_height: height,
-        num_cameras: cameras.length,
-      },
-    },
+    shared: shared,
+    pipeline: captureOnly ? captureOnlyPipeline : fullPipeline
   };
 }
 

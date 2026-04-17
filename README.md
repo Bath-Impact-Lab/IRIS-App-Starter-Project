@@ -30,7 +30,7 @@ You will need a FREE license key for IRIS available from [iris.cs.bath.ac.uk](ht
 ## 🛠️ Key Features
 
 - **Real-time Pose Streaming**: Seamless integration with the IRIS vision engine.
-- **Ready-to-use 3D Scene**: Three.js integration with OBJ/glTF support pre-configured.
+- **Ready-to-use 3D Scene**: Three.js integration.
 - **Modern Tech Stack**: Built with Electron, Vite, and Vue 3 for optimal performance.
 
 ## 📁 Project Structure
