@@ -134,6 +134,15 @@
         Link Recordings
       </button>
     </div>
+
+    <div
+      class="session-sidenav-resizer"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize sidebar"
+      :aria-valuenow="Math.round(props.width)"
+      @pointerdown.prevent="beginResize"
+    ></div>
   </aside>
 </template>
 
@@ -145,10 +154,12 @@ import type { ProjectParticipant, ProjectSession } from '@/lib/useProject';
 interface Props {
   activeView: 'capture' | 'analysis' | 'mocap';
   participants?: ProjectParticipant[];
+  width?: number;
 }
 
 const props = withDefaults(defineProps<Props>(), {
   participants: () => [],
+  width: 240,
 });
 
 const emit = defineEmits<{
@@ -157,6 +168,7 @@ const emit = defineEmits<{
   'open-mocap': [];
   'record-session': [{ participantId: string; sessionId: string }];
   'link-recordings': [{ participantId: string; sessionId: string }];
+  'resize-sidebar': [width: number];
 }>();
 
 // State for the main cameras dropdown
@@ -182,6 +194,7 @@ const hasIrisCameras = computed(() => irisCameras.value.length > 0);
 const irisCameraErrorMessage = computed(() =>
   irisCamerasError.value ? 'Unable to load IRIS cameras.' : ''
 );
+const isResizing = ref(false);
 
 onMounted(() => {
   window.addEventListener('click', closeSessionMenu);
@@ -190,6 +203,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  stopResize();
   window.removeEventListener('click', closeSessionMenu);
   window.removeEventListener('blur', closeSessionMenu);
   window.removeEventListener('scroll', closeSessionMenu, true);
@@ -248,6 +262,31 @@ function linkRecordingsFromMenu() {
   });
   closeSessionMenu();
 }
+
+function beginResize() {
+  if (window.innerWidth <= 768) return;
+
+  isResizing.value = true;
+  document.body.classList.add('session-sidenav-resizing');
+  window.addEventListener('pointermove', handleResizePointerMove);
+  window.addEventListener('pointerup', stopResize);
+  window.addEventListener('pointercancel', stopResize);
+}
+
+function handleResizePointerMove(event: PointerEvent) {
+  if (!isResizing.value) return;
+  emit('resize-sidebar', event.clientX);
+}
+
+function stopResize() {
+  if (!isResizing.value) return;
+
+  isResizing.value = false;
+  document.body.classList.remove('session-sidenav-resizing');
+  window.removeEventListener('pointermove', handleResizePointerMove);
+  window.removeEventListener('pointerup', stopResize);
+  window.removeEventListener('pointercancel', stopResize);
+}
 </script>
 
 <style scoped>
@@ -264,6 +303,41 @@ function linkRecordingsFromMenu() {
   z-index: 10;
   transition: background 0.3s ease, border-color 0.3s ease;
   overflow: hidden; /* Lock main component from scrolling */
+}
+
+.session-sidenav-resizer {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  bottom: 0;
+  width: 9px;
+  cursor: col-resize;
+  touch-action: none;
+  z-index: 30;
+}
+
+.session-sidenav-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 1px;
+  background: transparent;
+  transition: background-color 0.2s ease;
+}
+
+.session-sidenav-resizer:hover::before {
+  background: color-mix(in srgb, var(--accent, #3b82f6) 55%, transparent);
+}
+
+:global(body.session-sidenav-resizing) {
+  cursor: col-resize;
+  user-select: none;
+}
+
+:global(body.session-sidenav-resizing *) {
+  cursor: col-resize !important;
 }
 
 /* Scrollable Container for Lists */
@@ -589,6 +663,10 @@ function linkRecordingsFromMenu() {
 
 @media (max-width: 768px) {
   .session-sidenav {
+    display: none;
+  }
+
+  .session-sidenav-resizer {
     display: none;
   }
 }

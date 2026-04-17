@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { ref, computed, watch, watchEffect } from 'vue';
+import { ref, computed, onBeforeUnmount, onMounted, watch, watchEffect } from 'vue';
 import { useProject, type ProjectParticipant, type ProjectSession } from '@/lib/useProject';
 import { useProjectPresets, type ProjectPreset, type ProjectPresetStore } from '@/lib/useProjectPresets';
 import { useIris, type IrisStartOptions } from '@/lib/useIris';
@@ -55,11 +55,21 @@ const currentTheme = ref<'dark' | 'light'>('light');
 const irisRunMode = ref<'capture' | 'mocap' | null>(null);
 const isRecording = ref(false);
 const isRecordingBusy = ref(false);
+const SIDENAV_WIDTH_STORAGE_KEY = 'recapture.session-sidenav-width';
+const DEFAULT_SIDENAV_WIDTH = 240;
+const MIN_SIDENAV_WIDTH = 220;
+const MAX_SIDENAV_WIDTH = 480;
+const sessionSidenavWidth = ref(readStoredSidenavWidth());
 
 // Apply theme to document root for global CSS variable targeting
 watchEffect(() => {
   document.documentElement.setAttribute('data-theme', currentTheme.value);
 });
+
+watch(sessionSidenavWidth, (value) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(SIDENAV_WIDTH_STORAGE_KEY, String(clampSessionSidenavWidth(value)));
+}, { immediate: true });
 
 // View Navigation Handler
 function setView(view: 'capture' | 'mocap' | 'analysis') {
@@ -67,6 +77,10 @@ function setView(view: 'capture' | 'mocap' | 'analysis') {
     currentProject.value.workspace.activeView = view;
   }
 }
+
+const appContainerStyle = computed(() => ({
+  '--app-session-sidenav-width': `${sessionSidenavWidth.value}px`,
+}));
 
 const selectedResolution = computed(() => currentProject.value?.workspace.resolution ?? '1920x1080');
 const selectedFps = computed(() => currentProject.value?.workspace.fps ?? 30);
@@ -145,6 +159,46 @@ function getParentDirectory(filePath: string | null | undefined) {
 function createEntityId(prefix: string) {
   return globalThis.crypto?.randomUUID?.() ?? `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
+
+function readStoredSidenavWidth() {
+  if (typeof window === 'undefined') {
+    return DEFAULT_SIDENAV_WIDTH;
+  }
+
+  const rawValue = window.localStorage.getItem(SIDENAV_WIDTH_STORAGE_KEY);
+  const parsedValue = Number.parseInt(rawValue ?? '', 10);
+
+  return Number.isFinite(parsedValue)
+    ? clampSessionSidenavWidth(parsedValue)
+    : DEFAULT_SIDENAV_WIDTH;
+}
+
+function clampSessionSidenavWidth(width: number) {
+  if (typeof window === 'undefined') {
+    return Math.min(MAX_SIDENAV_WIDTH, Math.max(MIN_SIDENAV_WIDTH, width));
+  }
+
+  const viewportMax = Math.max(MIN_SIDENAV_WIDTH, window.innerWidth - 320);
+  return Math.min(Math.min(MAX_SIDENAV_WIDTH, viewportMax), Math.max(MIN_SIDENAV_WIDTH, width));
+}
+
+function handleResizeSessionSidenav(nextWidth: number) {
+  sessionSidenavWidth.value = clampSessionSidenavWidth(nextWidth);
+}
+
+function handleViewportResize() {
+  sessionSidenavWidth.value = clampSessionSidenavWidth(sessionSidenavWidth.value);
+}
+
+onMounted(() => {
+  if (typeof window === 'undefined') return;
+  window.addEventListener('resize', handleViewportResize);
+});
+
+onBeforeUnmount(() => {
+  if (typeof window === 'undefined') return;
+  window.removeEventListener('resize', handleViewportResize);
+});
 
 interface RecordingTarget {
   participantName?: string;
@@ -457,7 +511,7 @@ async function handleToggleRecording(target: RecordingTarget = {}) {
 </script>
 
 <template>
-  <div id="app-container" :data-theme="currentTheme">
+  <div id="app-container" :data-theme="currentTheme" :style="appContainerStyle">
     
     <AppTopBar 
       appTitle="ReCapture" 
@@ -478,11 +532,13 @@ async function handleToggleRecording(target: RecordingTarget = {}) {
       <SessionSidenav 
         :activeView="activeView"
         :participants="currentProject.participants"
+        :width="sessionSidenavWidth"
         @open-capture="setView('capture')"
         @open-mocap="setView('mocap')"
         @open-analysis="setView('analysis')"
         @record-session="handleRecordSession($event.participantId, $event.sessionId)"
         @link-recordings="handleLinkRecordings($event.participantId, $event.sessionId)"
+        @resize-sidebar="handleResizeSessionSidenav"
       />
 
       <main class="workspace-content">
