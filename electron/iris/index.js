@@ -67,8 +67,20 @@ function resolveMotionOutputDir(options = {}) {
     return null;
   }
 
-  const baseName = sanitizePathSegment(options.sessionName, 'Motion');
-  return path.join(motionsDir, baseName);
+  const recordingPath = typeof options.recordingPath === 'string' && options.recordingPath.trim().length > 0
+    ? options.recordingPath.trim()
+    : '';
+
+  if (recordingPath && isPathInside(motionsDir, recordingPath) && path.resolve(recordingPath) !== path.resolve(motionsDir)) {
+    return recordingPath;
+  }
+
+  const sessionName = typeof options.sessionName === 'string' ? options.sessionName.trim() : '';
+  if (!sessionName) {
+    return null;
+  }
+
+  return path.join(motionsDir, sanitizePathSegment(sessionName, 'Motion'));
 }
 
 function isSupportedVideoFile(filePath) {
@@ -312,7 +324,7 @@ function registerIrisIpc() {
     const outputDir = resolveMotionOutputDir(options);
 
     if (!outputDir) {
-      return { ok: false, error: 'A saved project path is required to start recording.' };
+      return { ok: false, error: 'A target motion folder is required to start recording.' };
     }
 
     try {
@@ -361,7 +373,7 @@ function registerIrisIpc() {
     const outputDir = resolveMotionOutputDir(options);
 
     if (!outputDir) {
-      return { ok: false, error: 'A saved project path is required to link recordings.' };
+      return { ok: false, error: 'A target motion folder is required to link recordings.' };
     }
 
     const selection = await dialog.showOpenDialog(targetWindow, {

@@ -25,6 +25,19 @@ interface Window {
     onWindowStateChange: (callback: (data: { isMaximized: boolean }) => void) => () => void;
   }
   opensimAPI?: {
+    scaleModel: (params: {
+      staticTrcPath: string;
+      subjectMass?: number;
+      subjectHeight?: number;
+      outputDir: string;
+      scaledModelPath?: string;
+    }) => Promise<{ success: boolean; scaledModelPath?: string; error?: string }>;
+    runIK: (params: {
+      motionTrcPath: string;
+      outputDir: string;
+      scaledModelPath?: string;
+      ikMotionPath?: string;
+    }) => Promise<{ success: boolean; scaledModelPath?: string; ikMotionPath?: string; error?: string }>;
     runPipeline: (params: {
       staticTrcPath: string;
       motionTrcPath: string;

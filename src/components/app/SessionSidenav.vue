@@ -138,6 +138,22 @@
       >
         Start IRIS
       </button>
+      <button
+        class="template-context-action"
+        :disabled="!canRunOpenSim"
+        type="button"
+        @click="runOpenSimScaleFromMenu"
+      >
+        Run OpenSim Scale
+      </button>
+      <button
+        class="template-context-action"
+        :disabled="!canRunOpenSim"
+        type="button"
+        @click="runOpenSimIkFromMenu"
+      >
+        Run OpenSim IK
+      </button>
       <button class="template-context-action" type="button" @click="linkRecordingsFromMenu">
         Link Recordings
       </button>
@@ -176,6 +192,8 @@ const emit = defineEmits<{
   'open-mocap': [];
   'record-session': [{ participantId: string; sessionId: string }];
   'start-session-iris': [{ participantId: string; sessionId: string }];
+  'run-session-opensim-scale': [{ participantId: string; sessionId: string }];
+  'run-session-opensim-ik': [{ participantId: string; sessionId: string }];
   'link-recordings': [{ participantId: string; sessionId: string }];
   'resize-sidebar': [width: number];
 }>();
@@ -211,6 +229,7 @@ const selectedSession = computed(() => {
   return participant?.sessions.find((entry) => entry.id === sessionMenu.value.sessionId) ?? null;
 });
 const canStartSessionIris = computed(() => hasSessionRecording(selectedSession.value));
+const canRunOpenSim = computed(() => hasSessionRecording(selectedSession.value));
 
 onMounted(() => {
   window.addEventListener('click', closeSessionMenu);
@@ -275,6 +294,26 @@ function startSessionIrisFromMenu() {
   if (!canStartSessionIris.value) return;
 
   emit('start-session-iris', {
+    participantId: sessionMenu.value.participantId,
+    sessionId: sessionMenu.value.sessionId,
+  });
+  closeSessionMenu();
+}
+
+function runOpenSimScaleFromMenu() {
+  if (!canRunOpenSim.value) return;
+
+  emit('run-session-opensim-scale', {
+    participantId: sessionMenu.value.participantId,
+    sessionId: sessionMenu.value.sessionId,
+  });
+  closeSessionMenu();
+}
+
+function runOpenSimIkFromMenu() {
+  if (!canRunOpenSim.value) return;
+
+  emit('run-session-opensim-ik', {
     participantId: sessionMenu.value.participantId,
     sessionId: sessionMenu.value.sessionId,
   });

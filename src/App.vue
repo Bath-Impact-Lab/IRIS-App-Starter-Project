@@ -57,6 +57,7 @@ const isRecording = ref(false);
 const isRecordingBusy = ref(false);
 const selectedRecordMode = ref<'plain' | 'augment'>('plain');
 const activeRecordMode = ref<'plain' | 'augment'>('plain');
+const PROJECT_MODELS_DIRECTORY_NAME = 'models';
 const SIDENAV_WIDTH_STORAGE_KEY = 'recapture.session-sidenav-width';
 const DEFAULT_SIDENAV_WIDTH = 240;
 const MIN_SIDENAV_WIDTH = 220;
@@ -156,6 +157,34 @@ function parseResolution(value: string) {
 function getParentDirectory(filePath: string | null | undefined) {
   if (typeof filePath !== 'string' || filePath.trim().length === 0) return '';
   return filePath.replace(/[\\/][^\\/]+$/, '');
+}
+
+function getPathSeparator(filePath: string | null | undefined) {
+  return typeof filePath === 'string' && filePath.includes('\\') ? '\\' : '/';
+}
+
+function joinPath(basePath: string, leaf: string) {
+  return `${basePath.replace(/[\\/]+$/, '')}${getPathSeparator(basePath)}${leaf}`;
+}
+
+function sanitizePathSegment(value: string | null | undefined, fallback = 'subject') {
+  const cleaned = typeof value === 'string'
+    ? value.replace(/[<>:"/\\|?*\x00-\x1f]+/g, ' ').replace(/\s+/g, ' ').trim()
+    : '';
+
+  return cleaned || fallback;
+}
+
+function getProjectModelsDir(filePath: string | null | undefined) {
+  const projectDir = getParentDirectory(filePath);
+  return projectDir ? joinPath(projectDir, PROJECT_MODELS_DIRECTORY_NAME) : '';
+}
+
+function getParticipantScaledModelPath(projectPath: string | null | undefined, participantName: string) {
+  const modelsDir = getProjectModelsDir(projectPath);
+  if (!modelsDir) return '';
+
+  return joinPath(modelsDir, `${sanitizePathSegment(participantName)}_scaled.osim`);
 }
 
 function createEntityId(prefix: string) {
@@ -356,6 +385,92 @@ async function handleStartSessionIris(participantId: string, sessionId: string) 
   }
 }
 
+function notifyOpenSimError(message: string) {
+  console.warn(`[opensim] ${message}`);
+  window.alert(message);
+}
+
+async function ensureAugmentedRecordingData(recordingPath: string) {
+  const trimmedPath = recordingPath.trim();
+  if (!trimmedPath) {
+    throw new Error('A linked motion folder is required.');
+  }
+
+  if (!window.ipc?.augmentMarkers) {
+    throw new Error('Augmenter IPC is unavailable.');
+  }
+
+  const result = await window.ipc.augmentMarkers(resolveRecordingPosesPath(trimmedPath), trimmedPath);
+  if (!result?.ok) {
+    throw new Error(result?.error ?? 'Failed to augment poses for OpenSim.');
+  }
+
+  return resolveRecordingAugmentedTrcPath(trimmedPath);
+}
+
+async function handleRunSessionOpenSimScale(participantId: string, sessionId: string) {
+  const participant = currentProject.value?.participants.find((entry) => entry.id === participantId);
+  const session = participant?.sessions.find((entry) => entry.id === sessionId);
+  const recordingPath = typeof session?.recordingPath === 'string' ? session.recordingPath.trim() : '';
+  const projectPath = currentProject.value?.path ?? '';
+
+  if (!participant || !session || !recordingPath) return;
+  if (!window.opensimAPI?.scaleModel) return;
+
+  try {
+    const staticTrcPath = await ensureAugmentedRecordingData(recordingPath);
+    const outputDir = getProjectModelsDir(projectPath);
+    const scaledModelPath = getParticipantScaledModelPath(projectPath, participant.name);
+
+    if (!outputDir || !scaledModelPath) {
+      throw new Error('Unable to resolve the project models folder.');
+    }
+
+    const result = await window.opensimAPI.scaleModel({
+      staticTrcPath,
+      outputDir,
+      scaledModelPath,
+    });
+
+    if (!result?.success) {
+      throw new Error(result?.error ?? 'OpenSim scaling failed.');
+    }
+  } catch (error) {
+    notifyOpenSimError(error instanceof Error ? error.message : 'OpenSim scaling failed.');
+  }
+}
+
+async function handleRunSessionOpenSimIk(participantId: string, sessionId: string) {
+  const participant = currentProject.value?.participants.find((entry) => entry.id === participantId);
+  const session = participant?.sessions.find((entry) => entry.id === sessionId);
+  const recordingPath = typeof session?.recordingPath === 'string' ? session.recordingPath.trim() : '';
+  const projectPath = currentProject.value?.path ?? '';
+
+  if (!participant || !session || !recordingPath) return;
+  if (!window.opensimAPI?.runIK) return;
+
+  try {
+    const motionTrcPath = await ensureAugmentedRecordingData(recordingPath);
+    const scaledModelPath = getParticipantScaledModelPath(projectPath, participant.name);
+
+    if (!scaledModelPath) {
+      throw new Error('Unable to resolve the participant scaled model path.');
+    }
+
+    const result = await window.opensimAPI.runIK({
+      motionTrcPath,
+      outputDir: recordingPath,
+      scaledModelPath,
+    });
+
+    if (!result?.success) {
+      throw new Error(result?.error ?? 'OpenSim IK failed.');
+    }
+  } catch (error) {
+    notifyOpenSimError(error instanceof Error ? error.message : 'OpenSim IK failed.');
+  }
+}
+
 async function handleSavePresetSettings({
   store,
   projectPresetId,
@@ -528,8 +643,11 @@ async function saveSessionRecordingPath(participantId: string, sessionId: string
 }
 
 function resolveRecordingPosesPath(recordingPath: string) {
-  const trimmedPath = recordingPath.trim().replace(/[\\/]+$/, '');
-  return `${trimmedPath}/poses.jsonl`;
+  return joinPath(recordingPath.trim(), 'poses.jsonl');
+}
+
+function resolveRecordingAugmentedTrcPath(recordingPath: string) {
+  return joinPath(recordingPath.trim(), 'augmented-poses.trc');
 }
 
 async function augmentRecordingOutput(recordingPath: string) {
@@ -641,6 +759,8 @@ async function handleToggleRecording(target: RecordingTarget = {}) {
         @open-analysis="setView('analysis')"
         @record-session="handleRecordSession($event.participantId, $event.sessionId)"
         @start-session-iris="handleStartSessionIris($event.participantId, $event.sessionId)"
+        @run-session-opensim-scale="handleRunSessionOpenSimScale($event.participantId, $event.sessionId)"
+        @run-session-opensim-ik="handleRunSessionOpenSimIk($event.participantId, $event.sessionId)"
         @link-recordings="handleLinkRecordings($event.participantId, $event.sessionId)"
         @resize-sidebar="handleResizeSessionSidenav"
       />

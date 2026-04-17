@@ -17,8 +17,8 @@ app.commandLine.appendSwitch('disable-background-timer-throttling');
 app.commandLine.appendSwitch('disable-renderer-backgrounding');
 
 const { registerIrisIpc, getIrisCliPath } = require('./iris');
+const { registerOpenSimIpc } = require('./opensim');
 const { runMarkerAugmentation } = require('./marker-augmenter/augmenter');
-const { runOpenSimPipeline } = require('./opensim/opensimManager');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
@@ -32,6 +32,7 @@ let mockTimer = null;
 const PROJECT_DIRECTORY_NAME = 'ReCapture Projects';
 const PROJECT_EXTENSION = 'recapture.json';
 const PROJECT_MOTIONS_DIRECTORY_NAME = 'motions';
+const PROJECT_MODELS_DIRECTORY_NAME = 'models';
 const PRESET_STORE_FILENAME = 'project-presets.json';
 const UNTITLED_PROJECT_NAME = 'Untitled Project';
 
@@ -175,7 +176,8 @@ function createWindow() {
 
 app.whenReady().then(() => {
 
-    registerIrisIpc(); 
+    registerIrisIpc();
+    registerOpenSimIpc();
     createWindow(); 
 
     app.on('activate', () => {
@@ -253,15 +255,6 @@ ipcMain.handle('augment-markers', async (_event, options = {}) => {
     }
 });
 
-ipcMain.handle('run-opensim', async (_event, args) => {
-    try {
-        const result = await runOpenSimPipeline(args || {});
-        return result;
-    } catch (error) {
-        return { success: false, error: error.message };
-    }
-});
-
 ipcMain.handle('preset-store-load', async () => {
     try {
         return { ok: true, store: readPresetStore() };
@@ -325,6 +318,11 @@ function getProjectMotionsDir(filePath) {
     return projectRootDir ? path.join(projectRootDir, PROJECT_MOTIONS_DIRECTORY_NAME) : null;
 }
 
+function getProjectModelsDir(filePath) {
+    const projectRootDir = getProjectRootDir(filePath);
+    return projectRootDir ? path.join(projectRootDir, PROJECT_MODELS_DIRECTORY_NAME) : null;
+}
+
 function isPathInside(parentPath, childPath) {
     if (!parentPath || !childPath) return false;
 
@@ -340,9 +338,13 @@ function ensureProjectDirectories(filePath) {
     if (!projectRootDir) return null;
 
     const motionsDir = getProjectMotionsDir(filePath);
+    const modelsDir = getProjectModelsDir(filePath);
     fs.mkdirSync(projectRootDir, { recursive: true });
     if (motionsDir) {
         fs.mkdirSync(motionsDir, { recursive: true });
+    }
+    if (modelsDir) {
+        fs.mkdirSync(modelsDir, { recursive: true });
     }
 
     return motionsDir;

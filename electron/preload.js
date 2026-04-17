@@ -46,5 +46,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 })
 
 contextBridge.exposeInMainWorld('opensimAPI', {
+  scaleModel: (params) => ipcRenderer.invoke('opensim-scale-model', params),
+  runIK: (params) => ipcRenderer.invoke('opensim-run-ik', params),
   runPipeline: (params) => ipcRenderer.invoke('run-opensim', params),
 })
