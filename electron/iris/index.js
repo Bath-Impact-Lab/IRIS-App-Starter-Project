@@ -12,8 +12,8 @@ const { execFile } = require('child_process');
 
 const processManager = new ProcessManager();
 const monitorManager = new MonitorManager();
-const PROJECT_FILE_SUFFIX_RE = /\.recapture\.json$/i;
 const INVALID_PATH_SEGMENT_RE = /[<>:"/\\|?*\x00-\x1f]/g;
+const PROJECT_MOTIONS_DIRECTORY_NAME = 'motions';
 const VIDEO_FILE_FILTERS = [
   {
     name: 'Video Files',
@@ -41,18 +41,6 @@ function resolveProjectDirectory(projectPath) {
   return path.dirname(projectPath.trim());
 }
 
-function inferProjectName(projectPath) {
-  if (typeof projectPath !== 'string' || projectPath.trim().length === 0) {
-    return 'Untitled Project';
-  }
-
-  const fileName = path.basename(projectPath.trim());
-  return fileName
-    .replace(PROJECT_FILE_SUFFIX_RE, '')
-    .replace(/\.json$/i, '')
-    .trim() || 'Untitled Project';
-}
-
 function sanitizePathSegment(value, fallback = 'Untitled Project') {
   const cleaned = typeof value === 'string'
     ? value.replace(INVALID_PATH_SEGMENT_RE, ' ').replace(/\s+/g, ' ').trim()
@@ -61,38 +49,25 @@ function sanitizePathSegment(value, fallback = 'Untitled Project') {
   return cleaned || fallback;
 }
 
-function formatTimestamp(date = new Date()) {
-  const pad = (value) => String(value).padStart(2, '0');
-  return [
-    date.getFullYear(),
-    pad(date.getMonth() + 1),
-    pad(date.getDate()),
-  ].join('-') + '_' + [
-    pad(date.getHours()),
-    pad(date.getMinutes()),
-    pad(date.getSeconds()),
-  ].join('-');
+function getProjectMotionsDir(projectPath) {
+  const projectDir = resolveProjectDirectory(projectPath);
+  return projectDir ? path.join(projectDir, PROJECT_MOTIONS_DIRECTORY_NAME) : null;
 }
 
-function resolveRecordingOutputDir(projectPath) {
-  const projectDir = resolveProjectDirectory(projectPath);
-  if (!projectDir) {
+function isPathInside(parentPath, childPath) {
+  if (!parentPath || !childPath) return false;
+  const relativePath = path.relative(parentPath, childPath);
+  return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
+}
+
+function resolveMotionOutputDir(options = {}) {
+  const motionsDir = getProjectMotionsDir(options.projectPath);
+  if (!motionsDir) {
     return null;
   }
 
-  const projectFolderName = sanitizePathSegment(inferProjectName(projectPath));
-  const recordingsRootDir = path.join(projectDir, 'recordings', projectFolderName);
-  const timestamp = formatTimestamp();
-
-  let candidateDir = path.join(recordingsRootDir, timestamp);
-  let suffix = 2;
-
-  while (fs.existsSync(candidateDir)) {
-    candidateDir = path.join(recordingsRootDir, `${timestamp}-${suffix}`);
-    suffix += 1;
-  }
-
-  return candidateDir;
+  const baseName = sanitizePathSegment(options.sessionName, 'Motion');
+  return path.join(motionsDir, baseName);
 }
 
 function resolveUniqueDestinationPath(directory, fileName) {
@@ -108,7 +83,41 @@ function resolveUniqueDestinationPath(directory, fileName) {
   return candidatePath;
 }
 
+function copyLatestExtrinsicsToMotionDir(targetDir) {
+  if (typeof targetDir !== 'string' || targetDir.trim().length === 0) {
+    return false;
+  }
+
+  const sourcePath = path.join(getDa3StartupCalibrationOutputDir(), 'extrinsics.json');
+  if (!fs.existsSync(sourcePath)) {
+    return false;
+  }
+
+  try {
+    fs.mkdirSync(targetDir, { recursive: true });
+    fs.copyFileSync(sourcePath, path.join(targetDir, 'extrinsics.json'));
+    return true;
+  } catch (error) {
+    console.warn('[iris] Failed to copy extrinsics into motion directory:', error);
+    return false;
+  }
+}
+
+function clearMotionDirectory(targetDir) {
+  if (typeof targetDir !== 'string' || targetDir.trim().length === 0) {
+    return;
+  }
+
+  fs.mkdirSync(targetDir, { recursive: true });
+
+  for (const entry of fs.readdirSync(targetDir, { withFileTypes: true })) {
+    fs.rmSync(path.join(targetDir, entry.name), { recursive: true, force: true });
+  }
+}
+
 function registerIrisIpc() {
+  let activeRecordingOutputDir = null;
+
   ipcMain.handle('start-iris', (event, options) => {
     const sessionId = crypto.randomUUID();
     const targetWindow = getTargetWindow(event);
@@ -209,13 +218,19 @@ function registerIrisIpc() {
 
   ipcMain.handle('start-iris-record', async (event, options = {}) => {
     const targetWindow = getTargetWindow(event);
-    const outputDir = resolveRecordingOutputDir(options.projectPath);
+    const outputDir = resolveMotionOutputDir(options);
 
     if (!outputDir) {
       return { ok: false, error: 'A saved project path is required to start recording.' };
     }
 
-    return monitorManager.start({
+    try {
+      clearMotionDirectory(outputDir);
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+
+    const result = await monitorManager.start({
       outputDir,
       shmName: options.shmName,
       fps: options.fps,
@@ -228,13 +243,31 @@ function registerIrisIpc() {
       onStdout: (data) => sendToWindow(targetWindow, 'iris-cli-output', { channel: 'record:stdout', line: data.toString() }),
       onStderr: (data) => sendToWindow(targetWindow, 'iris-cli-output', { channel: 'record:stderr', line: data.toString() }),
     });
+
+    if (result?.ok) {
+      activeRecordingOutputDir = outputDir;
+      copyLatestExtrinsicsToMotionDir(outputDir);
+    }
+
+    return result;
   });
 
-  ipcMain.handle('stop-iris-record', async () => monitorManager.stop());
+  ipcMain.handle('stop-iris-record', async () => {
+    const outputDir = activeRecordingOutputDir;
+    activeRecordingOutputDir = null;
+    const result = await monitorManager.stop();
+
+    if (result?.ok && outputDir) {
+      copyLatestExtrinsicsToMotionDir(outputDir);
+      return { ...result, outputDir };
+    }
+
+    return result;
+  });
 
   ipcMain.handle('link-recordings', async (event, options = {}) => {
     const targetWindow = getTargetWindow(event);
-    const outputDir = resolveRecordingOutputDir(options.projectPath);
+    const outputDir = resolveMotionOutputDir(options);
 
     if (!outputDir) {
       return { ok: false, error: 'A saved project path is required to link recordings.' };
@@ -251,7 +284,7 @@ function registerIrisIpc() {
     }
 
     try {
-      fs.mkdirSync(outputDir, { recursive: true });
+      clearMotionDirectory(outputDir);
       const copiedFiles = [];
 
       for (const sourcePath of selection.filePaths) {
@@ -259,6 +292,8 @@ function registerIrisIpc() {
         await fs.promises.copyFile(sourcePath, destinationPath);
         copiedFiles.push(destinationPath);
       }
+
+      copyLatestExtrinsicsToMotionDir(outputDir);
 
       return { ok: true, outputDir, copiedFiles };
     } catch (error) {

@@ -31,6 +31,7 @@ let mainWindow;
 let mockTimer = null;
 const PROJECT_DIRECTORY_NAME = 'ReCapture Projects';
 const PROJECT_EXTENSION = 'recapture.json';
+const PROJECT_MOTIONS_DIRECTORY_NAME = 'motions';
 const PRESET_STORE_FILENAME = 'project-presets.json';
 const UNTITLED_PROJECT_NAME = 'Untitled Project';
 
@@ -304,9 +305,84 @@ function resolveProjectName(projectName, filePath) {
     return trimmedName;
 }
 
+function sanitizeProjectPathSegment(value, fallback = UNTITLED_PROJECT_NAME) {
+    const cleaned = typeof value === 'string'
+        ? value.replace(/[<>:"/\\|?*\x00-\x1f]+/g, ' ').replace(/\s+/g, ' ').trim()
+        : '';
+    return cleaned || fallback;
+}
+
+function getProjectRootDir(filePath) {
+    if (typeof filePath !== 'string' || filePath.trim().length === 0) {
+        return null;
+    }
+
+    return path.dirname(filePath);
+}
+
+function getProjectMotionsDir(filePath) {
+    const projectRootDir = getProjectRootDir(filePath);
+    return projectRootDir ? path.join(projectRootDir, PROJECT_MOTIONS_DIRECTORY_NAME) : null;
+}
+
+function isPathInside(parentPath, childPath) {
+    if (!parentPath || !childPath) return false;
+
+    const resolvedParent = path.resolve(parentPath);
+    const resolvedChild = path.resolve(childPath);
+    const relativePath = path.relative(resolvedParent, resolvedChild);
+
+    return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath));
+}
+
+function ensureProjectDirectories(filePath) {
+    const projectRootDir = getProjectRootDir(filePath);
+    if (!projectRootDir) return null;
+
+    const motionsDir = getProjectMotionsDir(filePath);
+    fs.mkdirSync(projectRootDir, { recursive: true });
+    if (motionsDir) {
+        fs.mkdirSync(motionsDir, { recursive: true });
+    }
+
+    return motionsDir;
+}
+
+function resolveCreatedProjectFilePath(selectionPath, projectName) {
+    const parentDir = path.dirname(selectionPath);
+    const baseName = sanitizeProjectPathSegment(resolveProjectName(projectName, selectionPath));
+    return path.join(parentDir, baseName, `${baseName}.${PROJECT_EXTENSION}`);
+}
+
+function sanitizeRecentProjectEntries(entries = []) {
+    if (!Array.isArray(entries)) {
+        return [];
+    }
+
+    const defaultProjectsDir = getDefaultProjectsDir();
+
+    return entries.filter((entry) => {
+        if (!entry || typeof entry.path !== 'string' || typeof entry.name !== 'string' || typeof entry.lastOpenedAt !== 'string') {
+            return false;
+        }
+
+        const targetPath = entry.path.trim();
+        if (!targetPath || !isPathInside(defaultProjectsDir, targetPath)) {
+            return false;
+        }
+
+        try {
+            return fs.existsSync(targetPath) && fs.statSync(targetPath).isFile();
+        } catch {
+            return false;
+        }
+    }).slice(0, 10);
+}
+
 function ensureProjectPayload(projectData = {}, filePath = null, options = {}) {
     const touch = options.touch ?? false;
     const now = new Date().toISOString();
+    const motionsDir = getProjectMotionsDir(filePath);
     const participants = Array.isArray(projectData.participants) && projectData.participants.length > 0
         ? projectData.participants.map((participant, index) => ({
             id: participant?.id || `participant-${index + 1}`,
@@ -314,23 +390,27 @@ function ensureProjectPayload(projectData = {}, filePath = null, options = {}) {
                 ? participant.name.trim()
                 : `Participant ${index + 1}`,
             sessions: Array.isArray(participant?.sessions)
-                ? participant.sessions.map((session, sessionIndex) => ({
-                    id: session?.id || `participant-${index + 1}-session-${sessionIndex + 1}`,
-                    name: typeof session?.name === 'string' && session.name.trim()
-                        ? session.name.trim()
-                        : (typeof session?.date === 'string' && session.date.trim() ? session.date.trim() : 'Untitled Session'),
-                    date: typeof session?.date === 'string' && session.date.trim()
-                        ? session.date.trim()
-                        : now,
-                    completed: session?.completed === true,
-                    recordingPath: typeof session?.recordingPath === 'string' && session.recordingPath.trim()
+                ? participant.sessions.map((session, sessionIndex) => {
+                    const recordingPath = typeof session?.recordingPath === 'string' && session.recordingPath.trim()
                         ? session.recordingPath
-                        : null,
-                    templateId: typeof session?.templateId === 'string' ? session.templateId : null,
-                    exercises: Array.isArray(session?.exercises)
-                        ? session.exercises.filter((value) => typeof value === 'string')
-                        : [],
-                }))
+                        : null;
+
+                    return {
+                        id: session?.id || `participant-${index + 1}-session-${sessionIndex + 1}`,
+                        name: typeof session?.name === 'string' && session.name.trim()
+                            ? session.name.trim()
+                            : (typeof session?.date === 'string' && session.date.trim() ? session.date.trim() : 'Untitled Session'),
+                        date: typeof session?.date === 'string' && session.date.trim()
+                            ? session.date.trim()
+                            : now,
+                        completed: recordingPath !== null,
+                        recordingPath,
+                        templateId: typeof session?.templateId === 'string' ? session.templateId : null,
+                        exercises: Array.isArray(session?.exercises)
+                            ? session.exercises.filter((value) => typeof value === 'string')
+                            : [],
+                    };
+                })
                 : [],
         }))
         : [{
@@ -348,7 +428,7 @@ function ensureProjectPayload(projectData = {}, filePath = null, options = {}) {
         updatedAt: touch ? now : (projectData.updatedAt || projectData.createdAt || now),
         settings: {
             theme: projectData.settings?.theme === 'dark' ? 'dark' : 'light',
-            recordingsDir: projectData.settings?.recordingsDir ?? null,
+            recordingsDir: motionsDir ?? projectData.settings?.recordingsDir ?? null,
             presetId: typeof projectData.settings?.presetId === 'string' ? projectData.settings.presetId : null,
         },
         workspace: {
@@ -371,7 +451,7 @@ function ensureProjectPayload(projectData = {}, filePath = null, options = {}) {
 
 ipcMain.handle('project-create', async (event, projectData) => {
     const defaultDir = getDefaultProjectsDir();
-    const defaultName = resolveProjectName(projectData?.name, null).replace(/[<>:"/\\|?*]+/g, '').trim() || UNTITLED_PROJECT_NAME;
+    const defaultName = sanitizeProjectPathSegment(resolveProjectName(projectData?.name, null));
     const result = await dialog.showSaveDialog(getEventWindow(event), {
         title: 'Create Project',
         defaultPath: path.join(defaultDir, `${defaultName}.${PROJECT_EXTENSION}`),
@@ -383,10 +463,11 @@ ipcMain.handle('project-create', async (event, projectData) => {
     }
 
     try {
-        const payload = ensureProjectPayload(projectData, result.filePath, { touch: true });
-        fs.mkdirSync(path.dirname(result.filePath), { recursive: true });
-        fs.writeFileSync(result.filePath, JSON.stringify(payload, null, 2), 'utf8');
-        return { ok: true, path: result.filePath, project: payload };
+        const targetPath = resolveCreatedProjectFilePath(result.filePath, projectData?.name);
+        const payload = ensureProjectPayload(projectData, targetPath, { touch: true });
+        ensureProjectDirectories(targetPath);
+        fs.writeFileSync(targetPath, JSON.stringify(payload, null, 2), 'utf8');
+        return { ok: true, path: targetPath, project: payload };
     } catch (error) {
         return { ok: false, error: error.message };
     }
@@ -414,6 +495,7 @@ ipcMain.handle('project-open', async (event, filePath) => {
         const raw = fs.readFileSync(targetPath, 'utf8');
         const parsed = JSON.parse(raw);
         const payload = ensureProjectPayload(parsed, targetPath);
+        ensureProjectDirectories(targetPath);
         return { ok: true, path: targetPath, project: payload };
     } catch (error) {
         return { ok: false, error: error.message };
@@ -427,11 +509,19 @@ ipcMain.handle('project-save', async (event, filePath, projectData) => {
 
     try {
         const payload = ensureProjectPayload(projectData, filePath, { touch: true });
-        fs.mkdirSync(path.dirname(filePath), { recursive: true });
+        ensureProjectDirectories(filePath);
         fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
         return { ok: true, path: filePath, project: payload };
     } catch (error) {
         return { ok: false, error: error.message };
+    }
+});
+
+ipcMain.handle('project-prune-recents', async (_event, entries) => {
+    try {
+        return { ok: true, entries: sanitizeRecentProjectEntries(entries) };
+    } catch (error) {
+        return { ok: false, error: error.message, entries: [] };
     }
 });
  

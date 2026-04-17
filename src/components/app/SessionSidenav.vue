@@ -57,20 +57,19 @@
             v-for="session in participant.sessions"
             :key="session.id"
             class="session-sidenav-link session-trial-link"
-            :class="{ 'session-trial-link--complete': session.completed }"
+            :class="{ 'session-trial-link--complete': hasSessionRecording(session) }"
             type="button"
             :title="`Right click to manage ${session.name}`"
-            @click="emit('toggle-session-complete', { participantId: participant.id, sessionId: session.id })"
             @contextmenu.prevent="openSessionMenu($event, participant.id, session.id)"
           >
             <div class="link-left">
-              <span class="indicator" :class="{ 'indicator-complete': session.completed }"></span>
+              <span class="indicator" :class="{ 'indicator-complete': hasSessionRecording(session) }"></span>
               <div class="session-meta">
                 <span class="session-name">{{ session.name }}</span>
                 <span class="session-date">{{ formatSessionDate(session.date) }}</span>
               </div>
               <span class="session-status">
-                {{ session.completed ? 'Complete' : 'Pending' }}
+                {{ hasSessionRecording(session) ? 'Complete' : 'Pending' }}
               </span>
             </div>
           </button>
@@ -141,7 +140,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useIris } from '@/lib/useIris';
-import type { ProjectParticipant } from '@/lib/useProject';
+import type { ProjectParticipant, ProjectSession } from '@/lib/useProject';
 
 interface Props {
   activeView: 'capture' | 'analysis' | 'mocap';
@@ -156,7 +155,6 @@ const emit = defineEmits<{
   'open-capture': [];
   'open-analysis': [];
   'open-mocap': [];
-  'toggle-session-complete': [{ participantId: string; sessionId: string }];
   'record-session': [{ participantId: string; sessionId: string }];
   'link-recordings': [{ participantId: string; sessionId: string }];
 }>();
@@ -208,6 +206,10 @@ function formatSessionDate(value: string) {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+function hasSessionRecording(session: ProjectSession) {
+  return typeof session.recordingPath === 'string' && session.recordingPath.trim().length > 0;
 }
 
 function openSessionMenu(event: MouseEvent, participantId: string, sessionId: string) {

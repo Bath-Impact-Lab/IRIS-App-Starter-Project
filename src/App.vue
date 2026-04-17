@@ -146,6 +146,12 @@ function createEntityId(prefix: string) {
   return globalThis.crypto?.randomUUID?.() ?? `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+interface RecordingTarget {
+  participantName?: string;
+  sessionName?: string;
+  recordingPath?: string | null;
+}
+
 function createSessionFromTemplate(participantId: string, template: ProjectPreset['templates'][number]): ProjectSession {
   return {
     id: createEntityId(`${participantId}-session`),
@@ -230,38 +236,21 @@ async function createProjectWithDefaultPreset() {
   });
 }
 
-async function toggleSessionCompletion(participantId: string, sessionId: string) {
-  if (!currentProject.value) return;
-
-  const nextParticipants = currentProject.value.participants.map((participant) => {
-    if (participant.id !== participantId) {
-      return participant;
-    }
-
-    return {
-      ...participant,
-      sessions: participant.sessions.map((session) =>
-        session.id === sessionId
-          ? { ...session, completed: !session.completed }
-          : session
-      ),
-    };
-  });
-
-  await updateCurrentProject({ participants: nextParticipants }, { save: true });
-}
-
 async function handleRecordSession(participantId: string, sessionId: string) {
   const participant = currentProject.value?.participants.find((entry) => entry.id === participantId);
   const session = participant?.sessions.find((entry) => entry.id === sessionId);
-  if (!session) return;
+  if (!participant || !session) return;
 
   setView('capture');
 
   const startResult = await startIrisForMode('capture');
   if (!startResult?.ok || isRecording.value) return;
 
-  const recordingResult = await handleToggleRecording();
+  const recordingResult = await handleToggleRecording({
+    participantName: participant.name,
+    sessionName: session.name,
+    recordingPath: session.recordingPath,
+  });
   if (recordingResult?.ok && recordingResult.outputDir) {
     await saveSessionRecordingPath(participantId, sessionId, recordingResult.outputDir);
   }
@@ -270,10 +259,13 @@ async function handleRecordSession(participantId: string, sessionId: string) {
 async function handleLinkRecordings(participantId: string, sessionId: string) {
   const participant = currentProject.value?.participants.find((entry) => entry.id === participantId);
   const session = participant?.sessions.find((entry) => entry.id === sessionId);
-  if (!session || !currentProject.value?.path || !window.ipc?.linkRecordings) return;
+  if (!participant || !session || !currentProject.value?.path || !window.ipc?.linkRecordings) return;
 
   const result = await window.ipc.linkRecordings({
     projectPath: currentProject.value.path,
+    recordingPath: session.recordingPath,
+    participantName: participant.name,
+    sessionName: session.name,
   });
 
   if (!result?.ok || !result.outputDir) return;
@@ -281,21 +273,20 @@ async function handleLinkRecordings(participantId: string, sessionId: string) {
   await saveSessionRecordingPath(participantId, sessionId, result.outputDir);
 }
 
-async function handleSavePresetSettings(nextStore: ProjectPresetStore) {
-  const result = await savePresetStore(nextStore);
+async function handleSavePresetSettings({
+  store,
+  projectPresetId,
+}: {
+  store: ProjectPresetStore;
+  projectPresetId: string | null;
+}) {
+  const result = await savePresetStore(store);
   if (!result.ok || !result.store) return;
 
   if (!currentProject.value) return;
 
-  const nextPresetId = currentProject.value.settings.presetId ?? result.store.defaultPresetId ?? null;
+  const nextPresetId = projectPresetId ?? result.store.defaultPresetId ?? null;
   const nextPreset = result.store.presets.find((preset) => preset.id === nextPresetId) ?? result.store.presets[0] ?? null;
-  await applyPresetToCurrentProject(nextPreset, { save: true });
-}
-
-async function handleSetProjectPreset(presetId: string | null) {
-  const resolvedPresetId = presetId ?? defaultPresetId.value ?? null;
-  const nextPreset = presets.value.find((preset) => preset.id === resolvedPresetId) ?? presets.value[0] ?? null;
-  if (!nextPreset) return;
   await applyPresetToCurrentProject(nextPreset, { save: true });
 }
 
@@ -409,7 +400,7 @@ async function saveSessionRecordingPath(participantId: string, sessionId: string
       ...participant,
       sessions: participant.sessions.map((session) =>
         session.id === sessionId
-          ? { ...session, recordingPath }
+          ? { ...session, recordingPath, completed: recordingPath.trim().length > 0 }
           : session
       ),
     };
@@ -423,7 +414,7 @@ async function saveSessionRecordingPath(participantId: string, sessionId: string
   }, { save: true });
 }
 
-async function handleToggleRecording() {
+async function handleToggleRecording(target: RecordingTarget = {}) {
   if (!currentProject.value?.path || isRecordingBusy.value) return;
   if (!window.ipc?.startIrisRecord || !window.ipc?.stopIrisRecord) return;
 
@@ -440,12 +431,22 @@ async function handleToggleRecording() {
 
     const result = await window.ipc.startIrisRecord({
       projectPath: currentProject.value.path,
+      recordingPath: target.recordingPath ?? currentProject.value.workspace.selectedRecordingPath ?? undefined,
+      participantName: target.participantName,
+      sessionName: target.sessionName,
       fps: selectedFps.value,
       savePoses: true,
     });
 
     if (result?.ok) {
       isRecording.value = true;
+      if (result.outputDir && currentProject.value.workspace.selectedRecordingPath !== result.outputDir) {
+        await updateCurrentProject({
+          workspace: {
+            selectedRecordingPath: result.outputDir,
+          },
+        }, { save: true });
+      }
     }
 
     return result;
@@ -480,7 +481,6 @@ async function handleToggleRecording() {
         @open-capture="setView('capture')"
         @open-mocap="setView('mocap')"
         @open-analysis="setView('analysis')"
-        @toggle-session-complete="toggleSessionCompletion($event.participantId, $event.sessionId)"
         @record-session="handleRecordSession($event.participantId, $event.sessionId)"
         @link-recordings="handleLinkRecordings($event.participantId, $event.sessionId)"
       />
@@ -555,7 +555,6 @@ async function handleToggleRecording() {
       @settings="showSettings = $event" 
       @setTheme="currentTheme = $event"
       @save-presets="handleSavePresetSettings"
-      @set-project-preset="handleSetProjectPreset"
     />
     
   </div>
