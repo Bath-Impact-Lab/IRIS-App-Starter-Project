@@ -3,7 +3,7 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path'); // Ensure path is imported
-const { ipcMain } = require('electron');
+const { dialog, ipcMain } = require('electron');
 const { getIrisCliPath } = require('./config');
 const { ProcessManager } = require('./processManager');
 const { MonitorManager } = require('./monitorManager');
@@ -14,6 +14,16 @@ const processManager = new ProcessManager();
 const monitorManager = new MonitorManager();
 const PROJECT_FILE_SUFFIX_RE = /\.recapture\.json$/i;
 const INVALID_PATH_SEGMENT_RE = /[<>:"/\\|?*\x00-\x1f]/g;
+const VIDEO_FILE_FILTERS = [
+  {
+    name: 'Video Files',
+    extensions: ['mp4', 'mov', 'm4v', 'avi', 'mkv', 'wmv', 'webm', 'mpg', 'mpeg'],
+  },
+  {
+    name: 'All Files',
+    extensions: ['*'],
+  },
+];
 
 function resolveOutputDir(value) {
   if (typeof value === 'string' && value.trim().length > 0) {
@@ -84,6 +94,19 @@ function resolveRecordingOutputDir(projectPath) {
   }
 
   return candidateDir;
+}
+
+function resolveUniqueDestinationPath(directory, fileName) {
+  const parsed = path.parse(fileName);
+  let candidatePath = path.join(directory, fileName);
+  let suffix = 2;
+
+  while (fs.existsSync(candidatePath)) {
+    candidatePath = path.join(directory, `${parsed.name}-${suffix}${parsed.ext}`);
+    suffix += 1;
+  }
+
+  return candidatePath;
 }
 
 function registerIrisIpc() {
@@ -209,6 +232,41 @@ function registerIrisIpc() {
   });
 
   ipcMain.handle('stop-iris-record', async () => monitorManager.stop());
+
+  ipcMain.handle('link-recordings', async (event, options = {}) => {
+    const targetWindow = getTargetWindow(event);
+    const outputDir = resolveRecordingOutputDir(options.projectPath);
+
+    if (!outputDir) {
+      return { ok: false, error: 'A saved project path is required to link recordings.' };
+    }
+
+    const selection = await dialog.showOpenDialog(targetWindow, {
+      title: 'Link Recordings',
+      properties: ['openFile', 'multiSelections'],
+      filters: VIDEO_FILE_FILTERS,
+    });
+
+    if (selection.canceled || selection.filePaths.length === 0) {
+      return { ok: false, canceled: true };
+    }
+
+    try {
+      fs.mkdirSync(outputDir, { recursive: true });
+      const copiedFiles = [];
+
+      for (const sourcePath of selection.filePaths) {
+        const destinationPath = resolveUniqueDestinationPath(outputDir, path.basename(sourcePath));
+        await fs.promises.copyFile(sourcePath, destinationPath);
+        copiedFiles.push(destinationPath);
+      }
+
+      return { ok: true, outputDir, copiedFiles };
+    } catch (error) {
+      console.error('[link-recordings] Failed to import recordings:', error);
+      return { ok: false, error: error.message };
+    }
+  });
  
 }
 

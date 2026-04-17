@@ -323,6 +323,9 @@ function ensureProjectPayload(projectData = {}, filePath = null, options = {}) {
                         ? session.date.trim()
                         : now,
                     completed: session?.completed === true,
+                    recordingPath: typeof session?.recordingPath === 'string' && session.recordingPath.trim()
+                        ? session.recordingPath
+                        : null,
                     templateId: typeof session?.templateId === 'string' ? session.templateId : null,
                     exercises: Array.isArray(session?.exercises)
                         ? session.exercises.filter((value) => typeof value === 'string')

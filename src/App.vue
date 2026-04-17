@@ -152,6 +152,7 @@ function createSessionFromTemplate(participantId: string, template: ProjectPrese
     name: template.name,
     date: new Date().toISOString(),
     completed: false,
+    recordingPath: null,
     templateId: template.id,
     exercises: [template.name],
   };
@@ -260,7 +261,24 @@ async function handleRecordSession(participantId: string, sessionId: string) {
   const startResult = await startIrisForMode('capture');
   if (!startResult?.ok || isRecording.value) return;
 
-  await handleToggleRecording();
+  const recordingResult = await handleToggleRecording();
+  if (recordingResult?.ok && recordingResult.outputDir) {
+    await saveSessionRecordingPath(participantId, sessionId, recordingResult.outputDir);
+  }
+}
+
+async function handleLinkRecordings(participantId: string, sessionId: string) {
+  const participant = currentProject.value?.participants.find((entry) => entry.id === participantId);
+  const session = participant?.sessions.find((entry) => entry.id === sessionId);
+  if (!session || !currentProject.value?.path || !window.ipc?.linkRecordings) return;
+
+  const result = await window.ipc.linkRecordings({
+    projectPath: currentProject.value.path,
+  });
+
+  if (!result?.ok || !result.outputDir) return;
+
+  await saveSessionRecordingPath(participantId, sessionId, result.outputDir);
 }
 
 async function handleSavePresetSettings(nextStore: ProjectPresetStore) {
@@ -379,6 +397,32 @@ async function handleStopIris() {
   }
 }
 
+async function saveSessionRecordingPath(participantId: string, sessionId: string, recordingPath: string) {
+  if (!currentProject.value) return null;
+
+  const nextParticipants = currentProject.value.participants.map((participant) => {
+    if (participant.id !== participantId) {
+      return participant;
+    }
+
+    return {
+      ...participant,
+      sessions: participant.sessions.map((session) =>
+        session.id === sessionId
+          ? { ...session, recordingPath }
+          : session
+      ),
+    };
+  });
+
+  return updateCurrentProject({
+    participants: nextParticipants,
+    workspace: {
+      selectedRecordingPath: recordingPath,
+    },
+  }, { save: true });
+}
+
 async function handleToggleRecording() {
   if (!currentProject.value?.path || isRecordingBusy.value) return;
   if (!window.ipc?.startIrisRecord || !window.ipc?.stopIrisRecord) return;
@@ -391,7 +435,7 @@ async function handleToggleRecording() {
       if (result?.ok) {
         isRecording.value = false;
       }
-      return;
+      return result;
     }
 
     const result = await window.ipc.startIrisRecord({
@@ -403,6 +447,8 @@ async function handleToggleRecording() {
     if (result?.ok) {
       isRecording.value = true;
     }
+
+    return result;
   } finally {
     isRecordingBusy.value = false;
   }
@@ -436,6 +482,7 @@ async function handleToggleRecording() {
         @open-analysis="setView('analysis')"
         @toggle-session-complete="toggleSessionCompletion($event.participantId, $event.sessionId)"
         @record-session="handleRecordSession($event.participantId, $event.sessionId)"
+        @link-recordings="handleLinkRecordings($event.participantId, $event.sessionId)"
       />
 
       <main class="workspace-content">

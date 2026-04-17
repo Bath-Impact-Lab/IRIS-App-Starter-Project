@@ -49,6 +49,9 @@ interface Window {
       verbose?: boolean;
     }) => Promise<{ ok: boolean; outputDir?: string; args?: string[]; error?: string }>;
     stopIrisRecord: () => Promise<{ ok: boolean; error?: string }>;
+    linkRecordings: (options: {
+      projectPath: string;
+    }) => Promise<{ ok: boolean; canceled?: boolean; outputDir?: string; copiedFiles?: string[]; error?: string }>;
     getHardwareCameras: () => Promise<{ ok: boolean; data?: { id: number; name: string }[]; error?: string }>;
     getExtrinsics: (outputDir?: string) => Promise<any>;
     getScene: (outputDir?: string) => Promise<string | null>;

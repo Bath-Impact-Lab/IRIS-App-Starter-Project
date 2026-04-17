@@ -59,7 +59,7 @@
             class="session-sidenav-link session-trial-link"
             :class="{ 'session-trial-link--complete': session.completed }"
             type="button"
-            :title="`Right click to record ${session.name}`"
+            :title="`Right click to manage ${session.name}`"
             @click="emit('toggle-session-complete', { participantId: participant.id, sessionId: session.id })"
             @contextmenu.prevent="openSessionMenu($event, participant.id, session.id)"
           >
@@ -131,6 +131,9 @@
       <button class="template-context-action" type="button" @click="recordSessionFromMenu">
         Record Trial
       </button>
+      <button class="template-context-action" type="button" @click="linkRecordingsFromMenu">
+        Link Recordings
+      </button>
     </div>
   </aside>
 </template>
@@ -155,6 +158,7 @@ const emit = defineEmits<{
   'open-mocap': [];
   'toggle-session-complete': [{ participantId: string; sessionId: string }];
   'record-session': [{ participantId: string; sessionId: string }];
+  'link-recordings': [{ participantId: string; sessionId: string }];
 }>();
 
 // State for the main cameras dropdown
@@ -229,6 +233,14 @@ function closeSessionMenu() {
 
 function recordSessionFromMenu() {
   emit('record-session', {
+    participantId: sessionMenu.value.participantId,
+    sessionId: sessionMenu.value.sessionId,
+  });
+  closeSessionMenu();
+}
+
+function linkRecordingsFromMenu() {
+  emit('link-recordings', {
     participantId: sessionMenu.value.participantId,
     sessionId: sessionMenu.value.sessionId,
   });

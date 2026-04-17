@@ -25,6 +25,7 @@ export interface ProjectSession {
   name: string;
   date: string;
   completed: boolean;
+  recordingPath: string | null;
   templateId: string | null;
   exercises: string[];
 }
@@ -113,6 +114,9 @@ function sanitizeProjectParticipants(participants: unknown): ProjectParticipant[
             name: maybeSession?.name?.trim() || maybeSession?.date || 'Untitled Session',
             date: maybeSession?.date || nowIso(),
             completed: maybeSession?.completed === true,
+            recordingPath: typeof maybeSession?.recordingPath === 'string' && maybeSession.recordingPath.trim()
+              ? maybeSession.recordingPath
+              : null,
             templateId: typeof maybeSession?.templateId === 'string' ? maybeSession.templateId : null,
             exercises: Array.isArray(maybeSession?.exercises)
               ? maybeSession.exercises.filter((value): value is string => typeof value === 'string')
@@ -188,6 +192,7 @@ function toProjectFile(project: ProjectDocument | ProjectFile): ProjectFile {
         name: session.name,
         date: session.date,
         completed: session.completed,
+        recordingPath: session.recordingPath,
         templateId: session.templateId,
         exercises: [...session.exercises],
       })),

@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('ipc', {
   stopIRIS: (Id) => ipcRenderer.invoke('stop-iris', Id),
   startIrisRecord: (options) => ipcRenderer.invoke('start-iris-record', options),
   stopIrisRecord: () => ipcRenderer.invoke('stop-iris-record'),
+  linkRecordings: (options) => ipcRenderer.invoke('link-recordings', options),
   onIrisData: (callback) => {
     ipcRenderer.on('iris-data', (event, data,) => {
       callback(data)
