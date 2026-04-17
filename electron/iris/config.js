@@ -177,7 +177,7 @@ function buildConfigFromOptions(opts = {}) {
       },
       global_reid_tracking: {
         id: "global_track",
-        single_person_mode: false,
+        single_person_mode: true,
         max_age: 200,
         min_hits: 1,
         min_detection_confidence: 0.5,

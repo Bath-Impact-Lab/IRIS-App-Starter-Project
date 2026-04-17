@@ -15,7 +15,9 @@ const processManager = new ProcessManager();
 const monitorManager = new MonitorManager();
 const INVALID_PATH_SEGMENT_RE = /[<>:"/\\|?*\x00-\x1f]/g;
 const PROJECT_MOTIONS_DIRECTORY_NAME = 'motions';
-const MOTION_VIDEOS_DIRECTORY_NAME = 'videos';
+const MOTION_INGEST_DIRECTORY_NAME = 'ingest-videos';
+const MOTION_INGEST_RUNTIME_DIRECTORY_NAME = 'ingest-runtime';
+const LEGACY_MOTION_VIDEOS_DIRECTORY_NAME = 'videos';
 const VIDEO_FILE_FILTERS = [
   {
     name: 'Video Files',
@@ -90,7 +92,23 @@ function getMotionVideosDir(motionDir) {
     return null;
   }
 
-  return path.join(motionDir.trim(), MOTION_VIDEOS_DIRECTORY_NAME);
+  return path.join(motionDir.trim(), MOTION_INGEST_DIRECTORY_NAME);
+}
+
+function getLegacyMotionVideosDir(motionDir) {
+  if (typeof motionDir !== 'string' || motionDir.trim().length === 0) {
+    return null;
+  }
+
+  return path.join(motionDir.trim(), LEGACY_MOTION_VIDEOS_DIRECTORY_NAME);
+}
+
+function getMotionIngestRuntimeDir(motionDir) {
+  if (typeof motionDir !== 'string' || motionDir.trim().length === 0) {
+    return null;
+  }
+
+  return path.join(motionDir.trim(), MOTION_INGEST_RUNTIME_DIRECTORY_NAME);
 }
 
 function isSupportedVideoFile(filePath) {
@@ -108,23 +126,44 @@ function resolveIngestVideoPaths(recordingPath) {
     return [];
   }
 
-  const videosDir = getMotionVideosDir(resolvedRecordingPath);
-  const candidateDirectories = videosDir && fs.existsSync(videosDir)
-    ? [videosDir, resolvedRecordingPath]
-    : [resolvedRecordingPath];
+  const sourceVideosDir = getMotionVideosDir(resolvedRecordingPath);
+  const legacyVideosDir = getLegacyMotionVideosDir(resolvedRecordingPath);
+  const ingestRuntimeDir = getMotionIngestRuntimeDir(resolvedRecordingPath);
+  const candidateDirectories = [
+    sourceVideosDir,
+    legacyVideosDir,
+    resolvedRecordingPath,
+  ].filter((candidateDirectory, index, directories) =>
+    typeof candidateDirectory === 'string'
+      && fs.existsSync(candidateDirectory)
+      && directories.indexOf(candidateDirectory) === index,
+  );
+
+  let sourceVideoPaths = [];
 
   for (const candidateDirectory of candidateDirectories) {
-    const videoPaths = fs.readdirSync(candidateDirectory, { withFileTypes: true })
+    sourceVideoPaths = fs.readdirSync(candidateDirectory, { withFileTypes: true })
       .filter((entry) => entry.isFile() && isSupportedVideoFile(entry.name))
       .map((entry) => path.join(candidateDirectory, entry.name))
       .sort((left, right) => left.localeCompare(right));
 
-    if (videoPaths.length > 0) {
-      return videoPaths;
+    if (sourceVideoPaths.length > 0) {
+      break;
     }
   }
 
-  return [];
+  if (sourceVideoPaths.length === 0 || !ingestRuntimeDir) {
+    return [];
+  }
+
+  fs.rmSync(ingestRuntimeDir, { recursive: true, force: true });
+  fs.mkdirSync(ingestRuntimeDir, { recursive: true });
+
+  return sourceVideoPaths.map((sourcePath) => {
+    const destinationPath = resolveUniqueDestinationPath(ingestRuntimeDir, path.basename(sourcePath));
+    fs.copyFileSync(sourcePath, destinationPath);
+    return destinationPath;
+  });
 }
 
 function buildIngestCameraOptions(options = {}, videoPaths = []) {
@@ -219,14 +258,25 @@ function copyLatestExtrinsicsToMotionDir(targetDir) {
   }
 }
 
-function clearMotionDirectory(targetDir) {
+function clearMotionDirectory(targetDir, options = {}) {
   if (typeof targetDir !== 'string' || targetDir.trim().length === 0) {
     return;
   }
 
   fs.mkdirSync(targetDir, { recursive: true });
+  const preserveEntryNames = new Set(
+    Array.isArray(options.preserveEntryNames)
+      ? options.preserveEntryNames
+        .filter((entryName) => typeof entryName === 'string' && entryName.trim().length > 0)
+        .map((entryName) => entryName.trim())
+      : [],
+  );
 
   for (const entry of fs.readdirSync(targetDir, { withFileTypes: true })) {
+    if (preserveEntryNames.has(entry.name)) {
+      continue;
+    }
+
     fs.rmSync(path.join(targetDir, entry.name), { recursive: true, force: true });
   }
 }
@@ -405,7 +455,7 @@ function registerIrisIpc() {
     }
 
     try {
-      clearMotionDirectory(motionDir);
+      clearMotionDirectory(motionDir, { preserveEntryNames: [MOTION_INGEST_RUNTIME_DIRECTORY_NAME] });
     } catch (error) {
       return { ok: false, error: error.message };
     }
@@ -472,7 +522,7 @@ function registerIrisIpc() {
     let stagedSources = null;
     try {
       stagedSources = await stageLinkedSourceFiles(selection.filePaths, motionDir);
-      clearMotionDirectory(motionDir);
+      clearMotionDirectory(motionDir, { preserveEntryNames: [MOTION_INGEST_RUNTIME_DIRECTORY_NAME] });
       const videosDir = getMotionVideosDir(motionDir);
       fs.mkdirSync(videosDir, { recursive: true });
       const copiedFiles = [];
