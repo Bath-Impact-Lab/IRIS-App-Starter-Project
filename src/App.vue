@@ -55,6 +55,8 @@ const currentTheme = ref<'dark' | 'light'>('light');
 const irisRunMode = ref<'capture' | 'mocap' | null>(null);
 const isRecording = ref(false);
 const isRecordingBusy = ref(false);
+const selectedRecordMode = ref<'plain' | 'augment'>('plain');
+const activeRecordMode = ref<'plain' | 'augment'>('plain');
 const SIDENAV_WIDTH_STORAGE_KEY = 'recapture.session-sidenav-width';
 const DEFAULT_SIDENAV_WIDTH = 240;
 const MIN_SIDENAV_WIDTH = 220;
@@ -204,6 +206,7 @@ interface RecordingTarget {
   participantName?: string;
   sessionName?: string;
   recordingPath?: string | null;
+  recordMode?: 'plain' | 'augment';
 }
 
 function createSessionFromTemplate(participantId: string, template: ProjectPreset['templates'][number]): ProjectSession {
@@ -474,14 +477,10 @@ watch(
 
 watch(() => currentProject.value?.path ?? null, async (nextPath, previousPath) => {
   if (!previousPath || nextPath === previousPath || !isRecording.value) return;
-  if (!window.ipc?.stopIrisRecord) return;
 
   isRecordingBusy.value = true;
   try {
-    const result = await window.ipc.stopIrisRecord();
-    if (result?.ok) {
-      isRecording.value = false;
-    }
+    await stopRecordingAndFinalize();
   } finally {
     isRecordingBusy.value = false;
   }
@@ -528,6 +527,49 @@ async function saveSessionRecordingPath(participantId: string, sessionId: string
   }, { save: true });
 }
 
+function resolveRecordingPosesPath(recordingPath: string) {
+  const trimmedPath = recordingPath.trim().replace(/[\\/]+$/, '');
+  return `${trimmedPath}/poses.jsonl`;
+}
+
+async function augmentRecordingOutput(recordingPath: string) {
+  const trimmedPath = recordingPath.trim();
+  if (!trimmedPath || !window.ipc?.augmentMarkers) {
+    return { ok: false, error: 'Augmenter is unavailable.' };
+  }
+
+  return window.ipc.augmentMarkers(resolveRecordingPosesPath(trimmedPath), trimmedPath);
+}
+
+async function stopRecordingAndFinalize() {
+  if (!window.ipc?.stopIrisRecord) return;
+
+  const result = await window.ipc.stopIrisRecord();
+  if (!result?.ok) {
+    return result;
+  }
+
+  isRecording.value = false;
+
+  const completedMode = activeRecordMode.value;
+  activeRecordMode.value = selectedRecordMode.value;
+
+  const outputDir = typeof result.outputDir === 'string' && result.outputDir.trim().length > 0
+    ? result.outputDir.trim()
+    : currentProject.value?.workspace.selectedRecordingPath?.trim() ?? '';
+
+  if (completedMode !== 'augment' || !outputDir) {
+    return result;
+  }
+
+  const augmentationResult = await augmentRecordingOutput(outputDir);
+  if (!augmentationResult?.ok) {
+    console.warn('[recording] Failed to augment poses after recording stop.', augmentationResult?.error);
+  }
+
+  return { ...result, augmentationResult };
+}
+
 async function handleToggleRecording(target: RecordingTarget = {}) {
   if (!currentProject.value?.path || isRecordingBusy.value) return;
   if (!window.ipc?.startIrisRecord || !window.ipc?.stopIrisRecord) return;
@@ -536,12 +578,11 @@ async function handleToggleRecording(target: RecordingTarget = {}) {
 
   try {
     if (isRecording.value) {
-      const result = await window.ipc.stopIrisRecord();
-      if (result?.ok) {
-        isRecording.value = false;
-      }
-      return result;
+      return stopRecordingAndFinalize();
     }
+
+    const nextRecordMode = target.recordMode ?? selectedRecordMode.value;
+    activeRecordMode.value = nextRecordMode;
 
     const result = await window.ipc.startIrisRecord({
       projectPath: currentProject.value.path,
@@ -561,6 +602,8 @@ async function handleToggleRecording(target: RecordingTarget = {}) {
           },
         }, { save: true });
       }
+    } else {
+      activeRecordMode.value = selectedRecordMode.value;
     }
 
     return result;
@@ -609,6 +652,7 @@ async function handleToggleRecording(target: RecordingTarget = {}) {
               :resolution="selectedResolution"
               :fps="selectedFps"
               :rotation="selectedRotation"
+              :record-mode="selectedRecordMode"
               :show-start-button="true"
               :show-stop-button="true"
               :show-record-button="true"
@@ -622,9 +666,10 @@ async function handleToggleRecording(target: RecordingTarget = {}) {
               @update:resolution="updateResolution"
               @update:fps="updateFps"
               @update:rotation="updateRotation"
+              @update:record-mode="selectedRecordMode = $event"
               @start-iris="handleStartCaptureIris"
               @stop-iris="handleStopIris"
-              @toggle-recording="handleToggleRecording"
+              @toggle-recording="handleToggleRecording({ recordMode: $event.mode })"
             />
           </div>
           <FeedViewPage
@@ -638,6 +683,7 @@ async function handleToggleRecording(target: RecordingTarget = {}) {
               :resolution="selectedResolution"
               :fps="selectedFps"
               :rotation="selectedRotation"
+              :record-mode="selectedRecordMode"
               :show-start-button="true"
               :show-stop-button="true"
               :show-record-button="true"
@@ -651,9 +697,10 @@ async function handleToggleRecording(target: RecordingTarget = {}) {
               @update:resolution="updateResolution"
               @update:fps="updateFps"
               @update:rotation="updateRotation"
+              @update:record-mode="selectedRecordMode = $event"
               @start-iris="handleStartIris"
               @stop-iris="handleStopIris"
-              @toggle-recording="handleToggleRecording"
+              @toggle-recording="handleToggleRecording({ recordMode: $event.mode })"
             />
           </div>
           <ThreeWindow />
