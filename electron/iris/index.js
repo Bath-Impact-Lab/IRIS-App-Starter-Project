@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const fs = require('fs');
+const os = require('os');
 const path = require('path'); // Ensure path is imported
 const { dialog, ipcMain } = require('electron');
 const { getDa3StartupCalibrationOutputDir, getIrisCliPath } = require('./config');
@@ -14,6 +15,7 @@ const processManager = new ProcessManager();
 const monitorManager = new MonitorManager();
 const INVALID_PATH_SEGMENT_RE = /[<>:"/\\|?*\x00-\x1f]/g;
 const PROJECT_MOTIONS_DIRECTORY_NAME = 'motions';
+const MOTION_VIDEOS_DIRECTORY_NAME = 'videos';
 const VIDEO_FILE_FILTERS = [
   {
     name: 'Video Files',
@@ -83,6 +85,14 @@ function resolveMotionOutputDir(options = {}) {
   return path.join(motionsDir, sanitizePathSegment(sessionName, 'Motion'));
 }
 
+function getMotionVideosDir(motionDir) {
+  if (typeof motionDir !== 'string' || motionDir.trim().length === 0) {
+    return null;
+  }
+
+  return path.join(motionDir.trim(), MOTION_VIDEOS_DIRECTORY_NAME);
+}
+
 function isSupportedVideoFile(filePath) {
   const extension = path.extname(filePath).slice(1).toLowerCase();
   return VIDEO_FILE_EXTENSIONS.has(extension);
@@ -98,10 +108,23 @@ function resolveIngestVideoPaths(recordingPath) {
     return [];
   }
 
-  return fs.readdirSync(resolvedRecordingPath, { withFileTypes: true })
-    .filter((entry) => entry.isFile() && isSupportedVideoFile(entry.name))
-    .map((entry) => path.join(resolvedRecordingPath, entry.name))
-    .sort((left, right) => left.localeCompare(right));
+  const videosDir = getMotionVideosDir(resolvedRecordingPath);
+  const candidateDirectories = videosDir && fs.existsSync(videosDir)
+    ? [videosDir, resolvedRecordingPath]
+    : [resolvedRecordingPath];
+
+  for (const candidateDirectory of candidateDirectories) {
+    const videoPaths = fs.readdirSync(candidateDirectory, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && isSupportedVideoFile(entry.name))
+      .map((entry) => path.join(candidateDirectory, entry.name))
+      .sort((left, right) => left.localeCompare(right));
+
+    if (videoPaths.length > 0) {
+      return videoPaths;
+    }
+  }
+
+  return [];
 }
 
 function buildIngestCameraOptions(options = {}, videoPaths = []) {
@@ -206,6 +229,60 @@ function clearMotionDirectory(targetDir) {
   for (const entry of fs.readdirSync(targetDir, { withFileTypes: true })) {
     fs.rmSync(path.join(targetDir, entry.name), { recursive: true, force: true });
   }
+}
+
+function moveRecordedVideosToMotionSubdirectory(motionDir) {
+  const videosDir = getMotionVideosDir(motionDir);
+  if (!videosDir) {
+    return [];
+  }
+
+  fs.mkdirSync(videosDir, { recursive: true });
+
+  const movedFiles = [];
+  for (const entry of fs.readdirSync(motionDir, { withFileTypes: true })) {
+    if (!entry.isFile() || !isSupportedVideoFile(entry.name)) {
+      continue;
+    }
+
+    const sourcePath = path.join(motionDir, entry.name);
+    const destinationPath = resolveUniqueDestinationPath(videosDir, entry.name);
+    fs.renameSync(sourcePath, destinationPath);
+    movedFiles.push(destinationPath);
+  }
+
+  return movedFiles;
+}
+
+async function stageLinkedSourceFiles(sourcePaths, motionDir) {
+  const stagedPaths = [];
+  let stagingDir = null;
+
+  for (const sourcePath of sourcePaths) {
+    if (!isPathInside(motionDir, sourcePath)) {
+      stagedPaths.push(sourcePath);
+      continue;
+    }
+
+    if (!stagingDir) {
+      stagingDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'recapture-link-'));
+    }
+
+    const stagedPath = resolveUniqueDestinationPath(stagingDir, path.basename(sourcePath));
+    await fs.promises.copyFile(sourcePath, stagedPath);
+    stagedPaths.push(stagedPath);
+  }
+
+  return {
+    stagedPaths,
+    async cleanup() {
+      if (!stagingDir) {
+        return;
+      }
+
+      await fs.promises.rm(stagingDir, { recursive: true, force: true });
+    },
+  };
 }
 
 function registerIrisIpc() {
@@ -321,20 +398,20 @@ function registerIrisIpc() {
 
   ipcMain.handle('start-iris-record', async (event, options = {}) => {
     const targetWindow = getTargetWindow(event);
-    const outputDir = resolveMotionOutputDir(options);
+    const motionDir = resolveMotionOutputDir(options);
 
-    if (!outputDir) {
+    if (!motionDir) {
       return { ok: false, error: 'A target motion folder is required to start recording.' };
     }
 
     try {
-      clearMotionDirectory(outputDir);
+      clearMotionDirectory(motionDir);
     } catch (error) {
       return { ok: false, error: error.message };
     }
 
     const result = await monitorManager.start({
-      outputDir,
+      outputDir: motionDir,
       shmName: options.shmName,
       fps: options.fps,
       pipePath: options.pipePath,
@@ -348,21 +425,27 @@ function registerIrisIpc() {
     });
 
     if (result?.ok) {
-      activeRecordingOutputDir = outputDir;
-      copyLatestExtrinsicsToMotionDir(outputDir);
+      activeRecordingOutputDir = motionDir;
+      copyLatestExtrinsicsToMotionDir(motionDir);
     }
 
-    return result;
+    return result?.ok ? { ...result, outputDir: motionDir } : result;
   });
 
   ipcMain.handle('stop-iris-record', async () => {
-    const outputDir = activeRecordingOutputDir;
+    const motionDir = activeRecordingOutputDir;
     activeRecordingOutputDir = null;
     const result = await monitorManager.stop();
 
-    if (result?.ok && outputDir) {
-      copyLatestExtrinsicsToMotionDir(outputDir);
-      return { ...result, outputDir };
+    if (result?.ok && motionDir) {
+      try {
+        moveRecordedVideosToMotionSubdirectory(motionDir);
+      } catch (error) {
+        return { ok: false, error: error.message };
+      }
+
+      copyLatestExtrinsicsToMotionDir(motionDir);
+      return { ...result, outputDir: motionDir };
     }
 
     return result;
@@ -370,9 +453,9 @@ function registerIrisIpc() {
 
   ipcMain.handle('link-recordings', async (event, options = {}) => {
     const targetWindow = getTargetWindow(event);
-    const outputDir = resolveMotionOutputDir(options);
+    const motionDir = resolveMotionOutputDir(options);
 
-    if (!outputDir) {
+    if (!motionDir) {
       return { ok: false, error: 'A target motion folder is required to link recordings.' };
     }
 
@@ -386,22 +469,31 @@ function registerIrisIpc() {
       return { ok: false, canceled: true };
     }
 
+    let stagedSources = null;
     try {
-      clearMotionDirectory(outputDir);
+      stagedSources = await stageLinkedSourceFiles(selection.filePaths, motionDir);
+      clearMotionDirectory(motionDir);
+      const videosDir = getMotionVideosDir(motionDir);
+      fs.mkdirSync(videosDir, { recursive: true });
       const copiedFiles = [];
 
-      for (const sourcePath of selection.filePaths) {
-        const destinationPath = resolveUniqueDestinationPath(outputDir, path.basename(sourcePath));
+      for (const sourcePath of stagedSources.stagedPaths) {
+        const destinationPath = resolveUniqueDestinationPath(videosDir, path.basename(sourcePath));
         await fs.promises.copyFile(sourcePath, destinationPath);
         copiedFiles.push(destinationPath);
       }
 
-      copyLatestExtrinsicsToMotionDir(outputDir);
+      copyLatestExtrinsicsToMotionDir(motionDir);
+      await stagedSources.cleanup();
 
-      return { ok: true, outputDir, copiedFiles };
+      return { ok: true, outputDir: motionDir, copiedFiles };
     } catch (error) {
       console.error('[link-recordings] Failed to import recordings:', error);
       return { ok: false, error: error.message };
+    } finally {
+      if (stagedSources) {
+        await stagedSources.cleanup().catch(() => {});
+      }
     }
   });
  

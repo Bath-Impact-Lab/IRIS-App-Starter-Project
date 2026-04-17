@@ -57,6 +57,7 @@ const isRecording = ref(false);
 const isRecordingBusy = ref(false);
 const selectedRecordMode = ref<'plain' | 'augment'>('plain');
 const activeRecordMode = ref<'plain' | 'augment'>('plain');
+const PROJECT_MOTIONS_DIRECTORY_NAME = 'motions';
 const PROJECT_MODELS_DIRECTORY_NAME = 'models';
 const SIDENAV_WIDTH_STORAGE_KEY = 'recapture.session-sidenav-width';
 const DEFAULT_SIDENAV_WIDTH = 240;
@@ -173,6 +174,16 @@ function sanitizePathSegment(value: string | null | undefined, fallback = 'subje
     : '';
 
   return cleaned || fallback;
+}
+
+function normalizePathForComparison(filePath: string | null | undefined) {
+  if (typeof filePath !== 'string' || filePath.trim().length === 0) return '';
+  return filePath.replace(/[\\/]+/g, '/').replace(/\/+$/, '').toLowerCase();
+}
+
+function getProjectMotionsDir(filePath: string | null | undefined) {
+  const projectDir = getParentDirectory(filePath);
+  return projectDir ? joinPath(projectDir, PROJECT_MOTIONS_DIRECTORY_NAME) : '';
 }
 
 function getProjectModelsDir(filePath: string | null | undefined) {
@@ -388,6 +399,19 @@ async function handleStartSessionIris(participantId: string, sessionId: string) 
 function notifyOpenSimError(message: string) {
   console.warn(`[opensim] ${message}`);
   window.alert(message);
+}
+
+function notifyRecordingError(message: string) {
+  console.warn(`[recording] ${message}`);
+  window.alert(message);
+}
+
+function isValidMotionRecordingPath(projectPath: string | null | undefined, recordingPath: string | null | undefined) {
+  const normalizedRecordingPath = normalizePathForComparison(recordingPath);
+  const normalizedMotionsDir = normalizePathForComparison(getProjectMotionsDir(projectPath));
+  if (!normalizedRecordingPath || !normalizedMotionsDir) return false;
+  return normalizedRecordingPath.length > normalizedMotionsDir.length
+    && normalizedRecordingPath.startsWith(`${normalizedMotionsDir}/`);
 }
 
 async function ensureAugmentedRecordingData(recordingPath: string) {
@@ -701,12 +725,21 @@ async function handleToggleRecording(target: RecordingTarget = {}) {
 
     const nextRecordMode = target.recordMode ?? selectedRecordMode.value;
     activeRecordMode.value = nextRecordMode;
+    const recordingPath = (target.recordingPath ?? currentProject.value.workspace.selectedRecordingPath ?? '').trim();
+    const sessionName = typeof target.sessionName === 'string' ? target.sessionName.trim() : '';
+
+    if (!sessionName && !isValidMotionRecordingPath(currentProject.value.path, recordingPath)) {
+      activeRecordMode.value = selectedRecordMode.value;
+      const error = 'Select a session motion before recording, or start recording from a session context menu.';
+      notifyRecordingError(error);
+      return { ok: false, error };
+    }
 
     const result = await window.ipc.startIrisRecord({
       projectPath: currentProject.value.path,
-      recordingPath: target.recordingPath ?? currentProject.value.workspace.selectedRecordingPath ?? undefined,
+      recordingPath: recordingPath || undefined,
       participantName: target.participantName,
-      sessionName: target.sessionName,
+      sessionName: sessionName || undefined,
       fps: selectedFps.value,
       savePoses: true,
     });
@@ -722,6 +755,9 @@ async function handleToggleRecording(target: RecordingTarget = {}) {
       }
     } else {
       activeRecordMode.value = selectedRecordMode.value;
+      if (result?.error) {
+        notifyRecordingError(result.error);
+      }
     }
 
     return result;
