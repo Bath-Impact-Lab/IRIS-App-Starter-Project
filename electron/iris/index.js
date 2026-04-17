@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path'); // Ensure path is imported
 const { dialog, ipcMain } = require('electron');
-const { getIrisCliPath } = require('./config');
+const { getDa3StartupCalibrationOutputDir, getIrisCliPath } = require('./config');
 const { ProcessManager } = require('./processManager');
 const { MonitorManager } = require('./monitorManager');
 const { getTargetWindow, sendToWindow } = require('./utils');
@@ -30,8 +30,7 @@ function resolveOutputDir(value) {
     return value.trim();
   }
 
-  const irisCliDir = path.dirname(getIrisCliPath());
-  return path.join(irisCliDir, 'output', 'triangulation_da3_startup');
+  return getDa3StartupCalibrationOutputDir();
 }
 
 function resolveProjectDirectory(projectPath) {

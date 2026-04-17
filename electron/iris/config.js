@@ -37,6 +37,14 @@ const DEV_IRIS_CLI_EXE = process.env.IRIS_CLI_EXE
   || (getIrisHome() && path.join(getIrisHome(), 'bin', 'iris_cli.exe'))
   || path.join(os.homedir(), 'Documents', 'Iris', 'build', 'bin', 'iris_cli.exe');
 
+function getReCaptureAppDataDir() {
+  return path.join(app.getPath('appData'), 'ReCapture');
+}
+
+function getDa3StartupCalibrationOutputDir() {
+  return path.join(getReCaptureAppDataDir(), 'triangulation_da3_startup');
+}
+
 function getIrisCliPath() {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'app.asar.unpacked', 'iris_runtime_bundle', 'iris_cli.exe');
@@ -67,10 +75,7 @@ function buildConfigFromOptions(opts = {}) {
   // Pipeline mode flags
   const captureOnly = opts.capture_only === true;
   const isIngest = opts.is_ingest === true; 
-  
-  const outputDir = typeof opts.output_dir === 'string' && opts.output_dir.trim().length > 0
-    ? opts.output_dir.trim().replace(/\\/g, '/')
-    : 'output/triangulation_da3_startup';
+  const outputDir = getDa3StartupCalibrationOutputDir().replace(/\\/g, '/');
 
   const camera_ids = cameras.map((_, index) => index);
   const fps = cameras.length > 0 && cameras[0].fps ? cameras[0].fps : 30;
@@ -239,5 +244,6 @@ module.exports = {
   PIPE_NAME,
   DEV_IRIS_CLI_EXE,
   buildConfigFromOptions,
+  getDa3StartupCalibrationOutputDir,
   getIrisCliPath,
 };
