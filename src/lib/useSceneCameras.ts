@@ -323,6 +323,7 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
     }
     const scenePath = await window.ipc?.getScene()
     if (scenePath) {
+      console.log("scene")
       loadScenePoints(scenePath)
     }
 

@@ -215,7 +215,7 @@ ipcMain.handle('get-extrinsics', (event) => {
     }
 
     // Real runtime — read live calibration file
-    const extrinsicsPath = path.join(os.homedir(), 'AppData', 'Local', 'IRIS', 'calibration_output', 'extrinsics.json');
+    const extrinsicsPath = path.join("C:\\Users\\Bikefit\\Github_Repos\\IRIS\\build\\bin\\output\\triangulation_da3_startup", "extrinsics.json");
     try {
         if (!fs.existsSync(extrinsicsPath)) {
             console.warn(`[extrinsics] file not found: ${extrinsicsPath}`);
@@ -234,20 +234,20 @@ ipcMain.handle('get-scene', (event) => {
 
     // Mock mode — return the bundled mock extrinsics
     if (!runtimeExists) {
-        console.log('[extrinsics] mock mode — returning mock extrinsics');
+        console.log('[Scene] mock mode — returning mock extrinsics');
         return MOCK_EXTRINSICS;
     }
 
     // Real runtime — read live calibration file
-    const extrinsicsPath = path.join(os.homedir(), 'AppData', 'Local', 'IRIS', 'calibration_output', 'scene.ply');
+    const extrinsicsPath = path.join("C:\\Users\\Bikefit\\Github_Repos\\IRIS\\build\\bin\\output\\triangulation_da3_startup", "scene.ply");
     try {
         if (!fs.existsSync(extrinsicsPath)) {
-            console.warn(`[extrinsics] file not found: ${extrinsicsPath}`);
+            console.warn(`[Scene] file not found: ${extrinsicsPath}`);
             return null;
         }
         return extrinsicsPath;
     } catch (err) {
-        console.error('[extrinsics] failed to read:', err);
+        console.error('[Scene] failed to read:', err);
         return null;
     }
 })
