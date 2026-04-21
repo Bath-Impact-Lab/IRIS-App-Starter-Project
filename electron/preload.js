@@ -6,6 +6,8 @@ contextBridge.exposeInMainWorld('ipc', {
   getExtrinsics: () => ipcRenderer.invoke('get-extrinsics'),
   getScene: () => ipcRenderer.invoke('get-scene'),
   stopIRIS: (Id) => ipcRenderer.invoke('stop-iris', Id),
+  startIrisRecord: (options) => ipcRenderer.invoke('start-iris-record', options),
+  stopIrisRecord: () => ipcRenderer.invoke('stop-iris-record'),
   onIrisData: (callback) => {
     ipcRenderer.on('iris-data', (event, data,) => {
       callback(data)
@@ -34,4 +36,13 @@ contextBridge.exposeInMainWorld('ipc', {
 
 contextBridge.exposeInMainWorld('electronAPI', {
   openExternal: async (url) => ipcRenderer.invoke('open-external', url),
+  minimizeWindow: () => ipcRenderer.invoke('window-minimize'),
+  toggleMaximizeWindow: () => ipcRenderer.invoke('window-toggle-maximize'),
+  closeWindow: () => ipcRenderer.invoke('window-close'),
+  isWindowMaximized: () => ipcRenderer.invoke('window-is-maximized'),
+  onWindowStateChange: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on('window-state', handler);
+    return () => ipcRenderer.removeListener('window-state', handler);
+  },
 })

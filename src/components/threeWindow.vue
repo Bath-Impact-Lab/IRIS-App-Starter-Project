@@ -88,6 +88,14 @@ onMounted(() => {
   if (resizeObserver && sceneRef.value) resizeObserver.unobserve(sceneRef.value);
 })
 
+window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+			camera.updateProjectionMatrix();
+      if (renderer) {
+        renderer.setSize( window.innerWidth, window.innerHeight );
+      }
+})
+
 function collectBonesFromSkinnedMesh(root: THREE.Object3D) {
   const leftShoulder = root.getObjectByName('mixamorigLeftShoulder');
   const rightShoulder = root.getObjectByName('mixamorigRightShoulder');
