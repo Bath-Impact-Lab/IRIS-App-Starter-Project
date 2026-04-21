@@ -15,6 +15,7 @@ interface Props {
   rebuildPlaySpace: () => void,
   createPlaySpace: (scene: THREE.Scene) => void,
   addSceneCameras: (scene: THREE.Scene) => Promise<void>,
+  disposeCameras: () => void,
   spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null,
   skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null,
 }
@@ -200,11 +201,16 @@ async function initThree(container: HTMLElement) {
 
 
   // Add scene cameras from extrinsics
-  watch(() => IrisState.running, (running) => {
-    if (window.ipc?.getExtrinsics()) {
+  watch(() => IrisState.running, async (running) => {
+    if (window.ipc?.getExtrinsics() && running) {
+      await new Promise(resolve => setTimeout(resolve, 5000));
       props.addSceneCameras(scene)
       console.log("extrinsics")
-    };
+    }
+    else if (!running) {
+      console.log("dispose")
+      props.disposeCameras()
+    }
   })
 
   // Build play space from loaded camera frustums

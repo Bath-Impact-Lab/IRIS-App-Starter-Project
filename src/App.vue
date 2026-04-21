@@ -222,6 +222,7 @@
       :rebuild-play-space="rebuildPlaySpace"
       :create-play-space="createPlaySpace"
       :add-scene-cameras="addSceneCameras"
+      :dispose-cameras="disposeSceneCameras"
       :selected-avatar="selectedAvatar"
       @give-sphere-mesh="sphereMeshUpdate"
       @give-skeleton-mesh="skeletonMeshUpdate"

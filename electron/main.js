@@ -55,8 +55,8 @@ function createWindow() {
         height: 800,
         minWidth: 960,
         minHeight: 640,
-        frame: false,
-        autoHideMenuBar: true,
+        frame: true,
+        // autoHideMenuBar: true,
         title: process.env.VITE_APP_TITLE || 'IRIS Starter',
         backgroundColor: nativeTheme.shouldUseDarkColors ? '#111418' : '#ffffff',
         webPreferences: {
