@@ -8,6 +8,7 @@ const { promisify } = require('util');
 const { PIPE_NAME, buildConfigFromOptions, getIrisCliPath } = require('./config');
 const { writeTempConfigFile } = require('./utils');
 const { createPipeServer } = require('./pipeServer');
+const { VideoStreamer } = require('./videoStreamer');
 
 const execFileAsync = promisify(execFile);
 const MONITOR_VIDEO_HINT_RE = /(video pipe|video pipes|mpegts|h264|annex|encoder|encoding|failed to open|failed|error|warn|warning|init|initialized)/i;
@@ -99,6 +100,15 @@ class ProcessManager {
       pipeServer = await createPipeServer({
         pipeName: PIPE_NAME,
         onFrame,
+      });
+
+      // Pass the plain ports to your video streamer so it knows where to listen
+      const wsPort = await videoStreamer.start(udpPorts);
+      const wsUrl = `ws://127.0.0.1:${wsPort}`;
+
+      // Pass the full udp:// URLs to the C++ process
+      udpUrls.forEach((udpUrl, index) => {
+        args.push('--video-pipe', `${index}:${udpUrl}`);
       });
 
       return this.spawnWorker({
@@ -286,6 +296,11 @@ class ProcessManager {
         if (currentEntry.pipeServer) {
           currentEntry.pipeServer.close(() => console.log(`[iris:${sessionId}] pipe server closed`));
         }
+        if (currentEntry.videoStreamer) {
+          currentEntry.videoStreamer.stop().catch((err) => {
+            console.error(`[iris:${sessionId}] video streamer shutdown failed`, err);
+          });
+        }
 
         if (currentEntry.tmpDir && fs.existsSync(currentEntry.tmpDir)) {
           try {
@@ -308,11 +323,16 @@ class ProcessManager {
         cleanup();
       });
 
-    return { ok: true, sessionId, configPath: cfgPath, pipeStarted: Boolean(pipeServer), wsUrl };
+      return { ok: true, sessionId, configPath: cfgPath, pipeStarted: Boolean(pipeServer), wsUrl };
     } catch (error) {
       console.error('Failed to start IRIS process:', error);
       if (pipeServer) {
         pipeServer.close();
+      }
+      if (videoStreamer) {
+        videoStreamer.stop().catch(() => {
+          // Best-effort cleanup.
+        });
       }
       return { ok: false, error: error.message };
     }

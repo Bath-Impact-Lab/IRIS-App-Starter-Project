@@ -230,7 +230,7 @@ async function onStopIris() {
   IrisState.setRunningState(false)
 
   await window.ipc?.stopIRIS('example');
-
+  await new Promise(resolve => setTimeout(resolve, 3000));
   props.selectedCameras.forEach((d, i) => startCameraStream(d, i));
   emit('irisDataUpdate', null);
 }
