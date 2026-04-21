@@ -1,5 +1,6 @@
 <template>
-  <div class="sidenav">
+  <div class="sidenav" :style="{width: sidebarWidth + 'px'}">
+    <div class="resizer" @mousedown="startResize"></div>
     <!-- Filesystem playback mode: video files are loaded -->
     <PlaybackPanel
       v-if="isPlaybackMode"
@@ -24,7 +25,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { SceneCameraEntry } from '../lib/useSceneCameras';
 import CameraLivePanel from './sidebar/panels/CameraLivePanel.vue';
 import PlaybackPanel from './sidebar/panels/PlaybackPanel.vue';
@@ -63,6 +64,38 @@ const playbackFeedNames = computed(() =>
     try { return decodeURIComponent(url.split('/').pop() ?? ''); } catch { return ''; }
   })
 );
+
+const sidebarWidth = ref(250)
+const isResizing = ref(false)
+
+const onMouseMove = (e: MouseEvent) => {
+  if (!isResizing.value) return
+
+  let newWidth = e.clientX
+  
+  sidebarWidth.value = window.innerWidth - newWidth
+}
+
+const stopResize = () => {
+  isResizing.value = false
+  document.body.style.cursor = "default"
+}
+
+const startResize = () => {
+  isResizing.value = true
+  document.body.style.cursor = "ew-resize"
+}
+
+onMounted(() => {
+  document.addEventListener("mousemove", onMouseMove)
+  document.addEventListener("mouseup", stopResize)
+})
+
+onUnmounted(() => {
+  document.removeEventListener("mousedown", onMouseMove)
+  document.removeEventListener("mouseup", stopResize)
+})
+
 </script>
 
 <style scoped>
@@ -70,7 +103,8 @@ const playbackFeedNames = computed(() =>
   position: absolute;
   right: 0;
   height: calc(100% - 63px);
-  width: 250px;
+  min-width: 250px;
+  max-width: 1000px;
   background-color: var(--sidebar);
   z-index: 10;
   border-left: 1px solid rgba(255,255,255,0.06);
@@ -78,6 +112,15 @@ const playbackFeedNames = computed(() =>
   flex-direction: column;
   align-items: center;
   padding: 12px;
+}
+
+.resizer {
+  width: 5px;
+  cursor: ew-resize;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
 }
 
 @media (max-width: 768px) {

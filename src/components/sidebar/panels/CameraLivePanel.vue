@@ -2,46 +2,48 @@
   <div class="panel-root">
     <!-- Camera feed list -->
     <div class="cameras">
-      <div
-        v-for="(d, i) in props.selectedCameras"
-        :key="d.deviceId"
-        style="width: 100%;"
-        draggable="true"
-        :class="['drag-item', { 'drag-over': dragOverIndex === i, 'dragging': dragSourceIndex === i }]"
-        @dragstart="onDragStart(i)"
-        @dragenter.prevent="onDragEnter(i)"
-        @dragover.prevent
-        @dragleave="onDragLeave(i)"
-        @drop.prevent="onDrop(i)"
-        @dragend="onDragEnd"
-      >
+      <div class="cameraGrid">
         <div
-          class="camera-list"
-          :style="{
-            width: '100%',
-            boxShadow: deviceColour[d.deviceId] ? `inset 4px 0 0 ${deviceColour[d.deviceId]}` : 'none',
-          }"
+          v-for="(d, i) in props.selectedCameras"
+          :key="d.deviceId"
+          style="width: 225px;"
+          draggable="true"
+          :class="['drag-item', { 'drag-over': dragOverIndex === i, 'dragging': dragSourceIndex === i }]"
+          @dragstart="onDragStart(i)"
+          @dragenter.prevent="onDragEnter(i)"
+          @dragover.prevent
+          @dragleave="onDragLeave(i)"
+          @drop.prevent="onDrop(i)"
+          @dragend="onDragEnd"
         >
-          <div class="camera-text">
-            <span class="drag-handle" title="Drag to reorder">⠿</span>
-            {{ d.label ? d.label.split(' ')[0] + ' ' : '' }}{{ deviceShortCode(d.deviceId) }}
-            <button class="button btn" style="padding: 3px 5px;" @click="rotateCamera(d, i)" :disabled="IrisState.running">
-              <img style="width: 30px;" src="/assets/anticlockwise-2-line.svg" alt="" />
-            </button>
-          </div>
+          <div
+            class="camera-list"
+            :style="{
+              width: '100%',
+              boxShadow: deviceColour[d.deviceId] ? `inset 4px 0 0 ${deviceColour[d.deviceId]}` : 'none',
+            }"
+          >
+            <div class="camera-text">
+              <span class="drag-handle" title="Drag to reorder">⠿</span>
+              {{ d.label ? d.label.split(' ')[0] + ' ' : '' }}{{ deviceShortCode(d.deviceId) }}
+              <button class="button btn" style="padding: 3px 5px;" @click="rotateCamera(d, i)" :disabled="IrisState.running">
+                <img style="width: 30px;" src="/assets/anticlockwise-2-line.svg" alt="" />
+              </button>
+            </div>
 
-          <div :id="`camera-box${i}`">
-            <video
-              style="width: 100%;"
-              :id="`cameraFeed${i}`"
-              autoplay
-              playsinline
-              muted
-            ></video>
-          </div>
+            <div :id="`camera-box${i}`">
+              <video
+                style="width: 100%;"
+                :id="`cameraFeed${i}`"
+                autoplay
+                playsinline
+                muted
+              ></video>
+            </div>
 
-          <div>
+            <div>
 
+            </div>
           </div>
         </div>
       </div>
@@ -253,7 +255,9 @@ async function onStopIris() {
 }
 .drag-handle:hover { color: rgba(255,255,255,0.6); }
 
-.drag-item { border-radius: 10px; }
+.drag-item { 
+  border-radius: 10px; 
+}
 .drag-item.drag-over {
   outline: 2px solid rgba(100, 180, 255, 0.6);
   outline-offset: 2px;
@@ -265,6 +269,7 @@ async function onStopIris() {
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 10px;
   margin: 5px 0;
+  max-width: 225px;
 }
 
 .camera-text {
@@ -355,6 +360,11 @@ async function onStopIris() {
   grid-column-start: 2;
   grid-row-start: 2;
 }
-        
+
+.cameraGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 0px;
+}
 </style>
 

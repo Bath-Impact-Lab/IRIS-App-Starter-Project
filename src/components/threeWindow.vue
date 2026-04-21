@@ -186,7 +186,7 @@ async function initThree(container: HTMLElement) {
   const grid = new THREE.GridHelper(10, 20, 0x2a3340, 0x1b2430); scene.add(grid);
 
   // Load the mesh so it exists in the scene
-  loadModel(scene, "Idle.fbx");
+  // loadModel(scene, "Idle.fbx");
 
 
 
