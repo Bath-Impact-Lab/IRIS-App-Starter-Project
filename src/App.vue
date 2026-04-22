@@ -326,15 +326,11 @@
     <!-- License Badge â€” bottom-centre pill -->
     <div class="hud hud-right">
       <div
-        class="license-badge-container"
-        :class="{ 'clickable': !isValidLicense || planType === 'Trial' }"
-        @click="(!isValidLicense || planType === 'Trial') ? showSettings = true : null"
+        v-if="!isValidLicense"
+        class="license-badge-container clickable"
+        @click="showSettings = true"
       >
-        <div v-if="isValidLicense" class="badge glass">
-          <span class="badge-dot" :class="planType?.toLowerCase()"></span>
-          <span class="badge-text">{{ planType || 'Trial' }} License</span>
-        </div>
-        <div v-else class="badge-upgrade glass">
+        <div class="badge-upgrade glass">
           <svg class="badge-trial-icon" width="13" height="13" viewBox="0 0 24 24" fill="currentColor" stroke="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
           </svg>
