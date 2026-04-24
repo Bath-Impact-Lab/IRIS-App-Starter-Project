@@ -19,6 +19,7 @@ const fs = require('fs');
 const os = require('os');
 const { randomUUID } = require('crypto');
 const { spawn, execFile, exec } = require('child_process')
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
