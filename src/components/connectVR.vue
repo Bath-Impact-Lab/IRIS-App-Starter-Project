@@ -28,7 +28,7 @@
         <input 
           type="checkbox"
           v-model="invert"
-          :disabled="!props.running"
+          :disabled="!IrisState.running"
         >
       </div>
       <input
@@ -38,7 +38,7 @@
       max="10.0"
       step="0.1"
       v-on:mouseup="passConfig"
-      :disabled="!props.running"
+      :disabled="!IrisState.running"
       >
     </div>
 

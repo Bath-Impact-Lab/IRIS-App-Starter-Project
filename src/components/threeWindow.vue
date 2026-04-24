@@ -18,7 +18,7 @@ interface Props {
   disposeCameras: () => void,
   spheresMesh: THREE.InstancedMesh<THREE.SphereGeometry, THREE.MeshBasicMaterial, THREE.InstancedMeshEventMap> | null,
   skeletonLine: THREE.LineSegments<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.LineBasicMaterial, THREE.Object3DEventMap> | null,
-  running: boolean,
+
 }
 
 const props = defineProps<Props>()
