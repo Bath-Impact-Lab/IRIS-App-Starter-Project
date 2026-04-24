@@ -55,11 +55,11 @@ const IrisState = useIrisStore()
 
 const trackerMap = {
   xOffset: "X Offset",
-  yOffset: "y Offset",
-  zOffset: "X Offset",
+  yOffset: "Y Offset",
+  zOffset: "Z Offset",
   xRotation: "X Rotation",
-  yRotation: "y Rotation",
-  zRotation: "X Rotation",
+  yRotation: "Y Rotation",
+  zRotation: "Z Rotation",
 }
 const trackerConfig = ref({
   xOffset: 0,
@@ -78,7 +78,7 @@ function passConfig() {
   const formatedData = {
     translation: [trackerConfig.value.xOffset, trackerConfig.value.yOffset, trackerConfig.value.zOffset],
     rotation: [trackerConfig.value.xRotation, trackerConfig.value.yRotation, trackerConfig.value.zRotation],
-    scale: invert ? 1/scale.value : scale.value
+    scale: invert.value ? 1/scale.value : scale.value
   }
   const data = JSON.stringify(formatedData)
   // console.log("[VR Chat]", data)
