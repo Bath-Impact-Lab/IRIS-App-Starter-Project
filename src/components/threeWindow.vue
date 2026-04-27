@@ -70,20 +70,7 @@ const halpe26_pairs = [
 ]
 
 const linePositions = new Float32Array(halpe26_pairs.length * 3 * 2)
-
-watch(() => IrisState.running, (running) => {
-  if (!running) {
-    if (skeletonLine) {
-      skeletonLine.forEach((skeleton) => skeleton.removeFromParent())
-      skeletonLine = []
-    }
-    if (spheresMesh) {
-      spheresMesh.forEach((spheres) => spheres.removeFromParent())
-      spheresMesh = []
-    }
-    
-  }
-})
+const irisStarted = ref(false)
 
 onMounted(() => {
   if (sceneRef.value) initThree(sceneRef.value);
@@ -202,7 +189,7 @@ async function initThree(container: HTMLElement) {
 
 
   // Add scene cameras from extrinsics
-  watch(() => IrisState.running, async (running) => {
+  watch(() => irisStarted.value, async (running) => {
     if (window.ipc?.getExtrinsics() && running) {
       await new Promise(resolve => setTimeout(resolve, 5000));
       props.addSceneCameras(scene)
@@ -213,6 +200,26 @@ async function initThree(container: HTMLElement) {
       props.disposeCameras()
     }
   })
+
+watch(() => IrisState.running, (running) => {
+  if (!running) {
+    if (skeletonLine) {
+      skeletonLine.forEach((skeleton) => skeleton.removeFromParent())
+      skeletonLine = []
+    }
+    if (spheresMesh) {
+      spheresMesh.forEach((spheres) => spheres.removeFromParent())
+      spheresMesh = []
+    }
+    
+  }
+})
+
+watch(() => props.irisData, (data) => {
+  if (data) {
+    irisStarted.value = true
+  }
+})
 
   // Build play space from loaded camera frustums
   props.createPlaySpace(scene);
