@@ -191,7 +191,6 @@ async function initThree(container: HTMLElement) {
   // Add scene cameras from extrinsics
   watch(() => irisStarted.value, async (running) => {
     if (window.ipc?.getExtrinsics() && running) {
-      await new Promise(resolve => setTimeout(resolve, 5000));
       props.addSceneCameras(scene)
       console.log("extrinsics")
     }
