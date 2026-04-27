@@ -50,6 +50,7 @@ function registerIrisIpc() {
     const extrinsicsPath = path.join(outputDir, 'extrinsics.json');
 
     const targetPath = extrinsicsPath;
+    const time = Date.now()
 
     if (!targetPath) {
       return null;
@@ -57,6 +58,12 @@ function registerIrisIpc() {
 
     try {
       const rawData = fs.readFileSync(targetPath, 'utf8');
+      fs.stat(targetPath, (err, stats) => {
+        if (time - stats.mtimeMs > 20000) {
+          console.log('[iris] Extrinsics is too old, restart and try again.')
+          return null
+        }
+      })
       return JSON.parse(rawData);
     } catch (error) {
       console.warn('[iris] Failed to read extrinsics from', targetPath, error);
@@ -67,6 +74,7 @@ function registerIrisIpc() {
   ipcMain.handle('get-scene', async (_event,) => {
     const outputDir = resolveOutputDir();
     const scenePath = path.join(outputDir, 'scene.ply');
+    const time = Date.now()
 
     if (!fs.existsSync(scenePath)) {
       return null;
@@ -74,6 +82,12 @@ function registerIrisIpc() {
 
     try { 
       fs.accessSync(scenePath, fs.constants.R_OK);
+      fs.stat(scenePath, (err, stats) => {
+        if (time - stats.mtimeMs > 20000) {
+          console.log('[iris] Scene is too old, restart and try again.')
+          return null
+        }
+      })
       return `file:///${scenePath.replace(/\\/g, '/')}`;
     } catch (error) {
       console.warn('[iris] Failed to resolve scene file at', scenePath, error);
