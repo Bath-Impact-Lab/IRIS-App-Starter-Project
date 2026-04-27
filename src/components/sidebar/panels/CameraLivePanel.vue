@@ -311,6 +311,22 @@ async function onStopIris() {
 }
 .iris-controls button { margin: 5px 0; }
 
+.iris-controls :disabled { 
+  opacity: 0.5;
+  transition: none;
+  transform: none;
+  box-shadow: none;
+  cursor: default;
+}
+
+.button:hover:disabled  { 
+  background: var(--sidebar)
+}
+
+.button:active:disabled  { 
+  background: var(--sidebar)
+}
+
 .calibrate-extrinsics-btn {
   width: 90%;
   font-size: 12px;
