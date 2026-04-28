@@ -189,7 +189,7 @@ async function initThree(container: HTMLElement) {
 
 
   // Add scene cameras from extrinsics
-  watch(() => irisStarted.value, async (running) => {
+  watch(() => irisStarted.value, (running) => {
     if (window.ipc?.getExtrinsics() && running) {
       props.addSceneCameras(scene)
       console.log("extrinsics")
@@ -217,6 +217,9 @@ watch(() => IrisState.running, (running) => {
 watch(() => props.irisData, (data) => {
   if (data) {
     irisStarted.value = true
+  }
+  else {
+    irisStarted.value = false
   }
 })
 

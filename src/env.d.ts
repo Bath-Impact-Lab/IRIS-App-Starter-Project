@@ -20,7 +20,15 @@ interface Window {
     openExternal: (url: string) => {ok: boolean, error?: string},
   }
   ipc?: {
-    startIRIS: (options: any) => Promise<any>;
+    startIRIS: (options: any) => Promise<
+      {
+        ok: boolean, 
+        sessionId: string,
+        configPath: string,
+        pipeStarted: boolean,
+        wsUrl: string | null,
+      }
+    >;
     startIRISStream: (options: any) => Promise<any>;
     stopIRIS: (Id: any) => Promise<any>;
     getExtrinsics: () => Promise<any>;

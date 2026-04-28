@@ -126,7 +126,13 @@ watch(() => props.sceneCameras, syncDeviceColours, { immediate: true, deep: true
 const dragSourceIndex = ref<number | null>(null);
 const dragOverIndex = ref<number | null>(null);
 const dragEnterCounters = ref<Record<number, number>>({});
-
+const irisWorker = ref<{
+    ok: boolean, 
+    sessionId: string,
+    configPath: string,
+    pipeStarted: boolean,
+    wsUrl: string | null,
+  }>()
 function onDragStart(index: number) { dragSourceIndex.value = index; }
 
 function onDragEnter(index: number) {
@@ -224,14 +230,14 @@ async function onStartIris() {
 
   props.selectedCameras.forEach((_, i) => stopCameraStream(i));
   IrisState.setRunningState(true)
-  await window.ipc?.startIRIS(options);
+  irisWorker.value = await window.ipc?.startIRIS(options);
   if (options.stream) await window.ipc?.startIRISStream?.(options);
 }
 
 async function onStopIris() {
   IrisState.setRunningState(false)
 
-  await window.ipc?.stopIRIS('example');
+  await window.ipc?.stopIRIS(irisWorker.value?.sessionId);
   await new Promise(resolve => setTimeout(resolve, 3000));
   props.selectedCameras.forEach((d, i) => startCameraStream(d, i));
   emit('irisDataUpdate', null);
