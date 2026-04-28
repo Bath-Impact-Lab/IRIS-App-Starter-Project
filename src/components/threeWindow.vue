@@ -293,7 +293,7 @@ function alignBoneFromBindPose(
 }
 
 function renderIRISdata(poseInfo: IrisData) {
-  console.log(poseInfo)
+  // console.log(poseInfo)
   const scale = 4.5
   try {
     poseInfo.people.forEach((person, i) => {
@@ -314,7 +314,7 @@ function renderIRISdata(poseInfo: IrisData) {
         skeletonLine.push(new THREE.LineSegments(lGeometry, lMaterial))
         scene.add(skeletonLine[i])
       }
-      console.log(poseInfo.people.length, scene)
+      // console.log(poseInfo.people.length, scene)
       const positionAttr = skeletonLine[i].geometry.attributes.position
       let idx = 0
 
