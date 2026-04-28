@@ -14,7 +14,6 @@
         max="2.00" 
         step="0.01"
         :id="type"
-        v-on:mouseup="passConfig"
         :disabled="!IrisState.running"
       >
     </div>
@@ -37,7 +36,6 @@
       min="1.0"
       max="10.0"
       step="0.1"
-      v-on:mouseup="passConfig"
       :disabled="!IrisState.running"
       >
     </div>
@@ -80,7 +78,16 @@ const scale = ref(1)
 
 const invert = ref(false)
 
+watch(() => scale.value, (scale) => {
+  passConfig()
+})
+
+watch(trackerConfig.value, (trackerConfig) => {
+  passConfig()
+})
+
 function passConfig() {
+  console.log("changed", trackerConfig, scale)
   const formatedData = {
     translation: [trackerConfig.value.xOffset, trackerConfig.value.yOffset, trackerConfig.value.zOffset],
     rotation: [trackerConfig.value.xRotation, trackerConfig.value.yRotation, trackerConfig.value.zRotation],

@@ -247,7 +247,7 @@ function updateFrustumLines(entry: SceneCameraEntry) {
 export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<boolean>, showGizmos?: Ref<boolean>) {
   const sceneCameras = ref<SceneCameraEntry[]>([]);
   let attachedScene: THREE.Scene | null = null;
-  const scenePoints = ref<THREE.Points<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.PointsMaterial, THREE.Object3DEventMap> | null>(null)
+  let scenePoints: THREE.Points<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.PointsMaterial, THREE.Object3DEventMap> | null = null
   const COLORS = ['#ff4466', '#44aaff', '#ffaa22', '#44dd88', '#cc44ff', '#00dddd'];
 
   /**
@@ -317,8 +317,8 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
             vertexColors: geometry.hasAttribute('color')
           })
 
-          scenePoints.value = new THREE.Points(geometry, material)
-          scene.add(scenePoints.value)
+          scenePoints = new THREE.Points(geometry, material)
+          scene.add(scenePoints)
         })
     }
     const scenePath = await window.ipc?.getScene()
@@ -537,7 +537,7 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
 
   /** Remove all scene camera objects and clear the list. */
   function clearSceneCameras() {
-    scenePoints.value?.removeFromParent()
+    scenePoints?.removeFromParent()
     for (const entry of sceneCameras.value) {
       entry.gizmoMesh.removeFromParent();
       entry.camera.removeFromParent();
@@ -575,7 +575,7 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
   }
 
   function dispose() {
-    scenePoints.value?.removeFromParent()
+    scenePoints?.removeFromParent()
     for (const entry of sceneCameras.value) {
       entry.gizmoMesh.removeFromParent();
       entry.camera.removeFromParent();
