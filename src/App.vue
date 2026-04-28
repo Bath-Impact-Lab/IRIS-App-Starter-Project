@@ -209,7 +209,8 @@
     />
 
     <connectVR
-      v-if="outputOption=='VR Chat'"
+      v-if="outputOption=='VR Chat' || outputOption=='SteamVR'"
+      :output-option="outputOption"
     />
 
 

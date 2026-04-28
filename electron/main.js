@@ -259,10 +259,17 @@ ipcMain.handle('fs-rename-recording', async (event, oldPath, newName) => {
 
 
 // connecting to steamVR/VRchat
-ipcMain.handle('connect-VR', (event) => {
+ipcMain.handle('connect-VR', (event, outOption) => {
     //file path of connector
-    const irisToVr = path.join(__dirname, "..", "IRIStoVRChat", "rust.exe")
+    let irisToVr;
+    if (outOption == 'VR Chat') {
+        irisToVr = path.join(__dirname, "..", "IRIStoVRChat", "rust.exe")
+    }
+    else if (outOption == 'SteamVR') {
+        irisToVr = path.join(__dirname, "..", "IRIStoSteamVR", "rust.exe")
+    }
     console.log(irisToVr)
+    if (!fs.existsSync(irisToVr)) return
     const child = spawn(irisToVr, {
         stdio: ['pipe', 'pipe', 'pipe']
     })

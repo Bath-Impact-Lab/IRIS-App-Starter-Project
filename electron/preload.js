@@ -29,7 +29,7 @@ contextBridge.exposeInMainWorld('ipc', {
   fsGetRecordingData: (recordingPath) => ipcRenderer.invoke('fs-get-recording-data', recordingPath),
   fsGetVideoUrl: (filePath) => ipcRenderer.invoke('fs-get-video-url', filePath),
 
-  connectVR: () => ipcRenderer.invoke('connect-VR'),
+  connectVR: (outOption) => ipcRenderer.invoke('connect-VR', outOption),
   updatePos: (val) => ipcRenderer.invoke('update-pos', val),
   disconnectVR: () => ipcRenderer.invoke('disconnect-VR'),
 })

@@ -53,6 +53,12 @@ import { ref, watch, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
 const IrisState = useIrisStore()
 
+interface Props {
+  outputOption: string,
+}
+
+const props = defineProps<Props>()
+
 const trackerMap = {
   xOffset: "X Offset",
   yOffset: "Y Offset",
@@ -86,7 +92,7 @@ function passConfig() {
 }
 
 onMounted(() => {
-  window.ipc?.connectVR();
+  window.ipc?.connectVR(props.outputOption);
   console.log("[VR Chat] connected to VR")
 })
 

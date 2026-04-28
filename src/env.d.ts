@@ -30,7 +30,7 @@ interface Window {
     stopMonitor: () => Promise<{ok: boolean}>;
     checkIrisCli: () => Promise<{found: boolean, path: string}>;
     onIrisCliOutput: (callback: (data: {channel: string; cameraIndex?: number; line: string}) => void) => void;
-    connectVR: () => void;
+    connectVR: (outOption: string) => void;
     updatePos: (val: string) => void;
     disconnectVR: () => void;
   }
