@@ -171,6 +171,8 @@ class ProcessManager {
 
     if (child.stdin && !child.stdin.destroyed) {
       try {
+        child.kill()
+        child.kill("SIGKILL")
         child.stdin.write('\n');
         child.stdin.end();
       } catch (err) {
