@@ -3,11 +3,12 @@
     Tracker Config:
     <div v-if="!IrisState.running">Start IRIS first</div>
 
-    <div v-for="(value, type) in trackerConfig">
+    <div  v-for="(value, type) in trackerConfig">
       <div class="titles">
         {{trackerMap[type]}}: {{ trackerConfig[type] }} 
       </div>
       <input 
+        class="sliders"
         v-model.number="trackerConfig[type]" 
         type="range" 
         min="-2.00" 
@@ -31,6 +32,7 @@
         >
       </div>
       <input
+      class="sliders"
       v-model.number="scale"
       type="range"
       min="1.0"
@@ -78,6 +80,8 @@ const scale = ref(1)
 
 const invert = ref(false)
 
+const sessionId = ref<string>()
+
 watch(() => scale.value, (scale) => {
   passConfig()
 })
@@ -95,17 +99,17 @@ function passConfig() {
   }
   const data = JSON.stringify(formatedData)
   // console.log("[VR Chat]", data)
-  window.ipc?.updatePos(data)
+  if (sessionId.value) window.ipc?.updatePos(data, sessionId.value)
 }
 
-onMounted(() => {
-  window.ipc?.connectVR(props.outputOption);
-  console.log("[VR Chat] connected to VR")
+onMounted(async () => {
+  sessionId.value = await window.ipc?.connectVR(props.outputOption);
+  console.log("[Connector] connected to VR")
 })
 
 onUnmounted(() => {
-  console.log("[VR Chat] switching")
-  window.ipc?.disconnectVR()
+  console.log("[Connector] switching")
+  if (sessionId.value) window.ipc?.disconnectVR(sessionId.value)
 })
 
 </script>
@@ -115,7 +119,7 @@ onUnmounted(() => {
   position: absolute;
   left: 10px;
   top: 73px;
-  width: 200px;
+  width: 250px;
   background-color: var(--sidebar);
   opacity: 0.6;
   z-index: 10;
@@ -129,6 +133,10 @@ onUnmounted(() => {
 
 .titles {
   padding-top: 10px;
+}
+
+.sliders {
+  width: 200px;
 }
 
 .invert {

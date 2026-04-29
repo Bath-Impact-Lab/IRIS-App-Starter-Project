@@ -65,7 +65,7 @@ const playbackFeedNames = computed(() =>
   })
 );
 
-const sidebarWidth = ref(250)
+const sidebarWidth = ref(500)
 const isResizing = ref(false)
 
 const onMouseMove = (e: MouseEvent) => {

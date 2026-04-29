@@ -30,8 +30,8 @@ contextBridge.exposeInMainWorld('ipc', {
   fsGetVideoUrl: (filePath) => ipcRenderer.invoke('fs-get-video-url', filePath),
 
   connectVR: (outOption) => ipcRenderer.invoke('connect-VR', outOption),
-  updatePos: (val) => ipcRenderer.invoke('update-pos', val),
-  disconnectVR: () => ipcRenderer.invoke('disconnect-VR'),
+  updatePos: (val, sessionId) => ipcRenderer.invoke('update-pos', val, sessionId),
+  disconnectVR: (sessionId) => ipcRenderer.invoke('disconnect-VR', sessionId),
 })
 
 contextBridge.exposeInMainWorld('electronAPI', {

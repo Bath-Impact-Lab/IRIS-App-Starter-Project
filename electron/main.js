@@ -257,10 +257,11 @@ ipcMain.handle('fs-rename-recording', async (event, oldPath, newName) => {
     }
 });
 
-
+const workers = new Map()
 // connecting to steamVR/VRchat
 ipcMain.handle('connect-VR', (event, outOption) => {
     //file path of connector
+    const sessionId =  crypto.randomUUID();
     let irisToVr;
     if (outOption == 'VR Chat') {
         irisToVr = path.join(__dirname, "..", "IRIStoVRChat", "rust.exe")
@@ -273,21 +274,30 @@ ipcMain.handle('connect-VR', (event, outOption) => {
     const child = spawn(irisToVr, {
         stdio: ['pipe', 'pipe', 'pipe']
     })
+    workers.set(sessionId, { child })
 
     child.stdout.on('data', (d) => {
-        console.log(d.toString().trim())
+        console.log("[Connector] " + d.toString().trim())
     })
 
     child.stderr.on('data', (d) => {
-        console.log(d.toString().trim())
+        console.log("[Connector] " + d.toString().trim())
     })
+    console.log(`[Connector] connected to ${outOption}`)
+    return sessionId
+})
 
-    ipcMain.handle('update-pos', (event, val) => {
-        child.stdin.write(val + "\n")
-    })
+ipcMain.handle('update-pos', (event, val, sessionId) => {
+    const entry = workers.get(sessionId)
+    const { child } = entry
+    child.stdin.write(val + "\n")
+})
 
-    ipcMain.handle('disconnect-VR', (event) => {
-
-        child.stdin.write("stop" + "\n")
-    })
+ipcMain.handle('disconnect-VR', (event, sessionId) => {
+    console.log("[Connector] trying to disconnect")
+    const entry = workers.get(sessionId)
+    const { child } = entry
+    child.stdin.write("stop" + "\n")
+    child.kill()
+    console.log("[Connector] removing connector")
 })
