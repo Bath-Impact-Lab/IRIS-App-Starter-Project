@@ -1,6 +1,7 @@
 'use strict';
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { spawn, execFile } = require('child_process');
 const { promisify } = require('util');
@@ -10,6 +11,7 @@ const { createPipeServer } = require('./pipeServer');
 const { VideoStreamer } = require('./videoStreamer');
 
 const execFileAsync = promisify(execFile);
+const MONITOR_VIDEO_HINT_RE = /(video pipe|video pipes|mpegts|h264|annex|encoder|encoding|failed to open|failed|error|warn|warning|init|initialized)/i;
 
 function waitForChildExit(child, timeoutMs = 2000) {
   return new Promise((resolve) => {
@@ -33,6 +35,15 @@ function waitForChildExit(child, timeoutMs = 2000) {
   });
 }
 
+function writeDirectly(target, chunk) {
+  if (!target?.writable || chunk == null) {
+    return;
+  }
+
+  target.write(chunk);
+}
+
+
 function buildPipeName(prefix, sessionId) {
   const safeSessionId = String(sessionId).replace(/[^a-zA-Z0-9_-]/g, '_');
   return `\\\\.\\pipe\\${prefix}_${safeSessionId}`;
@@ -52,10 +63,9 @@ class ProcessManager {
     return fs.existsSync(this.getExecutablePath());
   }
 
-  async startStandard({ sessionId, options, onMockData, onData }) {
+  async startStandard({ sessionId, options, onCliOutput }) {
     if (!this.hasExecutable()) {
-      onMockData();
-      return { ok: false, error: 'Executable not found, using mock data' };
+      return { ok: false, error: 'Executable not found' };
     }
 
     const { tmpDir, cfgPath } = writeTempConfigFile(buildConfigFromOptions(options));
@@ -64,44 +74,48 @@ class ProcessManager {
       args: ['run', cfgPath],
       cfgPath,
       tmpDir,
-      onStdout: onData,
+      onStdout: (data) => onCliOutput?.({ channel: 'run:stdout', line: data.toString() }),
+      onStderr: (data) => onCliOutput?.({ channel: 'run:stderr', line: data.toString() }),
     });
   }
 
-  async startStream({ sessionId, options, onMockData, onFrame, onCliOutput }) {
+  async startStream({ sessionId, options, onFrame, onCliOutput }) {
     if (!this.hasExecutable()) {
-      onMockData();
-      return { ok: false, error: 'Executable not found, using mock data' };
+      return { ok: false, error: 'Executable not found' };
     }
 
     const { tmpDir, cfgPath } = writeTempConfigFile(buildConfigFromOptions(options));
-    const posePipeName = buildPipeName('iris_pose', sessionId);
     const cameraCount = options.cameras?.length ?? 1;
-    const videoPipeNames = [];
-    for (let i = 0; i < cameraCount; i++) {
-      videoPipeNames.push(buildPipeName(`iris_video_cam${i}`, sessionId));
-    }
+    // Define a starting UDP port (e.g., 9000)
+    const baseUdpPort = 9000;
+    const udpPorts = Array.from({ length: cameraCount }, (_, index) => baseUdpPort + index);
+
+    // Generate the FFmpeg UDP URLs for the C++ process
+    const udpUrls = udpPorts.map(port => `udp://127.0.0.1:${port}?pkt_size=1316&flush_packets=1`);
+
+    const args = [
+      'monitor',
+      '--shm-name', 'iris_shm_ipc',
+      '--pipe', PIPE_NAME,
+      '--fps', String(options.video_fps || 30),
+    ];
     const videoStreamer = new VideoStreamer();
     let pipeServer = null;
 
     try {
       pipeServer = await createPipeServer({
-        pipeName: posePipeName,
+        pipeName: PIPE_NAME,
         onFrame,
       });
 
-      const wsPort = await videoStreamer.start(videoPipeNames);
-      const fps = String(options.video_fps ?? 30);
-      const args = [
-        'monitor',
-        '--shm-name', 'iris_shm_ipc',
-        '--pipe', posePipeName,
-        '--fps', fps,
-      ];
+      // Pass the plain ports to your video streamer so it knows where to listen
+      const wsPort = await videoStreamer.start(udpPorts);
+      const wsUrl = `ws://127.0.0.1:${wsPort}`;
 
-      for (let i = 0; i < cameraCount; i++) {
-        args.push('--video-pipe', `${i}:${videoPipeNames[i]}`);
-      }
+      // Pass the full udp:// URLs to the C++ process
+      udpUrls.forEach((udpUrl, index) => {
+        args.push('--video-pipe', `${index}:${udpUrl}`);
+      });
 
       return this.spawnWorker({
         sessionId,
@@ -110,15 +124,18 @@ class ProcessManager {
         tmpDir,
         pipeServer,
         videoStreamer,
-        wsUrl: `ws://127.0.0.1:${wsPort}`,
-        onStdout: (data) => onCliOutput({ channel: 'stdout', line: data.toString() }),
+        wsUrl,
+        onStdout: (data) => onCliOutput({ channel: 'monitor:stdout', line: data.toString() }),
+        onStderr: (data) => onCliOutput({ channel: 'monitor:stderr', line: data.toString() }),
       });
     } catch (err) {
-      console.error('Failed to start stream servers', err);
+      console.error('Failed to start IRIS stream bridge', err);
       if (pipeServer) {
         pipeServer.close();
       }
-      await videoStreamer.stop();
+      await videoStreamer.stop().catch(() => {
+        // Best-effort cleanup.
+      });
       if (fs.existsSync(tmpDir)) {
         try {
           fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -126,6 +143,9 @@ class ProcessManager {
           // Best-effort cleanup.
         }
       }
+      return { ok: false, error: 'Pipe or video server failed to start' };
+    }
+  }
       return { ok: false, error: 'Stream servers failed to start' };
     }
   }
@@ -357,7 +377,7 @@ class ProcessManager {
     return true;
   }
 
-  spawnWorker({ sessionId, args, cfgPath, tmpDir, onStdout, pipeServer = null, videoStreamer = null, wsUrl = null }) {
+  spawnWorker({ sessionId, args, cfgPath, tmpDir, onStdout, onStderr, pipeServer = null, videoStreamer = null, wsUrl = null }) {
     const exePath = this.getExecutablePath();
 
     try {
@@ -372,9 +392,18 @@ class ProcessManager {
       console.log(`[iris:${sessionId}] START pid=${child.pid}`);
       console.log(`[iris:${sessionId}] exe=${exePath} args=${JSON.stringify(args)}`);
 
-      child.stdout.on('data', (data) => onStdout(data));
-      child.stderr.on('data', (data) => console.log(`[iris:${sessionId}] stderr: ${data.toString().trim()}`));
-      child.on('error', (err) => console.error(`[iris:${sessionId}] PROCESS ERROR`, err));
+      child.stdout.on('data', (data) => {
+        onStdout?.(data);
+        writeDirectly(process.stdout, data);
+      });
+      child.stderr.on('data', (data) => {
+        onStderr?.(data);
+        writeDirectly(process.stderr, data);
+      });
+      child.on('error', (err) => {
+        onStderr?.(Buffer.from(String(err?.message ?? err)));
+        console.error(`[iris:${sessionId}] PROCESS ERROR`, err);
+      });
 
       this.workers.set(sessionId, { child, tmpDir, cfgPath, pipeServer, videoStreamer, wsUrl });
 
@@ -395,7 +424,9 @@ class ProcessManager {
           currentEntry.pipeServer.close(() => console.log(`[iris:${sessionId}] pipe server closed`));
         }
         if (currentEntry.videoStreamer) {
-          void currentEntry.videoStreamer.stop();
+          currentEntry.videoStreamer.stop().catch((err) => {
+            console.error(`[iris:${sessionId}] video streamer shutdown failed`, err);
+          });
         }
 
         if (currentEntry.tmpDir && fs.existsSync(currentEntry.tmpDir)) {
@@ -426,7 +457,9 @@ class ProcessManager {
         pipeServer.close();
       }
       if (videoStreamer) {
-        void videoStreamer.stop();
+        videoStreamer.stop().catch(() => {
+          // Best-effort cleanup.
+        });
       }
       return { ok: false, error: error.message };
     }

@@ -18,6 +18,8 @@ const { addToScene: addSceneCameras } = useSceneCameras();
 const { create: createPlaySpace, rebuild: rebuildPlaySpace } = usePlaySpace();
 
 const sceneRef = ref<HTMLElement | null>(null);
+const IrisState = useIrisStore()
+
 
 let renderer: THREE.WebGLRenderer | null = null;
 let scene: THREE.Scene;
@@ -87,6 +89,20 @@ function clearModel() {
   skeletonHelper?.removeFromParent();
   skeletonHelper = null;
 }
+const irisStarted = ref(false)
+
+onMounted(() => {
+  if (sceneRef.value) initThree(sceneRef.value);
+  if (resizeObserver && sceneRef.value) resizeObserver.unobserve(sceneRef.value);
+})
+
+window.addEventListener("resize", () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+			camera.updateProjectionMatrix();
+      if (renderer) {
+        renderer.setSize( window.innerWidth, window.innerHeight );
+      }
+})
 
 function collectBonesFromSkinnedMesh(root: THREE.Object3D) {
   const leftShoulder = root.getObjectByName('mixamorigLeftShoulder');
@@ -177,7 +193,10 @@ async function initThree(container: HTMLElement) {
   const grid = new THREE.GridHelper(10, 20, 0x2a3340, 0x1b2430);
   scene.add(grid);
 
-  await loadModel(scene, selectedAvatar.value ?? 'Idle.fbx');
+  // Load the mesh so it exists in the scene
+  // loadModel(scene, "Idle.fbx");
+
+
 
   watch(selectedCameraCount, () => {
     void nextTick(() => rebuildPlaySpace());
@@ -195,8 +214,44 @@ async function initThree(container: HTMLElement) {
   controls.minDistance = 0.1;
   controls.maxDistance = 100;
 
-  await addSceneCameras(scene);
-  createPlaySpace(scene);
+
+  // Add scene cameras from extrinsics
+  watch(() => irisStarted.value, (running) => {
+    if (window.ipc?.getExtrinsics() && running) {
+      props.addSceneCameras(scene)
+      console.log("extrinsics")
+    }
+    else if (!running) {
+      console.log("dispose")
+      props.disposeCameras()
+    }
+  })
+
+watch(() => IrisState.running, (running) => {
+  if (!running) {
+    if (skeletonLine) {
+      skeletonLine.forEach((skeleton) => skeleton.removeFromParent())
+      skeletonLine = []
+    }
+    if (spheresMesh) {
+      spheresMesh.forEach((spheres) => spheres.removeFromParent())
+      spheresMesh = []
+    }
+    
+  }
+})
+
+watch(() => props.irisData, (data) => {
+  if (data) {
+    irisStarted.value = true
+  }
+  else {
+    irisStarted.value = false
+  }
+})
+
+  // Build play space from loaded camera frustums
+  props.createPlaySpace(scene);
 
   const fps = 30;
   const frameDuration = 1000 / fps;
@@ -268,81 +323,82 @@ function alignBoneFromBindPose(
 }
 
 function renderIRISData(poseInfo: IrisData) {
+  // console.log(poseInfo)
+  const scale = 4.5
   try {
-    poseInfo.people.forEach((person) => {
-      const neck = person.joint_centers[0];
-      const pelvis = person.joint_centers[1];
-      const spineMid = person.joint_centers[2];
-      const keypoints = [
-        [neck[0], neck[1], neck[2]],
-        [pelvis[0], pelvis[1], pelvis[2]],
-        [spineMid[0], spineMid[1], spineMid[2]],
-      ];
-
-      if (!(spheresMesh && skeletonLine)) {
-        const sphereGeometry = new THREE.SphereGeometry(0.025, 8, 8);
-        const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
-        spheresMesh = new THREE.InstancedMesh(
-          sphereGeometry,
-          material,
-          keypoints.length + person.joint_centers.length,
-        );
-        scene.add(spheresMesh);
+    poseInfo.people.forEach((person, i) => {
+      const neck = person.joint_centers[0]
+      const pelvis = person.joint_centers[1]
+      const spine_mid = person.joint_centers[2]
+      const keypoints = [[neck[0], neck[1], neck[2]], [pelvis[0], pelvis[1], pelvis[2]], [spine_mid[0], spine_mid[1], spine_mid[2]]]
+      if ((spheresMesh.length == 0 && skeletonLine.length == 0) || (spheresMesh.length < poseInfo.people.length && skeletonLine.length < poseInfo.people.length)) {
+        const sphereGeometry = new THREE.SphereGeometry(0.025, 8, 8)
+        const material = new THREE.MeshBasicMaterial({color: 0xffffff})
+        spheresMesh.push(new THREE.InstancedMesh(sphereGeometry, material, (keypoints.length + person.joint_centers.length)))
+        scene.add(spheresMesh[i])
 
         const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
         const lineGeometry = new THREE.BufferGeometry();
         lineGeometry.setAttribute('position', new THREE.BufferAttribute(linePositions, 3));
 
-        skeletonLine = new THREE.LineSegments(lineGeometry, lineMaterial);
-        scene.add(skeletonLine);
+        skeletonLine.push(new THREE.LineSegments(lGeometry, lMaterial))
+        scene.add(skeletonLine[i])
       }
+      // console.log(poseInfo.people.length, scene)
+      const positionAttr = skeletonLine[i].geometry.attributes.position
+      let idx = 0
 
-      const positionAttr = skeletonLine.geometry.attributes.position as THREE.BufferAttribute;
-      let idx = 0;
-
-      keypoints.forEach((point, index) => {
-        position.position.set(point[0]*4.5, point[1]*4.5, point[2]*4.5);
-        position.updateMatrix();
-        spheresMesh?.setMatrixAt(index, position.matrix);
-      });
-
-      person.joint_centers.forEach((point, index) => {
-        position.position.set(point[0]*4.5, point[1]*4.5, point[2]*4.5);
-        position.updateMatrix();
-        spheresMesh?.setMatrixAt(index + 3, position.matrix);
-      });
+      keypoints.forEach((points, j) => {
+        position.position.set(points[0] * scale, points[1] * scale, points[2] * scale)
+        position.updateMatrix()
+        spheresMesh[i].setMatrixAt(j, position.matrix)
+      })
+      person.joint_centers.forEach((points, j) => {
+        position.position.set(points[0] * scale, points[1] * scale, points[2] * scale)
+        position.updateMatrix()
+        spheresMesh[i].setMatrixAt(j + 3, position.matrix)
+      })
 
       halpe26Pairs.forEach(([a, b]) => {
         const pos1 = person.joint_centers[a];
         const pos2 = person.joint_centers[b];
 
-        positionAttr.array[idx++] = pos1[0] * 4.5;
-        positionAttr.array[idx++] = pos1[1] * 4.5;
-        positionAttr.array[idx++] = pos1[2] * 4.5;
+        positionAttr.array[idx++] = pos1[0] * scale
+        positionAttr.array[idx++] = pos1[1] * scale
+        positionAttr.array[idx++] = pos1[2] * scale
 
-        positionAttr.array[idx++] = pos2[0] * 4.5;
-        positionAttr.array[idx++] = pos2[1] * 4.5;
-        positionAttr.array[idx++] = pos2[2] * 4.5;
-      });
+        positionAttr.array[idx++] = pos2[0] * scale
+        positionAttr.array[idx++] = pos2[1] * scale
+        positionAttr.array[idx++] = pos2[2] * scale
+      })
 
-      positionAttr.needsUpdate = true;
-      spheresMesh.instanceMatrix.needsUpdate = true;
+      positionAttr.needsUpdate = true
+      spheresMesh[i].instanceMatrix.needsUpdate = true
 
-      if (person.joint_centers && person.joint_centers.length >= 26 && modelsRoot && modelsRoot.length > 0) {
-        const pelvisPos = person.joint_centers[19];
-        const targetPelvis = new THREE.Vector3(pelvisPos[0], pelvisPos[2], pelvisPos[1]);
-        if (bindPelvisWorldOffset) {
-          modelsRoot[0].position.copy(targetPelvis).sub(bindPelvisWorldOffset);
-        } else {
-          modelsRoot[0].position.copy(targetPelvis);
-        }
+      if (person.joint_centers && person.joint_centers.length >= 26) {
+        // 1. MOVE THE ENTIRE MODEL TO THE TRACKED ROOT
+        // We apply this to the parent group to respect your 0.01 scale!
+        if (modelsRoot && modelsRoot.length > 0) {
+          const pelvisPos = person.joint_centers[19]; // Tracked Pelvis
+          // Map OpenCV (X, Y, Z) to Three.js (X, Z, Y)
+          const targetPelvis = new THREE.Vector3(pelvisPos[0], pelvisPos[1], pelvisPos[2]);
+          if (bindPelvisWorldOffset) {
+            modelsRoot[0].position.copy(targetPelvis).sub(bindPelvisWorldOffset);
+          } else {
+            modelsRoot[0].position.copy(targetPelvis);
+          }
+          const leftHipPos = person.joint_centers[11];
+          const rightHipPos = person.joint_centers[12];
 
-        const leftHipPos = person.joint_centers[11];
-        const rightHipPos = person.joint_centers[12];
-        const leftHip = new THREE.Vector3(leftHipPos[0], leftHipPos[2], leftHipPos[1]);
-        const rightHip = new THREE.Vector3(rightHipPos[0], rightHipPos[2], rightHipPos[1]);
-        const hipDir = new THREE.Vector3().subVectors(leftHip, rightHip);
-        hipDir.y = 0;
+          // Map to Three.js coordinates
+          const lHip = new THREE.Vector3(leftHipPos[0], leftHipPos[1], leftHipPos[2]);
+          const rHip = new THREE.Vector3(rightHipPos[0], rightHipPos[1], rightHipPos[2]);
+
+          // Get the directional vector from Right Hip to Left Hip
+          const hipDir = new THREE.Vector3().subVectors(lHip, rHip);
+
+          // Restrict to the XZ plane so the character doesn't tilt/lean over
+          hipDir.y = 0;
 
         if (hipDir.lengthSq() > 1e-8) {
           hipDir.normalize();
@@ -361,7 +417,6 @@ function renderIRISData(poseInfo: IrisData) {
         alignBoneFromBindPose('hip_l', person.joint_centers[12], person.joint_centers[14]);
         alignBoneFromBindPose('knee_l', person.joint_centers[14], person.joint_centers[16]);
 
-        // skeletonHelper?.update();
       }
     });
   } catch (err) {

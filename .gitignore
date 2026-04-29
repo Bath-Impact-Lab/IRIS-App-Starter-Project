@@ -37,5 +37,5 @@ build/
 __pycache__/
 *.egg-info/
 .eggs/
-IRIS/
+# IRIS/
 IRIStoVRChat/

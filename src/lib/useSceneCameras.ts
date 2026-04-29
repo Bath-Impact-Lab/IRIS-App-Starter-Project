@@ -4,6 +4,7 @@ import mockExtrinsicsFallback from './../../public/assets/mockExtrinsics.json';
 import { useCameraStore } from '../stores/useCameraStore';
 import { useUIStore } from '../stores/useUIStore';
 
+import { PLYLoader } from 'three/examples/jsm/Addons.js';
 export interface SceneCameraDef {
   name: string;
   position: { x: number; y: number; z: number };
@@ -33,6 +34,24 @@ export interface PlaySpaceBounds {
   width: number; depth: number;
   polygons: THREE.Vector3[][]; // intersection footprint polygons
   cameraFootprints: CameraFootprint[]; // per-camera floor polygons
+}
+
+interface Extrinsics {
+  cameras: cameras[],
+  frames_used: number,
+  mean_reprojection_error: number,
+  success: boolean,
+}
+
+interface cameras {
+    cam_id: number,
+    extrinsics: {
+      R: number[],
+      cam_id: number,
+      t: number[],
+    },
+    reprojection_error: number,
+    success: boolean,
 }
 
 const GIZMO_SCALE = 0.2;
@@ -81,7 +100,7 @@ function createCameraGizmo(
   const lines = new THREE.LineSegments(lineGeo, lineMat);
 
   // Apply camera body rotation around the local Z axis (the viewing direction)
-  const rotRad = (rotationDeg * Math.PI) / 180;
+  const rotRad = ((rotationDeg+180) * Math.PI) / 180;
   lines.rotation.z = rotRad;
 
   const gap = s * 0.08;
@@ -115,8 +134,6 @@ function createCameraGizmo(
 
   group.position.set(position.x, position.y, position.z);
 
-  const axisSwap = new THREE.Matrix4().makeRotationX(Math.PI / 2);
-  const axisSwapInv = new THREE.Matrix4().makeRotationY(-Math.PI / 2);
   const Rotation = new THREE.Matrix4()
   Rotation.set(
     rotation[0], rotation[1], rotation[2], 0,
@@ -124,9 +141,9 @@ function createCameraGizmo(
     rotation[6], rotation[7], rotation[8], 0,
     0, 0, 0, 1,
   )
-  const formatedRotation = new THREE.Matrix4().multiplyMatrices(axisSwap, Rotation)//.multiply(axisSwapInv)
-  group.setRotationFromMatrix(Rotation);
 
+  group.setRotationFromMatrix(Rotation);
+  
   return group;
 }
 
@@ -235,7 +252,7 @@ function createSceneCameraStore() {
   const { showCameras } = useUIStore();
   const sceneCameras = ref<SceneCameraEntry[]>([]);
   let attachedScene: THREE.Scene | null = null;
-
+  let scenePoints: THREE.Points<THREE.BufferGeometry<THREE.NormalBufferAttributes, THREE.BufferGeometryEventMap>, THREE.PointsMaterial, THREE.Object3DEventMap> | null = null
   const COLORS = ['#ff4466', '#44aaff', '#ffaa22', '#44dd88', '#cc44ff', '#00dddd'];
 
   /**
@@ -247,21 +264,17 @@ function createSceneCameraStore() {
    * So camera position in world space = -R^T * t
    * And the forward axis (look direction) = third row of R (Z column of R^T).
    */
-  function extrinsicsToDef(entry: any, index: number, scale = 1): SceneCameraDef {
+  function extrinsicsToDef(entry: cameras, index: number, scale = 1): SceneCameraDef {
     // Support both field name variants
-    const R: number[] = entry.extrinsics.rotation_matrix ?? entry.extrinsics.R;
-    const t: number[] = entry.extrinsics.translation_matrix ?? entry.extrinsics.t;
+    const R: number[] = entry.extrinsics.R;
+    const t: number[] = entry.extrinsics.t;
 
-    // R as rows: R[0..2]=row0, R[3..5]=row1, R[6..8]=row2
-    // R^T columns become rows, so:
-    // pos = -R^T * t
-    const posX = t[0]* scale//-(R[0] * t[0] + R[3] * t[1] + R[6] * t[2]) * scale;
-    const posY = t[1]* scale//-(R[1] * t[0] + R[4] * t[1] + R[7] * t[2]) * scale;
-    const posZ = t[2]* scale//-(R[2] * t[0] + R[5] * t[1] + R[8] * t[2]) * scale;
+    const posX = t[0]* scale
+    const posY = t[1]* scale
+    const posZ = t[2]* scale
 
     // Forward direction = third row of R = [R[6], R[7], R[8]] (world Z axis of camera)
 
-    console.log(posX, posY, posZ)
     return {
       name: `Camera ${entry.cam_id}`,
       position: { x: posX, y: posY, z: posZ }, //invert y and z since z is vertical axis in IRIS
@@ -280,14 +293,13 @@ function createSceneCameraStore() {
     // Try loading live extrinsics via IPC; fall back to bundled mock
     try {
       const result = await window.ipc?.getExtrinsics();
-      const extrinsics = result ?? mockExtrinsicsFallback;
-      isMockExtrinsics = extrinsics?._isMock === true;
+      const extrinsics: Extrinsics = result ?? mockExtrinsicsFallback;
       if (extrinsics?.cameras?.length) {
-        const unit = (extrinsics.unit_of_measurement ?? 'm').replace(/[^a-z]/gi, '').toLowerCase();
-        const scale = unit === 'mm' ? 0.001 : unit === 'cm' ? 0.01 : 4.5;
+        const unit = ('m').replace(/[^a-z]/gi, '').toLowerCase();
+        const scale = unit === 'mm' ? 0.001 : unit === 'cm' ? 0.01 : 4.5; // 4.5 instead of 1 for unscaled data
         defs = extrinsics.cameras
-          .filter((c: any) => c.success !== false)
-          .map((c: any, i: number) => extrinsicsToDef(c, i, scale));
+          .filter((c) => c.success !== false)
+          .map((c, i: number) => extrinsicsToDef(c, i, scale));
         console.log(`[cameras] loaded ${defs.length} cameras from extrinsics (mock=${isMockExtrinsics}, unit=${unit}, scale=${scale})`);
       }
     } catch (err) {
@@ -297,6 +309,27 @@ function createSceneCameraStore() {
       defs = mockExtrinsicsFallback.cameras
         .filter((c: any) => c.success !== false)
         .map((c: any, i: number) => extrinsicsToDef(c, i, 1));
+    }
+
+    function loadScenePoints(path: string) {
+      const loader = new PLYLoader()
+        loader.load(path, (geometry) => {
+          geometry.computeVertexNormals()
+          geometry.scale(4.5, 4.5, 4.5)
+
+          const material = new THREE.PointsMaterial({
+            size: 0.02,
+            vertexColors: geometry.hasAttribute('color')
+          })
+
+          scenePoints = new THREE.Points(geometry, material)
+          scene.add(scenePoints)
+        })
+    }
+    const scenePath = await window.ipc?.getScene()
+    if (scenePath) {
+      console.log("scene")
+      loadScenePoints(scenePath)
     }
 
     for (const def of defs) {
@@ -316,12 +349,9 @@ function createSceneCameraStore() {
         def.rotation[6], def.rotation[7], def.rotation[8], 0,
         0, 0, 0, 1,
       )
-      const align = rotation.multiply(swap)
-      const axisSwap = new THREE.Matrix4().makeRotationX(Math.PI / 2);
+      rotation.multiply(swap)
 
       cam.setRotationFromMatrix(rotation);
-
-
       cam.name = def.name;
       cam.updateProjectionMatrix();
 
@@ -346,7 +376,7 @@ function createSceneCameraStore() {
         visible: false,
       };
 
-      updateFrustumLines(entry);
+      // updateFrustumLines(entry);
       sceneCameras.value.push(entry);
     }
 
@@ -479,13 +509,16 @@ function createSceneCameraStore() {
       return outputList;
     };
 
-    const resultPolygons: THREE.Vector3[][] = [];
-    for (let i = 0; i < footprints.length; i++) {
-      for (let j = i + 1; j < footprints.length; j++) {
-        const overlap = clipPoly(footprints[i], footprints[j]);
-        if (overlap.length >= 3) resultPolygons.push(overlap);
-      }
+    // Compute intersection across ALL camera footprints
+    let intersection = footprints[0];
+
+    for (let i = 1; i < footprints.length; i++) {
+      intersection = clipPoly(intersection, footprints[i]);
+      if (intersection.length === 0) break;
     }
+
+    const resultPolygons: THREE.Vector3[][] =
+      intersection.length >= 3 ? [intersection] : [];
 
     if (resultPolygons.length === 0) return { ...emptyBounds, cameraFootprints };
 
@@ -509,10 +542,11 @@ function createSceneCameraStore() {
 
   /** Remove all scene camera objects and clear the list. */
   function clearSceneCameras() {
+    scenePoints?.removeFromParent()
     for (const entry of sceneCameras.value) {
-      attachedScene?.remove(entry.gizmoMesh);
-      attachedScene?.remove(entry.camera);
-      attachedScene?.remove(entry.frustumLines);
+      entry.gizmoMesh.removeFromParent();
+      entry.camera.removeFromParent();
+      entry.frustumLines.removeFromParent();
       entry.gizmoMesh.traverse((child) => {
         if ((child as THREE.Mesh).geometry) (child as THREE.Mesh).geometry.dispose();
         if ((child as THREE.Mesh).material) ((child as THREE.Mesh).material as THREE.Material).dispose();
@@ -538,10 +572,11 @@ function createSceneCameraStore() {
   watch(showCameras, () => syncVisibility());
 
   function dispose() {
+    scenePoints?.removeFromParent()
     for (const entry of sceneCameras.value) {
-      attachedScene?.remove(entry.gizmoMesh);
-      attachedScene?.remove(entry.camera);
-      attachedScene?.remove(entry.frustumLines);
+      entry.gizmoMesh.removeFromParent();
+      entry.camera.removeFromParent();
+      entry.frustumLines.removeFromParent();
       entry.gizmoMesh.traverse((child) => {
         if ((child as THREE.Mesh).geometry) {
           (child as THREE.Mesh).geometry.dispose();

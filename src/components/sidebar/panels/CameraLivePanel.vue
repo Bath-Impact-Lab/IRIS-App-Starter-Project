@@ -148,7 +148,7 @@
           <option>100</option>
         </select>
 
-        <button class="button btn grid3" @click="onStopIris" :disabled="!running">Stop IRIS</button>
+        <button class="button btn grid3" @click="onStopIris" :disabled="!IrisState.running">Stop IRIS</button>
       </div>
     </div>
   </div>
@@ -296,7 +296,13 @@ const deviceColour = ref<Record<string, string>>({});
 const dragSourceIndex = ref<number | null>(null);
 const dragOverIndex = ref<number | null>(null);
 const dragEnterCounters = ref<Record<number, number>>({});
-
+const irisWorker = ref<{
+    ok: boolean, 
+    sessionId: string,
+    configPath: string,
+    pipeStarted: boolean,
+    wsUrl: string | null,
+  }>()
 function syncDeviceColours() {
   (selectedCameras.value ?? []).forEach((camera, index) => {
     const colour = sceneCameras.value[index]?.color ?? '';
@@ -355,42 +361,29 @@ function rotateCamera(device: MediaDeviceInfo, index: number) {
   });
 }
 
-async function onCalibrateIntrinsics(device: MediaDeviceInfo) {
-  if (calibratingIntrinsics.value.has(device.deviceId)) return;
-
-  calibratingIntrinsics.value = new Set(calibratingIntrinsics.value).add(device.deviceId);
-
-  const cameras = (await navigator.mediaDevices.enumerateDevices()).filter((entry) => entry.kind === 'videoinput');
-  const cameraIndex = cameras.findIndex((entry) => entry.deviceId === device.deviceId);
- 
-  const slotIndex = selectedCameras.value?.findIndex((entry) => entry.deviceId === device.deviceId) ?? -1;
-  intrinsicsCalibDevice.value = { device, slotIndex };
-  if (slotIndex >= 0) {
-    stopCameraStream(slotIndex);
+// ── Camera streams ───────────────────────────────────────────────────────────
+async function stopCameraStream(index: number) {
+  try {
+    const video = document.getElementById(`cameraFeed${index}`) as HTMLVideoElement;
+    const stream = video.srcObject as MediaStream | null;
+    if (stream) {
+      stream.getTracks().forEach(t => t.stop());
+      video.srcObject = null;
+    }
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  } catch {
+    console.log('Cameras are gone');
   }
-
-  await window.ipc?.calculateIntrinsics(cameraIndex, cameraRotation.value[device.deviceId] ?? 0);
 }
 
-async function onCalibrateExtrinsics() {
-  if (calibratingExtrinsics.value || !selectedCameras.value) return;
-
-  calibratingExtrinsics.value = true;
-
-  const allCameras = (await navigator.mediaDevices.enumerateDevices()).filter((entry) => entry.kind === 'videoinput');
-  const cameraIndices = selectedCameras.value.map((device) => {
-    const index = allCameras.findIndex((entry) => entry.deviceId === device.deviceId);
-    return index >= 0 ? index : 0;
-  }); 
-
-  selectedCameras.value.forEach((_, index) => {
-    stopCameraStream(index);
-  });
-
-  await window.ipc?.calculateExtrinsics(
-    cameraIndices,
-    cameraRotation.value[selectedCameras.value[0]?.deviceId ?? ''] ?? 0,
-  );
+async function startCameraStream(camera: MediaDeviceInfo, index: number) {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: camera.deviceId }, frameRate: 30 } });
+    const video = document.getElementById(`cameraFeed${index}`) as HTMLVideoElement;
+    if (video) video.srcObject = stream;
+  } catch (err) {
+    console.error('Camera access failed:', err);
+  }
 }
 
 async function onStartIris() {
@@ -529,7 +522,9 @@ window.ipc?.extrinsicsComplete((data: { ok: boolean; message?: string; error?: s
 }
 .drag-handle:hover { color: rgba(255,255,255,0.6); }
 
-.drag-item { border-radius: 10px; }
+.drag-item { 
+  border-radius: 10px; 
+}
 .drag-item.drag-over {
   outline: 2px solid rgba(100, 180, 255, 0.6);
   outline-offset: 2px;
@@ -635,6 +630,22 @@ window.ipc?.extrinsicsComplete((data: { ok: boolean; message?: string; error?: s
 }
 .iris-controls button { margin: 5px 0; }
 
+.iris-controls :disabled { 
+  opacity: 0.5;
+  transition: none;
+  transform: none;
+  box-shadow: none;
+  cursor: default;
+}
+
+.button:hover:disabled  { 
+  background: var(--sidebar)
+}
+
+.button:active:disabled  { 
+  background: var(--sidebar)
+}
+
 .calibrate-extrinsics-btn {
   width: 90%;
   font-size: 12px;
@@ -706,5 +717,11 @@ window.ipc?.extrinsicsComplete((data: { ok: boolean; message?: string; error?: s
   grid-column: span 2 / span 2;
   grid-column-start: 2;
   grid-row-start: 2;
+}
+
+.cameraGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 0px;
 }
 </style>

@@ -14,10 +14,33 @@
         max="2.00" 
         step="0.01"
         :id="type"
-        v-on:mouseup="passConfig"
         :disabled="!running"
       >
     </div>
+    <div style="position: relative;">
+      <div class="titles invert">
+        <span>
+          Scale: 
+          <span v-if="!invert">{{ scale }} </span>
+          <span v-else>{{ (1/scale).toPrecision(3) }}</span>
+        </span>
+        <input 
+          type="checkbox"
+          v-model="invert"
+          :disabled="!running"
+        >
+      </div>
+      <input
+      v-model.number="scale"
+      type="range"
+      min="1.0"
+      max="10.0"
+      step="0.1"
+      :disabled="!running"
+      >
+    </div>
+
+
     
   </div>
 </template>
@@ -30,12 +53,11 @@ const { running } = useIrisStore();
 
 const trackerMap = {
   xOffset: "X Offset",
-  yOffset: "y Offset",
-  zOffset: "X Offset",
+  yOffset: "Y Offset",
+  zOffset: "Z Offset",
   xRotation: "X Rotation",
-  yRotation: "y Rotation",
-  zRotation: "X Rotation",
-  Scale: "Scale",
+  yRotation: "Y Rotation",
+  zRotation: "Z Rotation",
 }
 const trackerConfig = ref({
   xOffset: 0,
@@ -44,27 +66,39 @@ const trackerConfig = ref({
   xRotation: 0,
   yRotation: 0,
   zRotation: 0,
-  Scale: 0
+})
+
+const scale = ref(1)
+
+const invert = ref(false)
+
+watch(() => scale.value, (scale) => {
+  passConfig()
+})
+
+watch(trackerConfig.value, (trackerConfig) => {
+  passConfig()
 })
 
 function passConfig() {
+  console.log("changed", trackerConfig, scale)
   const formatedData = {
     translation: [trackerConfig.value.xOffset, trackerConfig.value.yOffset, trackerConfig.value.zOffset],
     rotation: [trackerConfig.value.xRotation, trackerConfig.value.yRotation, trackerConfig.value.zRotation],
-    scale: trackerConfig.value.Scale
+    scale: invert.value ? 1/scale.value : scale.value
   }
   const data = JSON.stringify(formatedData)
-  // console.log(data)
+  // console.log("[VR Chat]", data)
   window.ipc?.updatePos(data)
 }
 
 onMounted(() => {
-  window.ipc?.connectVR();
-  console.log("connected to VR")
+  window.ipc?.connectVR(props.outputOption);
+  console.log("[VR Chat] connected to VR")
 })
 
 onUnmounted(() => {
-  console.log("switching")
+  console.log("[VR Chat] switching")
   window.ipc?.disconnectVR()
 })
 
@@ -89,5 +123,12 @@ onUnmounted(() => {
 
 .titles {
   padding-top: 10px;
+}
+
+.invert {
+  display: flex;
+  flex-direction: row; 
+  align-items: center;
+  justify-content: space-between;
 }
 </style>
