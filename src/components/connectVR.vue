@@ -1,7 +1,7 @@
 <template>
   <div class="sidenav">
     Tracker Config:
-    <div v-if="!IrisState.running">Start IRIS first</div>
+    <div v-if="!running">Start IRIS first</div>
 
     <div v-for="(value, type) in trackerConfig">
       <div class="titles">
@@ -14,56 +14,28 @@
         max="2.00" 
         step="0.01"
         :id="type"
-        :disabled="!IrisState.running"
+        v-on:mouseup="passConfig"
+        :disabled="!running"
       >
     </div>
-    <div style="position: relative;">
-      <div class="titles invert">
-        <span>
-          Scale: 
-          <span v-if="!invert">{{ scale }} </span>
-          <span v-else>{{ (1/scale).toPrecision(3) }}</span>
-        </span>
-        <input 
-          type="checkbox"
-          v-model="invert"
-          :disabled="!IrisState.running"
-        >
-      </div>
-      <input
-      v-model.number="scale"
-      type="range"
-      min="1.0"
-      max="10.0"
-      step="0.1"
-      :disabled="!IrisState.running"
-      >
-    </div>
-
-
     
   </div>
 </template>
 
 <script setup lang="ts">
-import { useIrisStore } from '@/Stores/irisStore';
-import { ref, watch, computed, nextTick, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
+import { useIrisStore } from '../stores/useIrisStore';
 
-const IrisState = useIrisStore()
-
-interface Props {
-  outputOption: string,
-}
-
-const props = defineProps<Props>()
+const { running } = useIrisStore();
 
 const trackerMap = {
   xOffset: "X Offset",
-  yOffset: "Y Offset",
-  zOffset: "Z Offset",
+  yOffset: "y Offset",
+  zOffset: "X Offset",
   xRotation: "X Rotation",
-  yRotation: "Y Rotation",
-  zRotation: "Z Rotation",
+  yRotation: "y Rotation",
+  zRotation: "X Rotation",
+  Scale: "Scale",
 }
 const trackerConfig = ref({
   xOffset: 0,
@@ -72,39 +44,27 @@ const trackerConfig = ref({
   xRotation: 0,
   yRotation: 0,
   zRotation: 0,
-})
-
-const scale = ref(1)
-
-const invert = ref(false)
-
-watch(() => scale.value, (scale) => {
-  passConfig()
-})
-
-watch(trackerConfig.value, (trackerConfig) => {
-  passConfig()
+  Scale: 0
 })
 
 function passConfig() {
-  console.log("changed", trackerConfig, scale)
   const formatedData = {
     translation: [trackerConfig.value.xOffset, trackerConfig.value.yOffset, trackerConfig.value.zOffset],
     rotation: [trackerConfig.value.xRotation, trackerConfig.value.yRotation, trackerConfig.value.zRotation],
-    scale: invert.value ? 1/scale.value : scale.value
+    scale: trackerConfig.value.Scale
   }
   const data = JSON.stringify(formatedData)
-  // console.log("[VR Chat]", data)
+  // console.log(data)
   window.ipc?.updatePos(data)
 }
 
 onMounted(() => {
-  window.ipc?.connectVR(props.outputOption);
-  console.log("[VR Chat] connected to VR")
+  window.ipc?.connectVR();
+  console.log("connected to VR")
 })
 
 onUnmounted(() => {
-  console.log("[VR Chat] switching")
+  console.log("switching")
   window.ipc?.disconnectVR()
 })
 
@@ -129,12 +89,5 @@ onUnmounted(() => {
 
 .titles {
   padding-top: 10px;
-}
-
-.invert {
-  display: flex;
-  flex-direction: row; 
-  align-items: center;
-  justify-content: space-between;
 }
 </style>

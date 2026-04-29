@@ -1,101 +1,41 @@
 <template>
-  <div class="sidenav" :style="{width: sidebarWidth + 'px'}">
-    <div class="resizer" @mousedown="startResize"></div>
-    <!-- Filesystem playback mode: video files are loaded -->
+  <div class="sidenav">
     <PlaybackPanel
       v-if="isPlaybackMode"
-      :video-urls="props.playbackVideoUrls ?? []"
-      :is-playing="props.isPlayingBack ?? false"
+      :video-urls="fsPlaybackVideoUrls"
+      :is-playing="isPlaying"
       :feed-names="playbackFeedNames"
     />
 
-    <!-- Live camera mode: real webcams selected -->
-    <CameraLivePanel
-      v-else-if="props.selectedCameras && props.selectedCameras.length > 0"
-      :selected-cameras="props.selectedCameras"
-      :selected-camera-ids="props.selectedCameraIds"
-      :scene-cameras="props.sceneCameras"
-      :camera-rotation="props.cameraRotation"
-      :devices="props.devices"
-      :person-count="props.personCount"
-      @iris-data-update="emit('irisDataUpdate', $event)"
-      @reorder-cameras="emit('reorderCameras', $event)"
-    />
+    <CameraLivePanel v-else-if="selectedDevices && selectedDevices.length > 0" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { SceneCameraEntry } from '../lib/useSceneCameras';
+import { computed } from 'vue';
 import CameraLivePanel from './sidebar/panels/CameraLivePanel.vue';
 import PlaybackPanel from './sidebar/panels/PlaybackPanel.vue';
+import { useCameraStore } from '../stores/useCameraStore';
+import { useFilesystemStore } from '../stores/useFilesystemStore';
 
-// ── Props — identical public API as before ───────────────────────────────────
-interface Props {
-  personCount: string | null;
-  irisData: IrisData[] | IrisData | null;
-  selectedCameras: MediaDeviceInfo[] | null;
-  selectedCameraIds: string[] | null;
-  sceneCameras: SceneCameraEntry[];
-  cameraRotation: Record<string, number>;
-  devices: MediaDeviceInfo[];
-  playbackVideoUrls?: (string | null)[];
-  isPlayingBack?: boolean;
-}
+const { selectedDevices, fsPlaybackVideoUrls } = useCameraStore();
+const { isPlaying } = useFilesystemStore();
 
-const props = defineProps<Props>();
+const isPlaybackMode = computed(() => (
+  fsPlaybackVideoUrls.value.length > 0 &&
+  fsPlaybackVideoUrls.value.some((url) => url !== null)
+));
 
-const emit = defineEmits<{
-  irisDataUpdate: [IrisData[] | IrisData | null];
-  reorderCameras: [MediaDeviceInfo[]];
-}>();
-
-// ── Panel routing ────────────────────────────────────────────────────────────
-/** True when we have resolved video file URLs to play back. */
-const isPlaybackMode = computed(() =>
-  (props.playbackVideoUrls?.length ?? 0) > 0 &&
-  props.playbackVideoUrls!.some(u => u !== null)
-);
-
-/** Feed display names derived from the URL filenames. */
-const playbackFeedNames = computed(() =>
-  (props.playbackVideoUrls ?? []).map(url => {
+const playbackFeedNames = computed(() => (
+  fsPlaybackVideoUrls.value.map((url) => {
     if (!url) return '';
-    try { return decodeURIComponent(url.split('/').pop() ?? ''); } catch { return ''; }
+    try {
+      return decodeURIComponent(url.split('/').pop() ?? '');
+    } catch {
+      return '';
+    }
   })
-);
-
-const sidebarWidth = ref(250)
-const isResizing = ref(false)
-
-const onMouseMove = (e: MouseEvent) => {
-  if (!isResizing.value) return
-
-  let newWidth = e.clientX
-  
-  sidebarWidth.value = window.innerWidth - newWidth
-}
-
-const stopResize = () => {
-  isResizing.value = false
-  document.body.style.cursor = "default"
-}
-
-const startResize = () => {
-  isResizing.value = true
-  document.body.style.cursor = "ew-resize"
-}
-
-onMounted(() => {
-  document.addEventListener("mousemove", onMouseMove)
-  document.addEventListener("mouseup", stopResize)
-})
-
-onUnmounted(() => {
-  document.removeEventListener("mousedown", onMouseMove)
-  document.removeEventListener("mouseup", stopResize)
-})
-
+));
 </script>
 
 <style scoped>
@@ -103,8 +43,7 @@ onUnmounted(() => {
   position: absolute;
   right: 0;
   height: calc(100% - 63px);
-  min-width: 250px;
-  max-width: 1000px;
+  width: 250px;
   background-color: var(--sidebar);
   z-index: 10;
   border-left: 1px solid rgba(255,255,255,0.06);
@@ -112,15 +51,6 @@ onUnmounted(() => {
   flex-direction: column;
   align-items: center;
   padding: 12px;
-}
-
-.resizer {
-  width: 5px;
-  cursor: ew-resize;
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
 }
 
 @media (max-width: 768px) {

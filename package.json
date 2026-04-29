@@ -19,10 +19,11 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.97.0",
     "dotenv": "^17.3.1",
+    "mpegts.js": "^1.8.0",
     "node-pty": "^1.1.0",
-    "pinia": "^3.0.4",
     "three": "0.169.0",
-    "vue": "^3.5.31"
+    "vue": "3.5.10",
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "@electron/notarize": "^2.3.0",
@@ -31,7 +32,7 @@
     "@vitejs/plugin-vue": "6.0.0",
     "concurrently": "^9.0.1",
     "cross-env": "^7.0.3",
-    "electron": "^40.9.1",
+    "electron": "40.6.1",
     "electron-builder": "^26.8.1",
     "npm-check-updates": "^17.1.0",
     "typescript": "^5.6.2",
