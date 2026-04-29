@@ -1,25 +1,13 @@
 
 const dotenv = require('dotenv');
-
 const { app, BrowserWindow, ipcMain, nativeTheme, shell, dialog } = require('electron');
-
-app.commandLine.appendSwitch('ignore-gpu-blocklist');
-app.commandLine.appendSwitch('enable-gpu-rasterization');
-app.commandLine.appendSwitch('enable-zero-copy');
-
-app.commandLine.appendSwitch('enable-features', 'WebCodecs,WebCodecsVideoEncoder,WebCodecsVideoDecoder');
-
-app.commandLine.appendSwitch('disable-background-timer-throttling');
-app.commandLine.appendSwitch('disable-renderer-backgrounding');
-
-const { registerIrisIpc, getIrisCliPath } = require('./iris');
 const { registerIrisIpc, processManager, getIrisCliPath } = require('./iris');
 const { MOCK_EXTRINSICS } = require('./mockExtrinsics');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { randomUUID } = require('crypto');
 const { spawn, execFile, exec } = require('child_process')
+
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 let mainWindow;
@@ -55,8 +43,6 @@ function createWindow() {
         height: 800,
         minWidth: 960,
         minHeight: 640,
-        frame: true,
-        // autoHideMenuBar: true,
         title: process.env.VITE_APP_TITLE || 'IRIS Starter',
         backgroundColor: nativeTheme.shouldUseDarkColors ? '#111418' : '#ffffff',
         webPreferences: {
@@ -80,25 +66,14 @@ function createWindow() {
     mainWindow.on('closed', () => {
         mainWindow = null;
     });
-
-    const sendWindowState = () => {
-        if (!mainWindow || mainWindow.isDestroyed()) return;
-        mainWindow.webContents.send('window-state', {
-            isMaximized: mainWindow.isMaximized(),
-        });
-    };
-
-    mainWindow.on('maximize', sendWindowState);
-    mainWindow.on('unmaximize', sendWindowState);
-    mainWindow.on('enter-full-screen', sendWindowState);
-    mainWindow.on('leave-full-screen', sendWindowState);
-    mainWindow.once('ready-to-show', sendWindowState);
 }
 
 app.whenReady().then(() => {
 
     registerIrisIpc();
+
     createWindow();
+    // startIrisMockProcess();
 
     app.on('activate', () => {
         if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -127,38 +102,6 @@ ipcMain.handle('open-external', async (event, url) => {
         console.error('[Main] shell.openExternal failed:', e);
         return { ok: false, error: e.message };
     }
-});
-
-function getEventWindow(event) {
-    return BrowserWindow.fromWebContents(event.sender) || mainWindow;
-}
-
-ipcMain.handle('window-minimize', (event) => {
-    const win = getEventWindow(event);
-    if (win && !win.isDestroyed()) win.minimize();
-});
-
-ipcMain.handle('window-toggle-maximize', (event) => {
-    const win = getEventWindow(event);
-    if (!win || win.isDestroyed()) return { isMaximized: false };
-
-    if (win.isMaximized()) {
-        win.unmaximize();
-    } else {
-        win.maximize();
-    }
-
-    return { isMaximized: win.isMaximized() };
-});
-
-ipcMain.handle('window-close', (event) => {
-    const win = getEventWindow(event);
-    if (win && !win.isDestroyed()) win.close();
-});
-
-ipcMain.handle('window-is-maximized', (event) => {
-    const win = getEventWindow(event);
-    return { isMaximized: !!win && !win.isDestroyed() && win.isMaximized() };
 });
 
 // Check whether iris_cli.exe is present on disk
@@ -264,19 +207,39 @@ ipcMain.handle('fs-rename-recording', async (event, oldPath, newName) => {
     }
 });
 
+// - If the mock stream is active (no real runtime), return the mock extrinsics.
+// - If a real runtime exists, read the live extrinsics file.
+// - The frontend should clear mock camera gizmos when real cameras connect.
+ipcMain.handle('get-extrinsics', (event) => {
+    const runtimeExists = fs.existsSync(getIrisCliPath());
+
+    // Mock mode — return the bundled mock extrinsics
+    if (!runtimeExists) {
+        console.log('[extrinsics] mock mode — returning mock extrinsics');
+        return MOCK_EXTRINSICS;
+    }
+
+    // Real runtime — read live calibration file
+    const extrinsicsPath = path.join(os.homedir(), 'AppData', 'Local', 'IRIS', 'calibration_output', 'extrinsics.json');
+    try {
+        if (!fs.existsSync(extrinsicsPath)) {
+            console.warn(`[extrinsics] file not found: ${extrinsicsPath}`);
+            return null;
+        }
+        const raw = fs.readFileSync(extrinsicsPath, 'utf8');
+        return JSON.parse(raw);
+    } catch (err) {
+        console.error('[extrinsics] failed to read:', err);
+        return null;
+    }
+});
+
 
 // connecting to steamVR/VRchat
-ipcMain.handle('connect-VR', (event, outOption) => {
+ipcMain.handle('connect-VR', (event) => {
     //file path of connector
-    let irisToVr;
-    if (outOption == 'VR Chat') {
-        irisToVr = path.join(__dirname, "..", "IRIStoVRChat", "rust.exe")
-    }
-    else if (outOption == 'SteamVR') {
-        irisToVr = path.join(__dirname, "..", "IRIStoSteamVR", "rust.exe")
-    }
+    const irisToVr = path.join(__dirname, "..", "IRIStoVRChat", "rust.exe")
     console.log(irisToVr)
-    if (!fs.existsSync(irisToVr)) return
     const child = spawn(irisToVr, {
         stdio: ['pipe', 'pipe', 'pipe']
     })

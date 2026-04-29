@@ -1,22 +1,16 @@
 'use strict';
 
 const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path'); // Ensure path is imported
 const { ipcMain } = require('electron');
 const { getIrisCliPath } = require('./config');
 const { ProcessManager } = require('./processManager');
+const { CalibrationManager } = require('./calibrationManager');
 const { MonitorManager } = require('./monitorManager');
-const { getTargetWindow, sendToWindow } = require('./utils');
-const { execFile } = require('child_process');
+const { getTargetWindow, sendMockData, sendToWindow } = require('./utils');
 
 const processManager = new ProcessManager();
+const calibrationManager = new CalibrationManager();
 const monitorManager = new MonitorManager();
-
-function resolveOutputDir() {
-  const irisCliDir = path.dirname(getIrisCliPath());
-  return path.join(irisCliDir, 'output', 'triangulation_da3_startup');
-}
 
 function registerIrisIpc() {
   ipcMain.handle('start-iris', (event, options) => {
@@ -26,7 +20,8 @@ function registerIrisIpc() {
     return processManager.startStandard({
       sessionId,
       options,
-      onCliOutput: (payload) => sendToWindow(targetWindow, 'iris-cli-output', payload),
+      onMockData: () => sendMockData(targetWindow),
+      onData: (data) => sendToWindow(targetWindow, 'iris-data', data),
     });
   });
 
@@ -37,6 +32,7 @@ function registerIrisIpc() {
     return processManager.startStream({
       sessionId,
       options,
+      onMockData: () => sendMockData(targetWindow),
       onFrame: (frame) => sendToWindow(targetWindow, 'iris-data', frame),
       onCliOutput: (payload) => sendToWindow(targetWindow, 'iris-cli-output', payload),
     });
@@ -56,83 +52,43 @@ function registerIrisIpc() {
   });
 
   ipcMain.handle('stop-iris', (_event, sessionId) => processManager.stop(sessionId));
- 
-  ipcMain.handle('get-extrinsics', async (_event,) => {
-    const outputDir = resolveOutputDir();
 
-    const extrinsicsPath = path.join(outputDir, 'extrinsics.json');
+  ipcMain.handle('stop-iris-full', (_event, baseSessionId) => processManager.stopFull(baseSessionId));
 
-    const targetPath = extrinsicsPath;
-    const time = Date.now()
+  ipcMain.handle('cancel-intrinsics', () => calibrationManager.cancelIntrinsics());
+  ipcMain.handle('cancel-extrinsics', () => calibrationManager.cancelExtrinsics());
 
-    if (!targetPath) {
-      return null;
-    }
-
-    try {
-      const rawData = fs.readFileSync(targetPath, 'utf8');
-      fs.stat(targetPath, (err, stats) => {
-        if (time - stats.mtimeMs > 20000) {
-          console.log('[iris] Extrinsics is too old, restart and try again.')
-          return null
-        }
-      })
-      return JSON.parse(rawData);
-    } catch (error) {
-      console.warn('[iris] Failed to read extrinsics from', targetPath, error);
-      return null;
-    }
-  });
-
-  ipcMain.handle('get-scene', async (_event,) => {
-    const outputDir = resolveOutputDir();
-    const scenePath = path.join(outputDir, 'scene.ply');
-    const time = Date.now()
-
-    if (!fs.existsSync(scenePath)) {
-      return null;
-    }
-
-    try { 
-      fs.accessSync(scenePath, fs.constants.R_OK);
-      fs.stat(scenePath, (err, stats) => {
-        if (time - stats.mtimeMs > 20000) {
-          console.log('[iris] Scene is too old, restart and try again.')
-          return null
-        }
-      })
-      return `file:///${scenePath.replace(/\\/g, '/')}`;
-    } catch (error) {
-      console.warn('[iris] Failed to resolve scene file at', scenePath, error);
-      return null;
-    }
-  });
-
-  ipcMain.handle('start-iris-record', async (event, options = {}) => {
+  ipcMain.handle('calculate-intrinsics', (event, index, rotation) => {
     const targetWindow = getTargetWindow(event);
-    const outputDir = resolveRecordingOutputDir(options.projectPath);
 
-    if (!outputDir) {
-      return { ok: false, error: 'A saved project path is required to start recording.' };
-    }
-
-    return monitorManager.start({
-      outputDir,
-      shmName: options.shmName,
-      fps: options.fps,
-      pipePath: options.pipePath,
-      pipeId: options.pipeId,
-      savePoses: options.savePoses,
-      drawBboxes: options.drawBboxes,
-      drawKeypoints: options.drawKeypoints,
-      verbose: options.verbose,
-      onStdout: (data) => sendToWindow(targetWindow, 'iris-cli-output', { channel: 'record:stdout', line: data.toString() }),
-      onStderr: (data) => sendToWindow(targetWindow, 'iris-cli-output', { channel: 'record:stderr', line: data.toString() }),
+    return calibrationManager.calculateIntrinsics({
+      cameraIndex: index,
+      rotation,
+      onOutput: (line) => sendToWindow(targetWindow, 'iris-cli-output', {
+        channel: 'intrinsics',
+        cameraIndex: index,
+        line,
+      }),
+      onComplete: (payload) => sendToWindow(targetWindow, 'intrinsics-complete', payload),
     });
   });
 
-  ipcMain.handle('stop-iris-record', async () => monitorManager.stop());
- 
+  ipcMain.handle('calculate-extrinsics', (event, cameraIndices, rotation) => {
+    const targetWindow = getTargetWindow(event);
+
+    return calibrationManager.calculateExtrinsics({
+      cameraIndices,
+      rotation,
+      onOutput: (line) => sendToWindow(targetWindow, 'iris-cli-output', {
+        channel: 'extrinsics',
+        line,
+      }),
+      onComplete: (payload) => sendToWindow(targetWindow, 'extrinsics-complete', payload),
+    });
+  });
+
+  ipcMain.handle('start-monitor', (_event, outputDir) => monitorManager.start(outputDir));
+  ipcMain.handle('stop-monitor', () => monitorManager.stop());
 }
 
 module.exports = {

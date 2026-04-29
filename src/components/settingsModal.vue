@@ -43,7 +43,7 @@
           <!-- Upgrade Section -->
           <div v-if="!isPaidLicense" class="settings-footer">
             <div class="divider"><span>Support Us</span></div>
-            <button class="btn-buy" @click="getLicense">
+            <button class="btn-buy" @click="buyLicense">
               Get a License
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/></svg>
             </button>
@@ -92,9 +92,9 @@ async function handleLicenseSubmit() {
   emit('licenseKey', licenseKeyInput.value)
 }
 
-async function getLicense() {
-  const url = import.meta.env.VITE_LICENSE_URL || 'https://iris.cs.bath.ac.uk/';
-  console.log('Get License clicked - opening:', url);
+async function buyLicense() {
+  const url = import.meta.env.VITE_LICENSE_URL || 'https://embodi.ecolizard.com/#pricing';
+  console.log('Buy License clicked - opening:', url);
   
   if (!(window as any).electronAPI?.openExternal) {
     console.error('CRITICAL: electronAPI.openExternal is missing! Please restart the application.');

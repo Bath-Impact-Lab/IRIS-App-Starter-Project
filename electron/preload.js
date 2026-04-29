@@ -5,13 +5,24 @@ contextBridge.exposeInMainWorld('ipc', {
   startIRISStream: (options) => ipcRenderer.invoke('start-iris-stream', options),
   startIRISFull: (options) => ipcRenderer.invoke('start-iris-full', options),
   getExtrinsics: () => ipcRenderer.invoke('get-extrinsics'),
-  getScene: () => ipcRenderer.invoke('get-scene'),
   stopIRIS: (Id) => ipcRenderer.invoke('stop-iris', Id),
-  startIrisRecord: (options) => ipcRenderer.invoke('start-iris-record', options),
-  stopIrisRecord: () => ipcRenderer.invoke('stop-iris-record'),
   stopIRISFull: (baseSessionId) => ipcRenderer.invoke('stop-iris-full', baseSessionId),
   onIrisData: (callback) => {
     ipcRenderer.on('iris-data', (event, data,) => {
+      callback(data)
+    })
+  },
+  calculateIntrinsics: (index, rotation) => ipcRenderer.invoke('calculate-intrinsics', index, rotation),
+  cancelIntrinsics: () => ipcRenderer.invoke('cancel-intrinsics'),
+  intrinsicsComplete: (callback) => {
+    ipcRenderer.on('intrinsics-complete', (event, data) => {
+      callback(data)
+    })
+  },
+  calculateExtrinsics: (cameraIndices, rotation) => ipcRenderer.invoke('calculate-extrinsics', cameraIndices, rotation),
+  cancelExtrinsics: () => ipcRenderer.invoke('cancel-extrinsics'),
+  extrinsicsComplete: (callback) => {
+    ipcRenderer.on('extrinsics-complete', (event, data) => {
       callback(data)
     })
   },
@@ -31,20 +42,11 @@ contextBridge.exposeInMainWorld('ipc', {
   fsGetRecordingData: (recordingPath) => ipcRenderer.invoke('fs-get-recording-data', recordingPath),
   fsGetVideoUrl: (filePath) => ipcRenderer.invoke('fs-get-video-url', filePath),
 
-  connectVR: (outOption) => ipcRenderer.invoke('connect-VR', outOption),
+  connectVR: () => ipcRenderer.invoke('connect-VR'),
   updatePos: (val) => ipcRenderer.invoke('update-pos', val),
   disconnectVR: () => ipcRenderer.invoke('disconnect-VR'),
 })
 
 contextBridge.exposeInMainWorld('electronAPI', {
   openExternal: async (url) => ipcRenderer.invoke('open-external', url),
-  minimizeWindow: () => ipcRenderer.invoke('window-minimize'),
-  toggleMaximizeWindow: () => ipcRenderer.invoke('window-toggle-maximize'),
-  closeWindow: () => ipcRenderer.invoke('window-close'),
-  isWindowMaximized: () => ipcRenderer.invoke('window-is-maximized'),
-  onWindowStateChange: (callback) => {
-    const handler = (event, data) => callback(data);
-    ipcRenderer.on('window-state', handler);
-    return () => ipcRenderer.removeListener('window-state', handler);
-  },
 })
