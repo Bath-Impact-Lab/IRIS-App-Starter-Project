@@ -133,6 +133,15 @@ const irisWorker = ref<{
     pipeStarted: boolean,
     wsUrl: string | null,
   }>()
+
+const irisStreamer = ref<{
+    ok: boolean, 
+    sessionId: string,
+    configPath: string,
+    pipeStarted: boolean,
+    wsUrl: string | null,
+  }>()
+
 function onDragStart(index: number) { dragSourceIndex.value = index; }
 
 function onDragEnter(index: number) {
@@ -229,15 +238,17 @@ async function onStartIris() {
   };
 
   props.selectedCameras.forEach((_, i) => stopCameraStream(i));
+  await new Promise(resolve => setTimeout(resolve, 2000));
   IrisState.setRunningState(true)
   irisWorker.value = await window.ipc?.startIRIS(options);
-  if (options.stream) await window.ipc?.startIRISStream?.(options);
+  if (options.stream) irisStreamer.value = await window.ipc?.startIRISStream?.(options);
 }
 
 async function onStopIris() {
   IrisState.setRunningState(false)
 
   await window.ipc?.stopIRIS(irisWorker.value?.sessionId);
+  await window.ipc?.stopIRIS(irisStreamer.value?.sessionId);
   await new Promise(resolve => setTimeout(resolve, 3000));
   props.selectedCameras.forEach((d, i) => startCameraStream(d, i));
   emit('irisDataUpdate', null);

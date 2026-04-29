@@ -198,21 +198,31 @@ async function initThree(container: HTMLElement) {
       console.log("dispose")
       props.disposeCameras()
     }
+    if (!running) {
+      if (skeletonLine) {
+        skeletonLine.forEach((skeleton) => skeleton.removeFromParent())
+        skeletonLine = []
+      }
+      if (spheresMesh) {
+        spheresMesh.forEach((spheres) => spheres.removeFromParent())
+        spheresMesh = []
+      }
+    }
   })
 
-watch(() => IrisState.running, (running) => {
-  if (!running) {
-    if (skeletonLine) {
-      skeletonLine.forEach((skeleton) => skeleton.removeFromParent())
-      skeletonLine = []
-    }
-    if (spheresMesh) {
-      spheresMesh.forEach((spheres) => spheres.removeFromParent())
-      spheresMesh = []
-    }
+// watch(() => IrisState.running, (running) => {
+//   if (!running) {
+//     if (skeletonLine) {
+//       skeletonLine.forEach((skeleton) => skeleton.removeFromParent())
+//       skeletonLine = []
+//     }
+//     if (spheresMesh) {
+//       spheresMesh.forEach((spheres) => spheres.removeFromParent())
+//       spheresMesh = []
+//     }
     
-  }
-})
+//   }
+// })
 
 watch(() => props.irisData, (data) => {
   if (data) {
