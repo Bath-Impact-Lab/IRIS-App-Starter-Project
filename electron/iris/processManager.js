@@ -171,10 +171,10 @@ class ProcessManager {
 
     if (child.stdin && !child.stdin.destroyed) {
       try {
-        child.kill()
-        child.kill("SIGKILL")
         child.stdin.write('\n');
         child.stdin.end();
+        child.kill()
+        child.kill("SIGKILL")
       } catch (err) {
         console.error(`[iris:${sessionId}] failed to write to stdin`, err);
         this.killProcessTree(sessionId).catch((killErr) => {

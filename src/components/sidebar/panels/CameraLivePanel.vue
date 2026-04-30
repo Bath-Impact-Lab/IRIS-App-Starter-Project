@@ -259,7 +259,7 @@ async function onStopIris() {
   IrisState.setRunningState(false)
 
   await window.ipc?.stopIRIS(irisWorker.value?.sessionId);
-  await window.ipc?.stopIRIS(irisStreamer.value?.sessionId);
+  if (shouldStream.value) await window.ipc?.stopIRIS(irisStreamer.value?.sessionId);
   await new Promise(resolve => setTimeout(resolve, 3000));
   props.selectedCameras.forEach((d, i) => startCameraStream(d, i));
   emit('irisDataUpdate', null);
