@@ -537,7 +537,7 @@ const personCountOptions = ['Single Person', 'Multi-Person'];
 const personCount = ref<string | null>('Single Person');
 
 // Output options
-const outputOptions = ['SteamVR', 'VR Chat', 'Quest', 'Unity', 'Unreal', 'Gadot', 'Filesystem'];
+const outputOptions = ['None', 'SteamVR', 'VR Chat', 'Quest', 'Unity', 'Unreal', 'Gadot', 'Filesystem'];
 const outputOption = ref<string | null>(null);
 
 // Avatar options

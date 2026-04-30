@@ -1,6 +1,6 @@
 <template>
   <div class="sidenav">
-    Tracker Config:
+    {{currentOut}} Tracker Config:
     <div v-if="!IrisState.running">Start IRIS first</div>
 
     <div  v-for="(value, type) in trackerConfig">
@@ -84,6 +84,8 @@ const invert = ref(false)
 
 const sessionId = ref<string>()
 
+const currentOut = ref<string>("None")
+
 watch(() => scale.value, (scale) => {
   passConfig()
 })
@@ -113,14 +115,37 @@ function reset(sliderName: "scale" | "xOffset" | "yOffset" | "zOffset" | "xRotat
   }
 }
 
-onMounted(async () => {
-  sessionId.value = await window.ipc?.connectVR(props.outputOption);
+async function connect() {
+  sessionId.value = await window.ipc?.connectVR(currentOut.value);
   console.log("[Connector] connected to VR")
+}
+
+function disconnect() {
+  console.log("[Connector] switching")
+  if (sessionId.value) window.ipc?.disconnectVR(sessionId.value)
+}
+
+onMounted(() => {
+  if (props.outputOption !== "None") {  
+    currentOut.value = props.outputOption
+    connect()
+  }
 })
 
 onUnmounted(() => {
-  console.log("[Connector] switching")
-  if (sessionId.value) window.ipc?.disconnectVR(sessionId.value)
+  disconnect()
+  currentOut.value = "None"
+})
+
+watch(() => props.outputOption, (option) => {
+  console.log("here")
+  if (option !== currentOut.value) {
+    currentOut.value = option
+    if (currentOut.value !== "None") {
+      disconnect() //disconnect from previous linker
+      connect() //connect to new linker
+    }
+  }
 })
 
 </script>
