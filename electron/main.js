@@ -264,10 +264,10 @@ ipcMain.handle('connect-VR', (event, outOption) => {
     const sessionId =  crypto.randomUUID();
     let irisToVr;
     if (outOption == 'VR Chat') {
-        irisToVr = path.join(__dirname, "..", "IRIStoVRChat", "rust.exe")
+        irisToVr = path.join(__dirname, "..", "IRIStoVRChat", "iris-to-vrchat.exe")
     }
     else if (outOption == 'SteamVR') {
-        irisToVr = path.join(__dirname, "..", "IRIStoSteamVR", "rust.exe")
+        irisToVr = path.join(__dirname, "..", "IRIStoSteamVR", "iris-to-steamvr.exe")
     }
     console.log(irisToVr)
     if (!fs.existsSync(irisToVr)) return
