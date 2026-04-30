@@ -16,6 +16,7 @@
         step="0.01"
         :id="type"
         :disabled="!IrisState.running"
+        @dblclick="reset(type)"
       >
     </div>
     <div style="position: relative;">
@@ -39,6 +40,7 @@
       max="10.0"
       step="0.1"
       :disabled="!IrisState.running"
+      @dblclick="reset('scale')"
       >
     </div>
 
@@ -100,6 +102,15 @@ function passConfig() {
   const data = JSON.stringify(formatedData)
   // console.log("[VR Chat]", data)
   if (sessionId.value) window.ipc?.updatePos(data, sessionId.value)
+}
+
+function reset(sliderName: "scale" | "xOffset" | "yOffset" | "zOffset" | "xRotation" | "yRotation" | "zRotation") {
+  if (sliderName === "scale") {
+    scale.value = 0
+  }
+  else {
+    trackerConfig.value[sliderName] = 0
+  }
 }
 
 onMounted(async () => {

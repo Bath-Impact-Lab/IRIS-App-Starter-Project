@@ -39,3 +39,4 @@ __pycache__/
 .eggs/
 # IRIS/
 IRIStoVRChat/
+jsconfig.json
