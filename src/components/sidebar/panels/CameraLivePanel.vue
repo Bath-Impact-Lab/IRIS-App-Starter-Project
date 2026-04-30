@@ -53,6 +53,14 @@
     <div class="iris-controls">
 
       <div class="parent">
+        <div class="streamGrid">
+          Stream
+          <input 
+          class="streamBtn"
+          type="checkbox"
+          v-model="shouldStream"
+          >
+        </div>
         <button class="button btn grid1" @click="onStartIris" :disabled="IrisState.running">Start IRIS</button>
         <select 
           v-model.number="irisFps" 
@@ -66,7 +74,6 @@
           <option>60</option>
           <option>100</option>
         </select>
-
         <button class="button btn grid3" @click="onStopIris" :disabled="!IrisState.running">Stop IRIS</button>
       </div>
     </div>
@@ -141,6 +148,10 @@ const irisStreamer = ref<{
     pipeStarted: boolean,
     wsUrl: string | null,
   }>()
+
+// ── IRIS Stream ──────────────────────────────────────────────────────────────
+const shouldStream = ref(true)
+
 
 function onDragStart(index: number) { dragSourceIndex.value = index; }
 
@@ -234,7 +245,7 @@ async function onStartIris() {
     camera_height: 1080,
     video_fps: irisFps.value,
     output_dir: '',
-    stream: true,
+    stream: shouldStream.value,
   };
 
   props.selectedCameras.forEach((_, i) => stopCameraStream(i));
@@ -386,6 +397,7 @@ async function onStopIris() {
 
 .grid2 {
   grid-column-start: 4;
+  align-self: center;
 }
 
 .grid3 {
@@ -399,5 +411,19 @@ async function onStopIris() {
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
   gap: 0px;
 }
+
+.streamBtn {
+  width: 15px;
+  height: 15px;
+}
+
+.streamGrid {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font: 13.3px Arial;
+}
+
 </style>
 
