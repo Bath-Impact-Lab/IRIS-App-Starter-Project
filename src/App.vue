@@ -1070,10 +1070,11 @@ onBeforeUnmount(() => {
 });
 
 
-function selectTracking(t: string) {
-  trackingType.value = t;
-  openTrack.value = false;
-}
+watch(() => IrisState.running, (running) => {
+  if (!running) {
+    outputOption.value = "None"
+  }
+})
 
 function selectPersonCount(p: string) {
   personCount.value = p;
