@@ -60,4 +60,9 @@ Please request access from mrt64@bath.ac.uk if you can't see these repositories
 - [Documentation](https://github.com/Bath-Impact-Lab/IRIS-App-Starter-Project/tree/main/documentation)
 - [Issue Tracker](https://github.com/Bath-Impact-Lab/IRIS/issues)
 
+## 📄 License
+
+This project is licensed under the [PolyForm Noncommercial License 1.0.0](LICENSE).  
+Free for non-commercial use. For commercial licensing, contact mrt64@bath.ac.uk.
+
 Built with ❤️ by the **Bath Impact Lab**.
