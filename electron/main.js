@@ -18,7 +18,8 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { randomUUID } = require('crypto');
-const { spawn, execFile, exec } = require('child_process')
+const { spawn, execFile, exec } = require('child_process');
+const { sendToWindow, getTargetWindow } = require('./iris/utils');
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 let mainWindow;
@@ -269,7 +270,6 @@ ipcMain.handle('connect-VR', (event, outOption) => {
     else if (outOption == 'SteamVR') {
         irisToVr = path.join(__dirname, "..", "IRIStoSteamVR", "iris-to-steamvr.exe")
     }
-    console.log(irisToVr)
     if (!fs.existsSync(irisToVr)) return
     const child = spawn(irisToVr, {
         stdio: ['pipe', 'pipe', 'pipe']
@@ -281,7 +281,11 @@ ipcMain.handle('connect-VR', (event, outOption) => {
     })
 
     child.stderr.on('data', (d) => {
-        console.log("[Connector] " + d.toString().trim())
+        const data = d.toString().trim()
+        if (data.includes("panicked")) {
+            BrowserWindow.getFocusedWindow().webContents.send("panicked", false)
+        } 
+        console.log("[Connector] Error: " + data)
     })
     console.log(`[Connector] connected to ${outOption}`)
     return sessionId

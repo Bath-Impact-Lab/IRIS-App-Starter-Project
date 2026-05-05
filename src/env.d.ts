@@ -45,5 +45,6 @@ interface Window {
     connectVR: (outOption: string) => Promise<string>;
     updatePos: (val: string, sessionId: string) => void;
     disconnectVR: (sessionId: string) => void;
+    panicked: (callback: (data: boolean) => void) => void;
   }
 } 

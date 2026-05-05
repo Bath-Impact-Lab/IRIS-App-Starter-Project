@@ -32,6 +32,11 @@ contextBridge.exposeInMainWorld('ipc', {
   connectVR: (outOption) => ipcRenderer.invoke('connect-VR', outOption),
   updatePos: (val, sessionId) => ipcRenderer.invoke('update-pos', val, sessionId),
   disconnectVR: (sessionId) => ipcRenderer.invoke('disconnect-VR', sessionId),
+  panicked: (callback) => {
+    ipcRenderer.on('panicked', (event, data) => {
+      callback(data)
+    })
+  }
 })
 
 contextBridge.exposeInMainWorld('electronAPI', {

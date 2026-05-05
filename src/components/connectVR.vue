@@ -33,18 +33,26 @@
         >
       </div>
       <input
-      class="sliders"
-      v-model.number="scale"
-      type="range"
-      min="1.0"
-      max="10.0"
-      step="0.1"
-      :disabled="!IrisState.running"
-      @dblclick="reset('scale')"
+        class="sliders"
+        v-model.number="scale"
+        type="range"
+        min="1.0"
+        max="10.0"
+        step="0.1"
+        :disabled="!IrisState.running"
+        @dblclick="reset('scale')"
       >
     </div>
 
-
+    <div class="connectBtn">
+      <button 
+        class="button btn" 
+        @click="connect"
+        :disabled="connected"
+      >
+        Connect
+      </button>
+    </div>
     
   </div>
 </template>
@@ -86,6 +94,8 @@ const sessionId = ref<string>()
 
 const currentOut = ref<string>("None")
 
+const connected = ref(false)
+
 watch(() => scale.value, (scale) => {
   passConfig()
 })
@@ -118,18 +128,23 @@ function reset(sliderName: "scale" | "xOffset" | "yOffset" | "zOffset" | "xRotat
 async function connect() {
   sessionId.value = await window.ipc?.connectVR(currentOut.value);
   console.log("[Connector] connected to VR")
+  connected.value = true
 }
 
 function disconnect() {
   console.log("[Connector] switching")
   if (sessionId.value) window.ipc?.disconnectVR(sessionId.value)
+  connected.value = false
 }
 
 onMounted(() => {
   if (props.outputOption !== "None") {  
     currentOut.value = props.outputOption
-    connect()
   }
+  window.ipc?.panicked((data) => {
+    connected.value = data
+    console.log("panik")
+  })
 })
 
 onUnmounted(() => {
@@ -143,7 +158,6 @@ watch(() => props.outputOption, (option) => {
     currentOut.value = option
     if (currentOut.value !== "None") {
       disconnect() //disconnect from previous linker
-      connect() //connect to new linker
     }
   }
 })
@@ -181,4 +195,31 @@ watch(() => props.outputOption, (option) => {
   align-items: center;
   justify-content: space-between;
 }
+
+.button {
+  border: 1px solid rgba(255,255,255,0.06);
+  background: var(--sidebar);
+  border-radius: 10px;
+}
+
+.button:hover { background: rgba(18,27,36,0.72); }
+
+.button:active { background: rgba(12,18,25,0.808); }
+
+.button:hover:disabled  { 
+  background: var(--sidebar)
+}
+
+.button:disabled  { 
+  background: var(--sidebar)
+}
+
+.connectBtn :disabled {
+  opacity: 0.5;
+  transition: none;
+  transform: none;
+  box-shadow: none;
+  cursor: default;
+}
+
 </style>

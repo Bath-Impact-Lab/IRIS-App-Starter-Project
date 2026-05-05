@@ -75,6 +75,9 @@
           <option>100</option>
         </select>
         <button class="button btn grid3" @click="onStopIris" :disabled="!IrisState.running">Stop IRIS</button>
+        <button class="button btn grid2" style="padding: 3px 5px;" @click="rotateAll" :disabled="IrisState.running">
+          <img style="width: 30px;" src="/assets/anticlockwise-2-line.svg" alt="" />
+        </button>
       </div>
     </div>
   </div>
@@ -199,6 +202,12 @@ function rotateCamera(d: MediaDeviceInfo, index: number) {
     const stream = await navigator.mediaDevices.getUserMedia({ video: { deviceId: { exact: d.deviceId } } });
     return stream.getVideoTracks()[0].getSettings().aspectRatio ?? 16 / 9;
   });
+}
+
+function rotateAll() {
+  props.selectedCameras.forEach((device, idx) => {
+    rotateCamera(device, idx)
+  })
 }
 
 // ── Camera streams ───────────────────────────────────────────────────────────
