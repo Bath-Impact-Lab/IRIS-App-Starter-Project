@@ -42,7 +42,7 @@ contextBridge.exposeInMainWorld('ipc', {
       callback(data)
     })
   },
-
+  getConfig: (options) => ipcRenderer.invoke('get-config', options),
 })
 
 contextBridge.exposeInMainWorld('electronAPI', {

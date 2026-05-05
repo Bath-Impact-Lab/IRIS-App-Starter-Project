@@ -6,8 +6,11 @@
         
         <div class="modal-header">
           <h2 class="modal-title">Settings</h2>
-          <p class="modal-subtitle">Manage your license key</p>
         </div>
+
+        <h3>Config Settings</h3>
+
+        <button class="btn" @click="downloadConfig">Export Config</button>
 
         <div class="settings-section">
           <div class="settings-group">
@@ -55,8 +58,9 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, watch, nextTick, computed } from 'vue';
+import { onMounted, onBeforeUnmount, ref, watch, nextTick, computed, toRaw } from 'vue';
 import { useLicense } from './../lib/useLicense';
+import { useIrisStore } from '@/Stores/irisStore';
 
 interface Props {
   showSettings: boolean,
@@ -70,6 +74,7 @@ const emit = defineEmits<{
 }>()
 
 
+const IrisState = useIrisStore()
 const licenseKeyInput = ref('');
 const { 
   licenseKey: storedLicenseKey,
@@ -90,6 +95,11 @@ const isPaidLicense = computed(() => {
 async function handleLicenseSubmit() {
   await validateLicense(licenseKeyInput.value);
   emit('licenseKey', licenseKeyInput.value)
+}
+
+function downloadConfig() {
+  const options = toRaw(IrisState.option)
+  window.ipc?.getConfig(options)
 }
 
 async function getLicense() {
@@ -138,8 +148,10 @@ function settings() {
   background: rgba(22, 30, 41, 0.95);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 20px;
+  height: 100%;
+  max-height: 85%;
   width: 100%;
-  max-width: 480px;
+  max-width: 85%;
   padding: 32px;
   position: relative;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);

@@ -14,6 +14,23 @@ declare module '*.vue' {
   }[];
 }
 
+interface options {
+    kp_format: string,
+    subjects: string | null,
+    cameras: {
+        uri: string,
+        width: number,
+        height: number,
+        fps: number,
+        rotation: number
+    }[],
+    camera_width: number,
+    camera_height: number,
+    video_fps: number,
+    output_dir: string,
+    stream: boolean
+}
+
 
 interface Window {
   electronAPI?: {
@@ -47,5 +64,6 @@ interface Window {
     disconnectVR: (sessionId: string) => void;
     panicked: (callback: (data: boolean) => void) => void;
     irisClosed: (callback: (data: boolean) => void) => void;
+    getConfig: (options: options) => void;
   }
 } 

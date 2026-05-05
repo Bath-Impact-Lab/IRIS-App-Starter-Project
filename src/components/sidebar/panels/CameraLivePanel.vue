@@ -243,7 +243,27 @@ async function startCameraStream(camera: MediaDeviceInfo, index: number) {
 
 // ── IRIS engine ──────────────────────────────────────────────────────────────
 async function onStartIris() {
+  const options = makeOptions()
 
+  IrisState.setOptionState(options)
+  props.selectedCameras.forEach((_, i) => stopCameraStream(i));
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  IrisState.setRunningState(true)
+  irisWorker.value = await window.ipc?.startIRIS(options);
+  if (options.stream) irisStreamer.value = await window.ipc?.startIRISStream?.(options);
+}
+
+async function onStopIris() {
+  IrisState.setRunningState(false)
+
+  await window.ipc?.stopIRIS(irisWorker.value?.sessionId);
+  if (shouldStream.value) await window.ipc?.stopIRIS(irisStreamer.value?.sessionId);
+  await new Promise(resolve => setTimeout(resolve, 3000));
+  props.selectedCameras.forEach((d, i) => startCameraStream(d, i));
+  emit('irisDataUpdate', null);
+}
+
+function makeOptions() {
   const cameras = props.selectedCameras.map((d, i) => ({
     uri: String(i),
     width: 1920,
@@ -263,21 +283,7 @@ async function onStartIris() {
     stream: shouldStream.value,
   };
 
-  props.selectedCameras.forEach((_, i) => stopCameraStream(i));
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  IrisState.setRunningState(true)
-  irisWorker.value = await window.ipc?.startIRIS(options);
-  if (options.stream) irisStreamer.value = await window.ipc?.startIRISStream?.(options);
-}
-
-async function onStopIris() {
-  IrisState.setRunningState(false)
-
-  await window.ipc?.stopIRIS(irisWorker.value?.sessionId);
-  if (shouldStream.value) await window.ipc?.stopIRIS(irisStreamer.value?.sessionId);
-  await new Promise(resolve => setTimeout(resolve, 3000));
-  props.selectedCameras.forEach((d, i) => startCameraStream(d, i));
-  emit('irisDataUpdate', null);
+  return options
 }
 
 </script>

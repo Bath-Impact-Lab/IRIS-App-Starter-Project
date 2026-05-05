@@ -19,6 +19,7 @@ const fs = require('fs');
 const os = require('os');
 const { randomUUID } = require('crypto');
 const { spawn, execFile, exec } = require('child_process');
+const { buildConfigFromOptions } = require('./iris/config');
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 let mainWindow;
@@ -303,4 +304,18 @@ ipcMain.handle('disconnect-VR', (event, sessionId) => {
     child.stdin.write("stop" + "\n")
     child.kill()
     console.log("[Connector] removing connector")
+})
+
+ipcMain.handle("get-config", async (event, opts) => {
+    const config = buildConfigFromOptions(opts)
+    const savePath = dialog.showOpenDialogSync({title: "Save Config Path", properties: ['openDirectory', 'createDirectory']})[0]
+    const fullPath = path.join(savePath, "config.json")
+    try {
+        fs.writeFileSync(fullPath, config)
+        console.log("[Config] File saved to " + savePath + "\\config.json")
+    }
+    catch (error) {
+        console.log("[Error] Config file not saved: ", error)
+    }
+
 })

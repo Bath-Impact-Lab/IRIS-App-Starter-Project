@@ -324,7 +324,7 @@
       <div class="hud-sep"></div>
       <span class="hud-item fps-counter">{{ irisDisplayFps }} <span class="fps-unit">FPS</span></span>
     </div>
-    <!-- License Badge â€” bottom-centre pill -->
+    <!-- License Badge â€” bottom-centre pill
     <div class="hud hud-right">
       <div
         v-if="!isValidLicense"
@@ -346,7 +346,7 @@
     <div v-if="jointAngles" class="debug" aria-live="polite">
       <div class="debug-title">Joint Angles</div>
       <pre class="debug-pre">{{ jointAnglesPretty }}</pre>
-    </div>
+    </div> -->
     <!-- Settings Modal -->
     <settingsModal
       :show-settings="showSettings"
