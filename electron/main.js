@@ -19,7 +19,6 @@ const fs = require('fs');
 const os = require('os');
 const { randomUUID } = require('crypto');
 const { spawn, execFile, exec } = require('child_process');
-const { sendToWindow, getTargetWindow } = require('./iris/utils');
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 let mainWindow;

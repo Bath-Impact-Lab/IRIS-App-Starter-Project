@@ -36,7 +36,13 @@ contextBridge.exposeInMainWorld('ipc', {
     ipcRenderer.on('panicked', (event, data) => {
       callback(data)
     })
-  }
+  },
+  irisClosed: (callback) => {
+    ipcRenderer.on('iris-closed', (event, data) => {
+      callback(data)
+    })
+  },
+
 })
 
 contextBridge.exposeInMainWorld('electronAPI', {

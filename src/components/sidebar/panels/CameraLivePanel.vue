@@ -90,6 +90,12 @@ import { useSceneCameras, SceneCameraEntry } from '../../../lib/useSceneCameras'
 import { deviceShortCode, applyCameraRotation } from '../useCameraFeedUtils';
 import { useIrisStore } from '@/Stores/irisStore';
 
+onMounted(() => {
+  window.ipc?.irisClosed((data) => {
+    IrisState.running = data
+  })
+})
+
 interface Props {
   selectedCameras: MediaDeviceInfo[];
   selectedCameraIds: string[] | null;

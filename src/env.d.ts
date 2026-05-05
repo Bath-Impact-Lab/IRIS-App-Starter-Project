@@ -46,5 +46,6 @@ interface Window {
     updatePos: (val: string, sessionId: string) => void;
     disconnectVR: (sessionId: string) => void;
     panicked: (callback: (data: boolean) => void) => void;
+    irisClosed: (callback: (data: boolean) => void) => void;
   }
 } 

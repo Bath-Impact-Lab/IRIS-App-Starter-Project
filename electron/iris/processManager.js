@@ -6,9 +6,10 @@ const path = require('path');
 const { spawn, execFile } = require('child_process');
 const { promisify } = require('util');
 const { PIPE_NAME, buildConfigFromOptions, getIrisCliPath } = require('./config');
-const { writeTempConfigFile } = require('./utils');
+const { writeTempConfigFile, sendToWindow, getTargetWindow } = require('./utils');
 const { createPipeServer } = require('./pipeServer');
 const { VideoStreamer } = require('./videoStreamer');
+const { BrowserWindow } = require('electron');
 
 const execFileAsync = promisify(execFile);
 const MONITOR_VIDEO_HINT_RE = /(video pipe|video pipes|mpegts|h264|annex|encoder|encoding|failed to open|failed|error|warn|warning|init|initialized)/i;
@@ -317,11 +318,13 @@ class ProcessManager {
 
       child.once('exit', (code, signal) => {
         console.log(`[iris:${sessionId}] EXIT code=${code} signal=${signal}`);
+        sendToWindow(BrowserWindow.getFocusedWindow(), "iris-closed", false);
         cleanup();
       });
 
       child.once('close', (code, signal) => {
         console.log(`[iris:${sessionId}] CLOSE code=${code} signal=${signal}`);
+        sendToWindow(BrowserWindow.getFocusedWindow(), "iris-closed", false);
         cleanup();
       });
 
