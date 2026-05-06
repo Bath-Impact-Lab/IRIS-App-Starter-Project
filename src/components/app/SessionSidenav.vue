@@ -132,11 +132,11 @@
       </button>
       <button
         class="template-context-action"
-        :disabled="!canStartSessionIris"
+        :disabled="!canRecordMotion"
         type="button"
-        @click="startSessionIrisFromMenu"
+        @click="recordMotionFromMenu"
       >
-        Start IRIS
+        Record Motion
       </button>
       <button
         class="template-context-action"
@@ -191,7 +191,7 @@ const emit = defineEmits<{
   'open-analysis': [];
   'open-mocap': [];
   'record-session': [{ participantId: string; sessionId: string }];
-  'start-session-iris': [{ participantId: string; sessionId: string }];
+  'record-motion': [{ participantId: string; sessionId: string }];
   'run-session-opensim-scale': [{ participantId: string; sessionId: string }];
   'run-session-opensim-ik': [{ participantId: string; sessionId: string }];
   'link-recordings': [{ participantId: string; sessionId: string }];
@@ -228,8 +228,8 @@ const selectedSession = computed(() => {
   const participant = participants.value.find((entry) => entry.id === sessionMenu.value.participantId);
   return participant?.sessions.find((entry) => entry.id === sessionMenu.value.sessionId) ?? null;
 });
-const canStartSessionIris = computed(() => hasSessionRecording(selectedSession.value));
 const canRunOpenSim = computed(() => hasSessionRecording(selectedSession.value));
+const canRecordMotion = computed(() => hasSessionRecording(selectedSession.value));
 
 onMounted(() => {
   window.addEventListener('click', closeSessionMenu);
@@ -290,10 +290,10 @@ function recordSessionFromMenu() {
   closeSessionMenu();
 }
 
-function startSessionIrisFromMenu() {
-  if (!canStartSessionIris.value) return;
+function recordMotionFromMenu() {
+  if (!canRecordMotion.value) return;
 
-  emit('start-session-iris', {
+  emit('record-motion', {
     participantId: sessionMenu.value.participantId,
     sessionId: sessionMenu.value.sessionId,
   });

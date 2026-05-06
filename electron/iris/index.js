@@ -281,6 +281,28 @@ function clearMotionDirectory(targetDir, options = {}) {
   }
 }
 
+function resolveRecordingPreserveEntryNames(motionDir, options = {}) {
+  const preserveEntryNames = [MOTION_INGEST_RUNTIME_DIRECTORY_NAME];
+
+  if (options.preserveIngestVideos !== true) {
+    return preserveEntryNames;
+  }
+
+  preserveEntryNames.push(MOTION_INGEST_DIRECTORY_NAME, LEGACY_MOTION_VIDEOS_DIRECTORY_NAME);
+
+  try {
+    for (const entry of fs.readdirSync(motionDir, { withFileTypes: true })) {
+      if (entry.isFile() && isSupportedVideoFile(entry.name)) {
+        preserveEntryNames.push(entry.name);
+      }
+    }
+  } catch {
+    // The caller creates the directory before clearing it, so this is best-effort.
+  }
+
+  return [...new Set(preserveEntryNames)];
+}
+
 function moveRecordedVideosToMotionSubdirectory(motionDir) {
   const videosDir = getMotionVideosDir(motionDir);
   if (!videosDir) {
@@ -455,7 +477,9 @@ function registerIrisIpc() {
     }
 
     try {
-      clearMotionDirectory(motionDir, { preserveEntryNames: [MOTION_INGEST_RUNTIME_DIRECTORY_NAME] });
+      clearMotionDirectory(motionDir, {
+        preserveEntryNames: resolveRecordingPreserveEntryNames(motionDir, options),
+      });
     } catch (error) {
       return { ok: false, error: error.message };
     }

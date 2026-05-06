@@ -153,7 +153,7 @@ function buildConfigFromOptions(opts = {}) {
     multi_video_ingestion: {
       id: "ingest",
       camera_group: "capture_rig",
-      loop: true,
+      loop: false,
       ...(opts.video_paths && { video_paths: opts.video_paths }) // Optional payload for ingest
     }
   } : {

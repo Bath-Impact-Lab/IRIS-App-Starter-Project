@@ -63,6 +63,7 @@ interface Window {
       drawBboxes?: boolean;
       drawKeypoints?: boolean;
       verbose?: boolean;
+      preserveIngestVideos?: boolean;
     }) => Promise<{ ok: boolean; outputDir?: string; args?: string[]; error?: string }>;
     stopIrisRecord: () => Promise<{ ok: boolean; outputDir?: string; error?: string }>;
     linkRecordings: (options: {

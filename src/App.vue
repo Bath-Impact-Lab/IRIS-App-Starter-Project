@@ -247,6 +247,7 @@ interface RecordingTarget {
   sessionName?: string;
   recordingPath?: string | null;
   recordMode?: 'plain' | 'augment';
+  preserveIngestVideos?: boolean;
 }
 
 function createSessionFromTemplate(participantId: string, template: ProjectPreset['templates'][number]): ProjectSession {
@@ -353,6 +354,71 @@ async function handleRecordSession(participantId: string, sessionId: string) {
   }
 }
 
+async function stopIrisBeforeMotionRecording() {
+  if (!isIrisRunning.value) return true;
+
+  const stopResult = await stopIris();
+  if (stopResult?.ok) {
+    irisRunMode.value = null;
+    return true;
+  }
+
+  notifyRecordingError(stopResult?.error ?? 'Failed to stop IRIS before recording motion.');
+  return false;
+}
+
+async function stopRecordingAfterFailedIrisStart() {
+  if (!isRecording.value) return;
+
+  isRecordingBusy.value = true;
+  try {
+    await stopRecordingAndFinalize();
+  } finally {
+    isRecordingBusy.value = false;
+  }
+}
+
+async function handleRecordMotion(participantId: string, sessionId: string) {
+  const participant = currentProject.value?.participants.find((entry) => entry.id === participantId);
+  const session = participant?.sessions.find((entry) => entry.id === sessionId);
+  const recordingPath = typeof session?.recordingPath === 'string' ? session.recordingPath.trim() : '';
+  if (!participant || !session || !recordingPath) return;
+
+  if (isRecording.value || isRecordingBusy.value) {
+    notifyRecordingError('Stop the active recording before recording another motion.');
+    return;
+  }
+
+  const canStartFreshIrisRun = await stopIrisBeforeMotionRecording();
+  if (!canStartFreshIrisRun) return;
+
+  setView('mocap');
+
+  const recordingResult = await handleToggleRecording({
+    participantName: participant.name,
+    sessionName: session.name,
+    recordingPath,
+    recordMode: 'plain',
+    preserveIngestVideos: true,
+  });
+  if (!recordingResult?.ok) return;
+
+  const startResult = await startIrisWithOptions(
+    'mocap',
+    buildIrisIngestOptions(recordingPath),
+    { allowReuseSameMode: false },
+  );
+  if (!startResult?.ok) {
+    await stopRecordingAfterFailedIrisStart();
+    notifyRecordingError(startResult?.error ?? 'Failed to start IRIS for motion recording.');
+    return;
+  }
+
+  if (recordingResult.outputDir) {
+    await saveSessionRecordingPath(participantId, sessionId, recordingResult.outputDir);
+  }
+}
+
 async function handleLinkRecordings(participantId: string, sessionId: string) {
   const participant = currentProject.value?.participants.find((entry) => entry.id === participantId);
   const session = participant?.sessions.find((entry) => entry.id === sessionId);
@@ -368,32 +434,6 @@ async function handleLinkRecordings(participantId: string, sessionId: string) {
   if (!result?.ok || !result.outputDir) return;
 
   await saveSessionRecordingPath(participantId, sessionId, result.outputDir);
-}
-
-async function handleStartSessionIris(participantId: string, sessionId: string) {
-  const participant = currentProject.value?.participants.find((entry) => entry.id === participantId);
-  const session = participant?.sessions.find((entry) => entry.id === sessionId);
-  const recordingPath = typeof session?.recordingPath === 'string' ? session.recordingPath.trim() : '';
-
-  if (!session || !recordingPath) return;
-
-  const result = await startIrisWithOptions(
-    'mocap',
-    buildIrisIngestOptions(recordingPath),
-    { allowReuseSameMode: false },
-  );
-
-  if (!result?.ok) return;
-
-  setView('mocap');
-
-  if (currentProject.value?.workspace.selectedRecordingPath !== recordingPath) {
-    await updateCurrentProject({
-      workspace: {
-        selectedRecordingPath: recordingPath,
-      },
-    }, { save: true });
-  }
 }
 
 function notifyOpenSimError(message: string) {
@@ -742,6 +782,7 @@ async function handleToggleRecording(target: RecordingTarget = {}) {
       sessionName: sessionName || undefined,
       fps: selectedFps.value,
       savePoses: true,
+      preserveIngestVideos: target.preserveIngestVideos,
     });
 
     if (result?.ok) {
@@ -794,7 +835,7 @@ async function handleToggleRecording(target: RecordingTarget = {}) {
         @open-mocap="setView('mocap')"
         @open-analysis="setView('analysis')"
         @record-session="handleRecordSession($event.participantId, $event.sessionId)"
-        @start-session-iris="handleStartSessionIris($event.participantId, $event.sessionId)"
+        @record-motion="handleRecordMotion($event.participantId, $event.sessionId)"
         @run-session-opensim-scale="handleRunSessionOpenSimScale($event.participantId, $event.sessionId)"
         @run-session-opensim-ik="handleRunSessionOpenSimIk($event.participantId, $event.sessionId)"
         @link-recordings="handleLinkRecordings($event.participantId, $event.sessionId)"
