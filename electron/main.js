@@ -311,8 +311,8 @@ ipcMain.handle("get-config", async (event, opts) => {
     const savePath = dialog.showOpenDialogSync({title: "Save Config Path", properties: ['openDirectory', 'createDirectory']})[0]
     const fullPath = path.join(savePath, "config.json")
     try {
-        fs.writeFileSync(fullPath, config)
-        console.log("[Config] File saved to " + savePath + "\\config.json")
+        fs.writeFileSync(fullPath, JSON.stringify(config))
+        console.log("[Config] File saved to " + fullPath)
     }
     catch (error) {
         console.log("[Error] Config file not saved: ", error)
