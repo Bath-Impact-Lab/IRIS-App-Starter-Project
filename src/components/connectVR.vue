@@ -5,9 +5,11 @@
 
     <div  v-for="(value, type) in trackerConfig">
       <div class="titles">
-        {{trackerMap[type]}}: {{ trackerConfig[type] }} 
+        {{trackerMap[type]}}: {{ trackerConfig[type].toPrecision(2) }} 
       </div>
-      <input 
+      <div class="adjust-row">
+        <button class="adjust-button" @click="increment(type, false)" :disabled="!IrisState.running"> - </button>
+        <input 
         class="sliders"
         v-model.number="trackerConfig[type]" 
         type="range" 
@@ -17,13 +19,15 @@
         :id="type"
         :disabled="!IrisState.running"
         @dblclick="reset(type)"
-      >
+        >
+        <button class="adjust-button" @click="increment(type, true)" :disabled="!IrisState.running"> + </button>
+      </div>
     </div>
     <div style="position: relative;">
       <div class="titles invert">
         <span>
           Scale: 
-          <span v-if="!invert">{{ scale }} </span>
+          <span v-if="!invert">{{ scale.toPrecision(3) }} </span>
           <span v-else>{{ (1/scale).toPrecision(3) }}</span>
         </span>
         <input 
@@ -32,16 +36,20 @@
           :disabled="!IrisState.running"
         >
       </div>
-      <input
-        class="sliders"
-        v-model.number="scale"
-        type="range"
-        min="1.0"
-        max="10.0"
-        step="0.1"
-        :disabled="!IrisState.running"
-        @dblclick="reset('scale')"
-      >
+      <div class="adjust-row">        
+        <button class="adjust-button" @click="increment('scale', false)" :disabled="!IrisState.running"> - </button>
+        <input
+          class="sliders"
+          v-model.number="scale"
+          type="range"
+          min="1.0"
+          max="10.0"
+          step="0.1"
+          :disabled="!IrisState.running"
+          @dblclick="reset('scale')"
+        >       
+        <button class="adjust-button" @click="increment('scale', true)" :disabled="!IrisState.running"> + </button>
+      </div>
     </div>
 
     <div class="connectBtn">
@@ -108,7 +116,7 @@ function passConfig() {
   console.log("changed", trackerConfig, scale)
   const formatedData = {
     translation: [trackerConfig.value.xOffset, trackerConfig.value.yOffset, trackerConfig.value.zOffset],
-    rotation: [trackerConfig.value.xRotation, trackerConfig.value.yRotation, trackerConfig.value.zRotation],
+    rotation: [trackerConfig.value.xRotation * Math.PI, trackerConfig.value.yRotation * Math.PI, trackerConfig.value.zRotation * Math.PI],
     scale: invert.value ? 1/scale.value : scale.value
   }
   const data = JSON.stringify(formatedData)
@@ -135,6 +143,16 @@ function disconnect() {
   console.log("[Connector] switching")
   if (sessionId.value) window.ipc?.disconnectVR(sessionId.value)
   connected.value = false
+}
+
+function increment(type: "scale" | "xOffset" | "yOffset" | "zOffset" | "xRotation" | "yRotation" | "zRotation", add: boolean) {
+  const incVal = add ? 0.01 : -0.01
+  if (type === "scale") {
+    scale.value += incVal
+  }
+  else {
+    trackerConfig.value[type] += incVal
+  }
 }
 
 onMounted(() => {
@@ -186,7 +204,25 @@ watch(() => props.outputOption, (option) => {
 }
 
 .sliders {
-  width: 200px;
+  width: 170px;
+}
+
+.adjust-row {
+  display: flex; 
+  flex-direction: row; 
+  align-items: center;
+  width: 100%;
+}
+
+.adjust-button {
+  width: 15px;
+  height: 15px;
+  padding: 0px ;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  /* border: 1px solid; */
 }
 
 .invert {
