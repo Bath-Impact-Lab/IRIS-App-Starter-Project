@@ -204,7 +204,23 @@ watch(() => props.outputOption, (option) => {
 }
 
 .sliders {
+  -webkit-appearance: none;
   width: 170px;
+  height: 20px;
+  background: #d3d3d3;
+  outline: none;
+  opacity: 0.7;
+  -webkit-transition: .2s;
+  transition: opacity .2s;
+}
+
+.sliders::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: #04AA6D;
+  cursor: pointer;
 }
 
 .adjust-row {
@@ -215,13 +231,13 @@ watch(() => props.outputOption, (option) => {
 }
 
 .adjust-button {
-  width: 15px;
-  height: 15px;
+  width: 20px;
+  height: 20px;
   padding: 0px ;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 10px;
+  /* border-radius: 10px; */
   /* border: 1px solid; */
 }
 
@@ -236,6 +252,7 @@ watch(() => props.outputOption, (option) => {
   border: 1px solid rgba(255,255,255,0.06);
   background: var(--sidebar);
   border-radius: 10px;
+  margin-top: 10px;
 }
 
 .button:hover { background: rgba(18,27,36,0.72); }
