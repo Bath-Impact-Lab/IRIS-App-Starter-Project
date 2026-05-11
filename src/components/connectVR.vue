@@ -204,6 +204,7 @@ watch(() => props.outputOption, (option) => {
 }
 
 .sliders {
+  appearance: none;
   -webkit-appearance: none;
   width: 170px;
   height: 20px;

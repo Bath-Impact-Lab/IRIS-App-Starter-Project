@@ -10,7 +10,7 @@
 
         <h3>Config Settings</h3>
 
-        <button class="btn" @click="downloadConfig">Export Config</button>
+        <button class="btn-export btn-activate" @click="downloadConfig">Export Config</button>
 
         <div class="settings-section">
           <div class="settings-group">
@@ -149,9 +149,9 @@ function settings() {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 20px;
   height: 100%;
-  max-height: 85%;
+  max-height: 75%;
   width: 100%;
-  max-width: 85%;
+  max-width: 65%;
   padding: 32px;
   position: relative;
   box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
@@ -286,5 +286,11 @@ function settings() {
 
 .divider:not(:empty)::before { margin-right: 12px; }
 .divider:not(:empty)::after { margin-left: 12px; }
+
+.btn-export {
+  background-color: var(--muted);
+  height: 45px;
+  margin-bottom: 15px;
+}
 
 </style>

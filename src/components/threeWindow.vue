@@ -227,9 +227,11 @@ async function initThree(container: HTMLElement) {
 watch(() => props.irisData, (data) => {
   if (data) {
     irisStarted.value = true
+    IrisState.setRunningState(true)
   }
   else {
     irisStarted.value = false
+    IrisState.setRunningState(false)
   }
 })
 

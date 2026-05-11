@@ -2,6 +2,20 @@
   <div class="panel-root">
     <!-- Camera feed list -->
     <div class="cameras">
+      <div class="stateBox">
+        <div class="states" v-if="IrisState.running && IrisStart">
+          Iris Running
+          <i class="stateCircle started" ></i>
+        </div>
+        <div class="states" v-else-if="!IrisState.running && IrisStart">
+          Iris Starting Up
+          <i class="stateCircle starting" ></i>
+        </div>
+        <div class="states" v-else="!IrisState.running && !IrisStart">
+          Iris Off
+          <i class="stateCircle idle"></i>
+        </div>
+      </div>
       <div class="cameraGrid">
         <div
           v-for="(d, i) in props.selectedCameras"
@@ -92,7 +106,8 @@ import { useIrisStore } from '@/Stores/irisStore';
 
 onMounted(() => {
   window.ipc?.irisClosed((data) => {
-    IrisState.running = data
+    IrisState.setRunningState(data)
+    IrisStart.value = data
   })
 })
 
@@ -114,6 +129,7 @@ const emit = defineEmits<{
 
 // ── IRIS state ────────────────────────────────────────────────────────────
 const IrisState = useIrisStore()
+const IrisStart = ref(false)
 
 // ── Config Options ─────────────────────────────────────────────────────────────
 const irisFps = ref<number>(30)
@@ -247,8 +263,9 @@ async function onStartIris() {
 
   IrisState.setOptionState(options)
   props.selectedCameras.forEach((_, i) => stopCameraStream(i));
+  IrisStart.value = true 
   await new Promise(resolve => setTimeout(resolve, 2000));
-  IrisState.setRunningState(true)
+  // IrisState.setRunningState(true)
   irisWorker.value = await window.ipc?.startIRIS(options);
   if (options.stream) irisStreamer.value = await window.ipc?.startIRISStream?.(options);
 }
@@ -261,6 +278,7 @@ async function onStopIris() {
   await new Promise(resolve => setTimeout(resolve, 3000));
   props.selectedCameras.forEach((d, i) => startCameraStream(d, i));
   emit('irisDataUpdate', null);
+  IrisStart.value = false
 }
 
 function makeOptions() {
@@ -444,6 +462,38 @@ function makeOptions() {
   align-items: center;
   justify-content: center;
   font: 13.3px Arial;
+}
+
+.stateCircle {
+  width: 15px;
+  height: 15px;
+  border-radius: 15px;
+  margin-left: 10px;
+}
+
+.idle {
+  background-color: white;
+}
+
+.started {
+  background-color: red;
+}
+
+.starting {
+  background-color: yellow;
+}
+
+.stateBox {
+  position: absolute; 
+  top: 5px; 
+  right: 5px; 
+  display: flex;
+}
+
+.states {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
 }
 
 </style>
