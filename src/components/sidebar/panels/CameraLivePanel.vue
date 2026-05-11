@@ -4,16 +4,16 @@
     <div class="cameras">
       <div class="stateBox">
         <div class="states" v-if="IrisState.running && IrisStart">
-          Iris Running
           <i class="stateCircle started" ></i>
+          Iris Running
         </div>
         <div class="states" v-else-if="!IrisState.running && IrisStart">
-          Iris Starting Up
           <i class="stateCircle starting" ></i>
+          Iris Starting Up
         </div>
         <div class="states" v-else="!IrisState.running && !IrisStart">
-          Iris Off
           <i class="stateCircle idle"></i>
+          Iris Off
         </div>
       </div>
       <div class="cameraGrid">
@@ -75,7 +75,7 @@
           v-model="shouldStream"
           >
         </div>
-        <button class="button btn grid1" @click="onStartIris" :disabled="IrisState.running">Start IRIS</button>
+        <button class="button btn grid1" @click="onStartIris" :disabled="IrisState.running || IrisStart">Start IRIS</button>
         <select 
           v-model.number="irisFps" 
           name="FPS" 
@@ -88,7 +88,7 @@
           <option>60</option>
           <option>100</option>
         </select>
-        <button class="button btn grid3" @click="onStopIris" :disabled="!IrisState.running">Stop IRIS</button>
+        <button class="button btn grid3" @click="onStopIris" :disabled="!IrisStart">Stop IRIS</button>
         <button class="button btn grid2" style="padding: 3px 5px;" @click="rotateAll" :disabled="IrisState.running">
           <img style="width: 30px;" src="/assets/anticlockwise-2-line.svg" alt="" />
         </button>
@@ -468,7 +468,7 @@ function makeOptions() {
   width: 15px;
   height: 15px;
   border-radius: 15px;
-  margin-left: 10px;
+  margin-right: 10px;
 }
 
 .idle {
@@ -484,9 +484,7 @@ function makeOptions() {
 }
 
 .stateBox {
-  position: absolute; 
-  top: 5px; 
-  right: 5px; 
+  position: relative; 
   display: flex;
 }
 
