@@ -151,7 +151,8 @@
     right: 16px;
   }
 }
-.hud-center{ left: calc(50% - 125px); transform: translateX(-50%); }
+.hud-center{ left: calc(50%); transform: translateX(-50%); }
+.sidebar-open .hud-center { left: calc(50% - 125px)}
 .activity-blinker{
   width: 8px; height: 8px; border-radius: 50%;
   background: #6be675;

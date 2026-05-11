@@ -5,7 +5,7 @@
 
     <div  v-for="(value, type) in trackerConfig">
       <div class="titles">
-        {{trackerMap[type]}}: {{ trackerConfig[type].toPrecision(2) }} 
+        {{trackerMap[type]}}: {{ trackerConfig[type].toPrecision(3) }} 
       </div>
       <div class="adjust-row">
         <button class="adjust-button" @click="increment(type, false)" :disabled="!IrisState.running"> - </button>
@@ -67,9 +67,11 @@
 
 <script setup lang="ts">
 import { useIrisStore } from '@/Stores/irisStore';
+import { useConnectorStore } from '@/Stores/connectorStore';
 import { ref, watch, computed, nextTick, onMounted, onUnmounted } from 'vue';
 
 const IrisState = useIrisStore()
+const connectorState = useConnectorStore()
 
 interface Props {
   outputOption: string,
@@ -163,11 +165,15 @@ onMounted(() => {
     connected.value = data
     console.log("panik")
   })
+  trackerConfig.value = connectorState.currentConfig
+  scale.value = connectorState.scale
 })
 
 onUnmounted(() => {
   disconnect()
   currentOut.value = "None"
+  connectorState.setCurrentConfig(trackerConfig.value)
+  connectorState.setScale(scale.value)
 })
 
 watch(() => props.outputOption, (option) => {

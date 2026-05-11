@@ -318,13 +318,22 @@
         </svg>
       </button>
     </div>
-    <div class="hud hud-center" v-if="IrisState.running">
-      <span class="activity-blinker"></span>
-      <span class="hud-item">IRIS Engine</span>
-      <div class="hud-sep"></div>
-      <span class="hud-item fps-counter">{{ irisDisplayFps }} <span class="fps-unit">FPS</span></span>
+    <div class="hud hud-center" v-if="IrisState.running && IrisState.start">
+      <span class="activity-blinker" style="animation: none;"></span>
+      <span class="hud-item">IRIS Engine: Running</span>
     </div>
-    <!-- License Badge â€” bottom-centre pill
+
+    <div class="hud hud-center" v-else-if="!IrisState.running && IrisState.start">
+      <span class="activity-blinker" style="background-color: yellow;"></span>
+      <span class="hud-item">IRIS Engine: Starting</span>
+    </div>
+
+    <div class="hud hud-center" v-else>
+      <span class="activity-blinker" style="background-color: white; animation: none;"></span>
+      <span class="hud-item">IRIS Engine: Idle</span>
+    </div>
+
+    <!-- License Badge bottom-centre pill -->
     <div class="hud hud-right">
       <div
         v-if="!isValidLicense"
@@ -346,7 +355,7 @@
     <div v-if="jointAngles" class="debug" aria-live="polite">
       <div class="debug-title">Joint Angles</div>
       <pre class="debug-pre">{{ jointAnglesPretty }}</pre>
-    </div> -->
+    </div>
     <!-- Settings Modal -->
     <settingsModal
       :show-settings="showSettings"
@@ -831,7 +840,6 @@ function stopFsTimer() {
 
 const lastSentMsg = ref('');
 
-const irisDisplayFps = ref(0);
 const jointAngles = computed(() => {
   const frame = Array.isArray(irisData.value) ? irisData.value[0] : irisData.value;
   return frame?.people?.[0]?.joint_angles ?? null;

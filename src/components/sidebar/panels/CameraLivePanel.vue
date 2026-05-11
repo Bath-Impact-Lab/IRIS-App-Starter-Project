@@ -2,20 +2,6 @@
   <div class="panel-root">
     <!-- Camera feed list -->
     <div class="cameras">
-      <div class="stateBox">
-        <div class="states" v-if="IrisState.running && IrisStart">
-          <i class="stateCircle started" ></i>
-          Iris Running
-        </div>
-        <div class="states" v-else-if="!IrisState.running && IrisStart">
-          <i class="stateCircle starting" ></i>
-          Iris Starting Up
-        </div>
-        <div class="states" v-else="!IrisState.running && !IrisStart">
-          <i class="stateCircle idle"></i>
-          Iris Off
-        </div>
-      </div>
       <div class="cameraGrid">
         <div
           v-for="(d, i) in props.selectedCameras"
@@ -75,7 +61,7 @@
           v-model="shouldStream"
           >
         </div>
-        <button class="button btn grid1" @click="onStartIris" :disabled="IrisState.running || IrisStart">Start IRIS</button>
+        <button class="button btn grid1" @click="onStartIris" :disabled="IrisState.running || IrisState.start">Start IRIS</button>
         <select 
           v-model.number="irisFps" 
           name="FPS" 
@@ -88,7 +74,7 @@
           <option>60</option>
           <option>100</option>
         </select>
-        <button class="button btn grid3" @click="onStopIris" :disabled="!IrisStart">Stop IRIS</button>
+        <button class="button btn grid3" @click="onStopIris" :disabled="!IrisState.start">Stop IRIS</button>
         <button class="button btn grid2" style="padding: 3px 5px;" @click="rotateAll" :disabled="IrisState.running">
           <img style="width: 30px;" src="/assets/anticlockwise-2-line.svg" alt="" />
         </button>
@@ -107,7 +93,7 @@ import { useIrisStore } from '@/Stores/irisStore';
 onMounted(() => {
   window.ipc?.irisClosed((data) => {
     IrisState.setRunningState(data)
-    IrisStart.value = data
+    IrisState.setStartState(data)
   })
 })
 
@@ -129,7 +115,6 @@ const emit = defineEmits<{
 
 // ── IRIS state ────────────────────────────────────────────────────────────
 const IrisState = useIrisStore()
-const IrisStart = ref(false)
 
 // ── Config Options ─────────────────────────────────────────────────────────────
 const irisFps = ref<number>(30)
@@ -263,7 +248,7 @@ async function onStartIris() {
 
   IrisState.setOptionState(options)
   props.selectedCameras.forEach((_, i) => stopCameraStream(i));
-  IrisStart.value = true 
+  IrisState.setStartState(true) 
   await new Promise(resolve => setTimeout(resolve, 2000));
   // IrisState.setRunningState(true)
   irisWorker.value = await window.ipc?.startIRIS(options);
@@ -278,7 +263,7 @@ async function onStopIris() {
   await new Promise(resolve => setTimeout(resolve, 3000));
   props.selectedCameras.forEach((d, i) => startCameraStream(d, i));
   emit('irisDataUpdate', null);
-  IrisStart.value = false
+  IrisState.setStartState(false)
 }
 
 function makeOptions() {
