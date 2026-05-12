@@ -532,8 +532,13 @@ const {
   syncVisibility,
   setGizmoRotation,
   computePlaySpaceBounds,
-  dispose: disposeSceneCameras
+  dispose: disposeSceneCameras,
+  showScene,
 } = useSceneCameras(selectedCameraCount, showCameras, showCameras);
+
+watch(() => showPlaySpace.value, (playspace) => {
+  showScene(playspace)
+})
 
 const activeCameraOptionId = computed(() => (devices.value.length > 0 ? `cam-opt-${cameraHoverIndex.value}` : undefined));
 

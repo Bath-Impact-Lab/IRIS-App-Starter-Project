@@ -551,7 +551,9 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
     }
     sceneCameras.value = [];
   }
-
+  function showScene(show: boolean) {
+    if (scenePoints) scenePoints.visible = show
+  }
   if (selectedCount) {
     let prevCount = 0;
     watch(selectedCount, async (count) => {
@@ -602,5 +604,6 @@ export function useSceneCameras(selectedCount?: Ref<number>, showFrustums?: Ref<
     setGizmoRotation,
     computePlaySpaceBounds,
     dispose,
+    showScene,
   } as const;
 }

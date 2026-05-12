@@ -95,7 +95,8 @@ function buildConfigFromOptions(opts = {}) {
     defaults: {
       output: {
         shm_name: "iris_shm_ipc",
-        capacity: 120
+        capacity: 120,
+        pose_only: true,
       }
     }
   };
