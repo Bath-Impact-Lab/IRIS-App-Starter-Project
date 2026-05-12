@@ -337,6 +337,7 @@ function makeOptions() {
   border: 1px solid rgba(255,255,255,0.06);
   background: var(--sidebar);
   border-radius: 10px;
+  color: var(--fg);
 }
 .button:hover { background: rgba(18,27,36,0.72); }
 .button:active { background: rgba(12,18,25,0.808); }
