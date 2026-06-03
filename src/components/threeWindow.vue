@@ -69,7 +69,7 @@ const halpe26_pairs = [
   [16, 21], [16, 23], [16, 25]
 ]
 
-const linePositions = new Float32Array(halpe26_pairs.length * 3 * 2)
+const linePositions: Float32Array<ArrayBuffer>[] = []
 const irisStarted = ref(false)
 
 onMounted(() => {
@@ -316,17 +316,22 @@ function renderIRISdata(poseInfo: IrisData) {
       const pelvis = person.joint_centers[1]
       const spine_mid = person.joint_centers[2]
       const keypoints = [[neck[0], neck[1], neck[2]], [pelvis[0], pelvis[1], pelvis[2]], [spine_mid[0], spine_mid[1], spine_mid[2]]]
-      if ((spheresMesh.length == 0 && skeletonLine.length == 0) || (spheresMesh.length < poseInfo.people.length && skeletonLine.length < poseInfo.people.length)) {
+      if (spheresMesh.length < poseInfo.people.length && skeletonLine.length < poseInfo.people.length) {
+        const pointColour = 0xffffff;
+        const skeletonColour = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0x00ffff, 0xff00ff];
         const sphereGeometry = new THREE.SphereGeometry(0.025, 8, 8)
-        const material = new THREE.MeshBasicMaterial({color: 0xffffff})
+        const material = new THREE.MeshBasicMaterial({color: pointColour})
         spheresMesh.push(new THREE.InstancedMesh(sphereGeometry, material, (keypoints.length + person.joint_centers.length)))
+        spheresMesh[i].name = `person Points ${i}`
         scene.add(spheresMesh[i])
 
-        const lMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 })
+        linePositions.push(new Float32Array(halpe26_pairs.length * 3 * 2))
+        const lMaterial = new THREE.LineBasicMaterial({ color: skeletonColour[i%6] })
         const lGeometry = new THREE.BufferGeometry()
-        lGeometry.setAttribute('position', new THREE.BufferAttribute(linePositions, 3))
+        lGeometry.setAttribute('position', new THREE.BufferAttribute(linePositions[i], 3))
 
         skeletonLine.push(new THREE.LineSegments(lGeometry, lMaterial))
+        skeletonLine[i].name = `person skeleton ${i}`
         scene.add(skeletonLine[i])
       }
       // console.log(poseInfo.people.length, scene)
